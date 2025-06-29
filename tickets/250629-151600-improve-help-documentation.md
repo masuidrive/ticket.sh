@@ -4,7 +4,7 @@ tags: ["documentation", "help", "workflow"]
 description: "ヘルプメッセージの改善とワークフロー説明の更新"
 created_at: "2025-06-29T15:16:00Z"
 started_at: 2025-06-29T16:07:17Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2025-06-29T16:24:52Z # Do not modify manually
 ---
 
 # ヘルプメッセージの改善
