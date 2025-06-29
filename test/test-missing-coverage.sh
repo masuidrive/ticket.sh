@@ -3,6 +3,9 @@
 # Test cases for missing coverage based on spec.ja.md
 # These test edge cases and error conditions not covered by other tests
 
+# Source helper functions
+source "$(dirname "$0")/test-helpers.sh"
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -45,7 +48,7 @@ echo "1. Testing file specification flexibility..."
 setup_test
 ./ticket.sh new test-file >/dev/null 2>&1
 git add . && git commit -q -m "add ticket"
-TICKET_NAME=$(ls tickets/*test-file.md | xargs basename | sed 's/.md$//')
+TICKET_NAME=$(safe_get_ticket_name "*test-file.md")
 
 # Test all three ways to specify ticket
 ./ticket.sh start "tickets/${TICKET_NAME}.md" --no-push >/dev/null 2>&1
@@ -73,7 +76,7 @@ fi
 echo -e "\n2. Testing close on unstarted ticket..."
 cd .. && setup_test
 ./ticket.sh new unstarted >/dev/null 2>&1
-TICKET=$(ls tickets/*unstarted.md | tail -1)
+TICKET=$(safe_get_first_file "*unstarted.md" "tickets")
 # Create fake current-ticket.md pointing to unstarted ticket
 ln -s "$TICKET" current-ticket.md
 git checkout -q -b feature/fake-branch
@@ -89,7 +92,7 @@ echo -e "\n3. Testing operations on closed ticket..."
 cd .. && setup_test
 ./ticket.sh new closed-test >/dev/null 2>&1
 git add . && git commit -q -m "add"
-TICKET_NAME=$(ls tickets/*closed-test.md | xargs basename | sed 's/.md$//')
+TICKET_NAME=$(safe_get_ticket_name "*closed-test.md")
 # Manually set closed_at
 TICKET_FILE="tickets/${TICKET_NAME}.md"
 sed -i.bak 's/started_at: null/started_at: "2025-01-01T00:00:00Z"/' "$TICKET_FILE" 2>/dev/null || \
@@ -136,10 +139,12 @@ fi
 echo -e "\n7. Testing corrupted YAML frontmatter..."
 cd .. && setup_test
 ./ticket.sh new corrupt >/dev/null 2>&1
-TICKET=$(ls tickets/*corrupt.md | tail -1)
+TICKET=$(safe_get_first_file "*corrupt.md" "tickets")
 # Corrupt the YAML
-echo "broken yaml: [" > "$TICKET"
-echo "more content" >> "$TICKET"
+if [[ -n "$TICKET" ]]; then
+    echo "broken yaml: [" > "$TICKET"
+    echo "more content" >> "$TICKET"
+fi
 
 OUTPUT=$(./ticket.sh list 2>&1)
 if echo "$OUTPUT" | grep -q "corrupt"; then
@@ -172,7 +177,7 @@ sed -i '' 's|branch_prefix: "feature/"|branch_prefix: "feature/team/"|' .ticket-
 
 ./ticket.sh new slash-test >/dev/null 2>&1
 git add . && git commit -q -m "add"
-TICKET=$(ls tickets/*slash-test.md | xargs basename | sed 's/.md$//')
+TICKET=$(safe_get_ticket_name "*slash-test.md")
 
 if ./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1; then
     BRANCH=$(git branch --show-current)
@@ -192,7 +197,7 @@ cd .. && setup_test  # Start fresh
 ./ticket.sh new multi-1 >/dev/null 2>&1
 ./ticket.sh new multi-2 >/dev/null 2>&1
 git add . && git commit -q -m "add tickets"
-TICKET=$(ls tickets/*multi-1.md | xargs basename | sed 's/.md$//')
+TICKET=$(safe_get_ticket_name "*multi-1.md")
 ./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1
 git add . && git commit -q -m "start"
 # Merge back to develop so the started_at is visible

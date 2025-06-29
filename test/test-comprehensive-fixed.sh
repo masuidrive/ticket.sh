@@ -3,6 +3,9 @@
 # Fixed comprehensive test suite for ticket.sh
 # Removed set -e to prevent early exit on test failures
 
+# Source helper functions
+source "$(dirname "$0")/test-helpers.sh"
+
 # Test configuration
 TEST_DIR="test-comprehensive-$(date +%s)"
 ORIGINAL_DIR=$(pwd)
@@ -98,7 +101,7 @@ run_tests() {
     
     # Valid slugs
     ./ticket.sh new feature-abc >/dev/null 2>&1
-    TICKET1=$(ls tickets/*feature-abc.md 2>/dev/null)
+    TICKET1=$(safe_get_first_file "*feature-abc.md" "tickets")
     [[ -n "$TICKET1" ]] && pass "Creates ticket with valid slug" || fail "Failed to create ticket"
     
     # Invalid slugs
@@ -126,7 +129,10 @@ run_tests() {
     git commit -q -m "Add tickets"
     
     # Start ticket
-    TICKET_NAME=$(basename "$TICKET1" .md)
+    TICKET_NAME=""
+    if [[ -n "$TICKET1" ]]; then
+        TICKET_NAME=$(basename "$TICKET1" .md)
+    fi
     ./ticket.sh start "$TICKET_NAME" --no-push >/dev/null 2>&1
     
     # Commit the started_at change

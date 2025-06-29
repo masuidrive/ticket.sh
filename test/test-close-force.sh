@@ -2,6 +2,9 @@
 
 # Test for close --force option
 
+# Source helper functions
+source "$(dirname "$0")/test-helpers.sh"
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -39,8 +42,10 @@ test_result() {
 echo "1. Testing close with uncommitted changes (should fail)..."
 ./ticket.sh new test-force >/dev/null 2>&1
 git add . && git commit -q -m "add ticket"
-TICKET=$(ls tickets/*.md | xargs basename | sed 's/.md$//')
-./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1
+TICKET=$(safe_get_ticket_name "*.md")
+if [[ -n "$TICKET" ]]; then
+    ./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1
+fi
 
 # Create uncommitted changes
 echo "uncommitted content" > dirty.txt
@@ -85,8 +90,10 @@ git checkout -q -b develop
 
 ./ticket.sh new test-short >/dev/null 2>&1
 git add . && git commit -q -m "add ticket"
-TICKET=$(ls tickets/*.md | xargs basename | sed 's/.md$//')
-./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1
+TICKET=$(safe_get_ticket_name "*.md")
+if [[ -n "$TICKET" ]]; then
+    ./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1
+fi
 
 # Create uncommitted changes
 echo "more uncommitted" > another-dirty.txt
@@ -111,8 +118,10 @@ git checkout -q -b develop
 
 ./ticket.sh new test-combined >/dev/null 2>&1
 git add . && git commit -q -m "add ticket"
-TICKET=$(ls tickets/*.md | xargs basename | sed 's/.md$//')
-./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1
+TICKET=$(safe_get_ticket_name "*.md")
+if [[ -n "$TICKET" ]]; then
+    ./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1
+fi
 
 # Create uncommitted changes
 echo "combined test" > combined.txt

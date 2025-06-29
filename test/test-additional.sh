@@ -3,6 +3,9 @@
 # Additional test cases for ticket.sh
 # Tests edge cases and error conditions not covered by other tests
 
+# Source helper functions
+source "$(dirname "$0")/test-helpers.sh"
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -44,17 +47,36 @@ test_result() {
 echo "1. Testing duplicate ticket prevention..."
 setup_test
 ./ticket.sh new test-duplicate >/dev/null 2>&1
-FIRST_TICKET=$(ls tickets/*test-duplicate.md)
-sleep 1  # Ensure different timestamp
-if ./ticket.sh new test-duplicate >/dev/null 2>&1; then
-    SECOND_TICKET=$(ls tickets/*test-duplicate.md | tail -1)
-    if [[ "$FIRST_TICKET" != "$SECOND_TICKET" ]]; then
-        test_result 0 "Allows same slug with different timestamp"
-    else
-        test_result 1 "Should create different files for same slug"
-    fi
+
+# Check if tickets directory exists
+if [[ ! -d tickets ]]; then
+    test_result 1 "Tickets directory not created"
 else
-    test_result 1 "Should allow duplicate slug with different timestamp"
+    # Find first ticket file
+    FIRST_TICKET=$(safe_get_first_file "*test-duplicate.md" "tickets")
+    
+    if [[ -z "$FIRST_TICKET" ]]; then
+        test_result 1 "First ticket not created"
+    else
+        sleep 1  # Ensure different timestamp
+        if ./ticket.sh new test-duplicate >/dev/null 2>&1; then
+            # Find all matching files
+            TICKET_COUNT=0
+            for f in tickets/*test-duplicate.md; do
+                if [[ -f "$f" ]]; then
+                    ((TICKET_COUNT++))
+                fi
+            done
+            
+            if [[ $TICKET_COUNT -gt 1 ]]; then
+                test_result 0 "Allows same slug with different timestamp"
+            else
+                test_result 1 "Should create different files for same slug"
+            fi
+        else
+            test_result 1 "Should allow duplicate slug with different timestamp"
+        fi
+    fi
 fi
 
 # Test 2: Start already started ticket
@@ -95,6 +117,7 @@ cd .. && setup_test
 # Create multiple tickets
 for i in {1..5}; do
     ./ticket.sh new "test-$i" >/dev/null 2>&1
+    sleep 0.1  # Small delay to ensure different timestamps
 done
 
 COUNT_1=$(./ticket.sh list --count 1 2>&1 | grep -c "ticket_name:")
@@ -130,7 +153,7 @@ sed -i '' 's/branch_prefix: "feature\/"/branch_prefix: "ticket\/"/' .ticket-conf
 
 ./ticket.sh new custom-branch >/dev/null 2>&1
 git add . && git commit -q -m "add"
-TICKET=$(ls tickets/*custom-branch.md | xargs basename | sed 's/.md$//')
+TICKET=$(safe_get_ticket_name "*custom-branch.md")
 ./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1
 
 BRANCH=$(git branch --show-current)
@@ -157,7 +180,7 @@ cd .. && setup_test
 # Create and start first ticket
 ./ticket.sh new "feature-a" >/dev/null 2>&1
 git add . && git commit -q -m "add a"
-TICKET_A=$(ls tickets/*feature-a.md | xargs basename | sed 's/.md$//')
+TICKET_A=$(safe_get_ticket_name "*feature-a.md")
 ./ticket.sh start "$TICKET_A" --no-push >/dev/null 2>&1
 git add . && git commit -q -m "start a"
 echo "work a" > work-a.txt
@@ -167,7 +190,7 @@ git add . && git commit -q -m "work a"
 git checkout -q develop
 ./ticket.sh new "feature-b" >/dev/null 2>&1
 git add . && git commit -q -m "add b"
-TICKET_B=$(ls tickets/*feature-b.md | xargs basename | sed 's/.md$//')
+TICKET_B=$(safe_get_ticket_name "*feature-b.md")
 ./ticket.sh start "$TICKET_B" --no-push >/dev/null 2>&1
 git add . && git commit -q -m "start b"
 
@@ -211,14 +234,16 @@ cd .. && setup_test
 # Create tickets with different priorities
 for i in 3 1 2; do
     ./ticket.sh new "priority-$i" >/dev/null 2>&1
-    TICKET=$(ls tickets/*priority-$i.md | tail -1)
-    sed -i.bak "s/priority: 2/priority: $i/" "$TICKET" 2>/dev/null || \
-    sed -i '' "s/priority: 2/priority: $i/" "$TICKET"
+    TICKET=$(safe_get_first_file "*priority-$i.md" "tickets")
+    if [[ -n "$TICKET" ]]; then
+        sed -i.bak "s/priority: 2/priority: $i/" "$TICKET" 2>/dev/null || \
+        sed -i '' "s/priority: 2/priority: $i/" "$TICKET"
+    fi
 done
 
 # Start one to test status+priority sorting
 git add . && git commit -q -m "add all"
-TICKET_2=$(ls tickets/*priority-2.md | xargs basename | sed 's/.md$//')
+TICKET_2=$(safe_get_ticket_name "*priority-2.md")
 ./ticket.sh start "$TICKET_2" --no-push >/dev/null 2>&1
 
 # Stay on feature branch to commit the started_at change
@@ -245,7 +270,7 @@ cd .. && setup_test
 # Test with auto_push: true (default)
 ./ticket.sh new "push-test" >/dev/null 2>&1
 git add . && git commit -q -m "add"
-TICKET=$(ls tickets/*push-test.md | xargs basename | sed 's/.md$//')
+TICKET=$(safe_get_ticket_name "*push-test.md")
 
 # Should show push command in output when auto_push is true
 OUTPUT=$(./ticket.sh start "$TICKET" 2>&1)

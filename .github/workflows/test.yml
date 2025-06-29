@@ -17,6 +17,20 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
+    - name: Setup environment
+      run: |
+        git config --global user.name "Test User"
+        git config --global user.email "test@example.com"
+        if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+        fi
+    
+    - name: Make scripts executable
+      run: |
+        chmod +x ./build.sh ./test-all.sh
+        chmod +x ./test/*.sh
+        chmod +x ./yaml-sh/*.sh
+    
     - name: Build ticket.sh
       run: ./build.sh
       
