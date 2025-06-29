@@ -109,6 +109,17 @@ The test suite consists of multiple test files that verify different aspects of 
 - **Dependencies**: test-helpers.sh
 - **Note**: Skips tests when running as root; some tests are platform-specific
 
+#### test-timezone-conversion.sh
+- **Purpose**: Test timezone conversion functionality in list command
+- **Coverage**:
+  - Local timezone display for todo tickets
+  - closed_at field display for done tickets
+  - Timezone conversion robustness (null, empty, valid formats)
+  - Platform detection (GNU date vs BSD date)
+  - Performance impact of timezone conversion
+- **Dependencies**: test-helpers.sh
+- **Note**: Gracefully handles platforms without timezone conversion support
+
 ## Helper Files
 
 ### test-helpers.sh

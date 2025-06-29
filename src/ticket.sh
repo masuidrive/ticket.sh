@@ -425,13 +425,18 @@ EOF
     while IFS='|' read -r status priority ticket_path description created_at started_at closed_at; do
         [[ $displayed -ge $count ]] && break
         
+        # Convert timestamps to local timezone
+        local created_at_local=$(convert_utc_to_local "$created_at")
+        local started_at_local=$(convert_utc_to_local "$started_at")
+        local closed_at_local=$(convert_utc_to_local "$closed_at")
+        
         echo "- status: $status"
         echo "  ticket_path: $ticket_path"
         [[ -n "$description" ]] && echo "  description: $description"
         echo "  priority: $priority"
-        echo "  created_at: $created_at"
-        [[ "$status" != "todo" ]] && echo "  started_at: $started_at"
-        [[ "$status" == "done" ]] && [[ "$closed_at" != "null" ]] && echo "  closed_at: $closed_at"
+        echo "  created_at: $created_at_local"
+        [[ "$status" != "todo" ]] && echo "  started_at: $started_at_local"
+        [[ "$status" == "done" ]] && [[ "$closed_at" != "null" ]] && echo "  closed_at: $closed_at_local"
         echo
         
         ((displayed++))

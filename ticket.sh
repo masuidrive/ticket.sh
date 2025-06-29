@@ -890,6 +890,49 @@ get_ticket_status() {
         echo "done"
     fi
 }
+
+# Convert UTC time to local timezone
+# Usage: convert_utc_to_local <utc_time>
+# Returns the original time on error (graceful degradation)
+convert_utc_to_local() {
+    local utc_time="$1"
+    
+    # Return original if empty or null
+    if is_null_or_empty "$utc_time"; then
+        echo "$utc_time"
+        return 0
+    fi
+    
+    # Try GNU date first (Linux)
+    if date --version >/dev/null 2>&1; then
+        local result=$(date -d "${utc_time}" "+%Y-%m-%d %H:%M:%S %Z" 2>/dev/null)
+        if [[ -n "$result" ]]; then
+            echo "$result"
+            return 0
+        fi
+    fi
+    
+    # Try BSD date (macOS)
+    if date -j >/dev/null 2>&1; then
+        # Try with ISO 8601 format first
+        local result=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "${utc_time}" "+%Y-%m-%d %H:%M:%S %Z" 2>/dev/null)
+        if [[ -n "$result" ]]; then
+            echo "$result"
+            return 0
+        fi
+        
+        # Try without Z suffix
+        local time_no_z="${utc_time%Z}"
+        result=$(date -j -f "%Y-%m-%dT%H:%M:%S" "${time_no_z}" "+%Y-%m-%d %H:%M:%S %Z" 2>/dev/null)
+        if [[ -n "$result" ]]; then
+            echo "$result"
+            return 0
+        fi
+    fi
+    
+    # Fallback to original
+    echo "$utc_time"
+}
 # === Main Script ===
 
 
@@ -1302,13 +1345,18 @@ EOF
     while IFS='|' read -r status priority ticket_path description created_at started_at closed_at; do
         [[ $displayed -ge $count ]] && break
         
+        # Convert timestamps to local timezone
+        local created_at_local=$(convert_utc_to_local "$created_at")
+        local started_at_local=$(convert_utc_to_local "$started_at")
+        local closed_at_local=$(convert_utc_to_local "$closed_at")
+        
         echo "- status: $status"
         echo "  ticket_path: $ticket_path"
         [[ -n "$description" ]] && echo "  description: $description"
         echo "  priority: $priority"
-        echo "  created_at: $created_at"
-        [[ "$status" != "todo" ]] && echo "  started_at: $started_at"
-        [[ "$status" == "done" ]] && [[ "$closed_at" != "null" ]] && echo "  closed_at: $closed_at"
+        echo "  created_at: $created_at_local"
+        [[ "$status" != "todo" ]] && echo "  started_at: $started_at_local"
+        [[ "$status" == "done" ]] && [[ "$closed_at" != "null" ]] && echo "  closed_at: $closed_at_local"
         echo
         
         ((displayed++))

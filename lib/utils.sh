@@ -147,3 +147,46 @@ get_ticket_status() {
         echo "done"
     fi
 }
+
+# Convert UTC time to local timezone
+# Usage: convert_utc_to_local <utc_time>
+# Returns the original time on error (graceful degradation)
+convert_utc_to_local() {
+    local utc_time="$1"
+    
+    # Return original if empty or null
+    if is_null_or_empty "$utc_time"; then
+        echo "$utc_time"
+        return 0
+    fi
+    
+    # Try GNU date first (Linux)
+    if date --version >/dev/null 2>&1; then
+        local result=$(date -d "${utc_time}" "+%Y-%m-%d %H:%M:%S %Z" 2>/dev/null)
+        if [[ -n "$result" ]]; then
+            echo "$result"
+            return 0
+        fi
+    fi
+    
+    # Try BSD date (macOS)
+    if date -j >/dev/null 2>&1; then
+        # Try with ISO 8601 format first
+        local result=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "${utc_time}" "+%Y-%m-%d %H:%M:%S %Z" 2>/dev/null)
+        if [[ -n "$result" ]]; then
+            echo "$result"
+            return 0
+        fi
+        
+        # Try without Z suffix
+        local time_no_z="${utc_time%Z}"
+        result=$(date -j -f "%Y-%m-%dT%H:%M:%S" "${time_no_z}" "+%Y-%m-%d %H:%M:%S %Z" 2>/dev/null)
+        if [[ -n "$result" ]]; then
+            echo "$result"
+            return 0
+        fi
+    fi
+    
+    # Fallback to original
+    echo "$utc_time"
+}
