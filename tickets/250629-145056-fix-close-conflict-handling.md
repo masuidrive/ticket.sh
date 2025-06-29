@@ -4,7 +4,7 @@ tags: ["bug-fix", "core", "conflict-handling"]
 description: "closeコマンドでマージコンフリクト発生時の復旧フロー改善"
 created_at: "2025-06-29T14:50:56Z"
 started_at: 2025-06-29T14:51:58Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2025-06-29T15:00:02Z # Do not modify manually
 ---
 
 # closeコマンドのマージコンフリクト対応改善
