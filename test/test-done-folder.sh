@@ -22,6 +22,9 @@ git checkout -b develop -q
 
 # Initialize ticket system
 "$TICKET_SH" init
+# Commit the initialization
+git add -A
+git commit -m "Initialize ticket system" -q
 
 echo "1. Testing close moves ticket to done folder..."
 # Create and start a ticket
