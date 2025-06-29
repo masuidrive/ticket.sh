@@ -1391,7 +1391,7 @@ EOF
     fi
     
     # Extract ticket name from branch
-    local ticket_name="${current_branch#$branch_prefix}"
+    local ticket_name="${current_branch#"$branch_prefix"}"
     local ticket_file="${tickets_dir}/${ticket_name}.md"
     
     # Check if ticket file exists
