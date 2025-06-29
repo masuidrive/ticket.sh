@@ -165,7 +165,7 @@ default_content: |
 ./ticket.sh list [--status todo|doing|done] [--count N]  # チケット一覧
 ./ticket.sh start <ticket-name> [--no-push]  # チケット開始・ブランチ作成
 ./ticket.sh restore                       # current-ticketリンク復元
-./ticket.sh close [--no-push]             # チケット完了・マージ処理
+./ticket.sh close [--no-push] [--force|-f]  # チケット完了・マージ処理
 ```
 
 ---
@@ -495,16 +495,21 @@ Permission denied creating symlink. Please:
 3. Run with appropriate permissions if needed
 ```
 
-### `close [--no-push]`
+### `close [--no-push] [--force|-f]`
 チケット完了とマージ処理：
 
+**オプション:**
+- `--no-push`: 自動プッシュを無効化（`auto_push: true` の場合でも）
+- `--force` / `-f`: コミットされていない変更を無視して強制的にクローズ
+
 **実行フロー:**
-1. **チケット更新**: current-ticket.md の参照先チケットの `closed_at` に現在時刻を設定
-2. **コミット**: `"Close ticket"` メッセージでコミット
-3. **Push (条件付き)**: `auto_push: true` かつ `--no-push` 未指定時のみ featureブランチをpush
-4. **Squash Merge**: featureブランチを `{default_branch}` にsquash merge
-5. **Push (条件付き)**: `auto_push: true` かつ `--no-push` 未指定時のみ `{default_branch}` をpush
-6. 実行したGitコマンドと出力を詳細表示
+1. **作業ディレクトリチェック**: `--force` 未指定時のみ、コミットされていない変更がないか確認
+2. **チケット更新**: current-ticket.md の参照先チケットの `closed_at` に現在時刻を設定
+3. **コミット**: `"Close ticket"` メッセージでコミット
+4. **Push (条件付き)**: `auto_push: true` かつ `--no-push` 未指定時のみ featureブランチをpush
+5. **Squash Merge**: featureブランチを `{default_branch}` にsquash merge
+6. **Push (条件付き)**: `auto_push: true` かつ `--no-push` 未指定時のみ `{default_branch}` をpush
+7. 実行したGitコマンドと出力を詳細表示
 
 **Git操作詳細:**
 ```bash
@@ -657,8 +662,16 @@ Note: Changes not pushed to remote. Use 'git push origin develop' and 'git push 
   Error: Uncommitted changes
   Working directory has uncommitted changes. Please:
   1. Commit your changes: git add . && git commit -m "message"
-  2. Review changes: git status
-  3. Then retry closing the ticket
+  2. Or stash changes: git stash
+  3. Then retry the ticket operation
+  
+  To ignore uncommitted changes and force close, use:
+    ticket.sh close --force (or -f)
+  
+  Or handle the changes:
+    1. Commit your changes: git add . && git commit -m "message"
+    2. Stash changes: git stash
+    3. Discard changes: git checkout -- .
   ```
 - Push失敗: 
   ```
@@ -718,7 +731,7 @@ USAGE:
   ./ticket.sh list [--status STATUS] [--count N]  List tickets (default: todo + doing, count: 20)
   ./ticket.sh start <ticket-name> [--no-push]     Start working on ticket (creates feature branch)
   ./ticket.sh restore                  Restore current-ticket.md symlink from branch name
-  ./ticket.sh close [--no-push]       Complete current ticket (squash merge to default branch)
+  ./ticket.sh close [--no-push] [--force|-f]  Complete current ticket (squash merge to default branch)
 
 TICKET NAMING:
 - Format: YYMMDD-hhmmss-<slug>

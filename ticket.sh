@@ -916,7 +916,7 @@ USAGE:
   ./ticket.sh list [--status STATUS] [--count N]  List tickets (default: todo + doing, count: 20)
   ./ticket.sh start <ticket-name> [--no-push]     Start working on ticket (creates feature branch)
   ./ticket.sh restore                  Restore current-ticket.md symlink from branch name
-  ./ticket.sh close [--no-push]       Complete current ticket (squash merge to default branch)
+  ./ticket.sh close [--no-push] [--force|-f]  Complete current ticket (squash merge to default branch)
 
 TICKET NAMING:
 - Format: YYMMDD-hhmmss-<slug>
@@ -1389,16 +1389,47 @@ EOF
 # Close current ticket
 cmd_close() {
     local no_push=false
+    local force=false
     
-    # Check for --no-push flag
-    if [[ "${1:-}" == "--no-push" ]]; then
-        no_push=true
-    fi
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --no-push)
+                no_push=true
+                shift
+                ;;
+            --force|-f)
+                force=true
+                shift
+                ;;
+            *)
+                echo "Error: Unknown option: $1" >&2
+                echo "Usage: ticket.sh close [--no-push] [--force|-f]" >&2
+                return 1
+                ;;
+        esac
+    done
     
     # Check prerequisites
     check_git_repo || return 1
     check_config || return 1
-    check_clean_working_dir || return 1
+    
+    # Check clean working directory unless --force is used
+    if [[ "$force" == "false" ]]; then
+        if ! check_clean_working_dir; then
+            cat >&2 << EOF
+
+To ignore uncommitted changes and force close, use:
+  ticket.sh close --force (or -f)
+
+Or handle the changes:
+  1. Commit your changes: git add . && git commit -m "message"
+  2. Stash changes: git stash
+  3. Discard changes: git checkout -- .
+EOF
+            return 1
+        fi
+    fi
     
     # Check current ticket link
     if [[ ! -L "$CURRENT_TICKET_LINK" ]]; then
@@ -1566,7 +1597,8 @@ main() {
             cmd_restore
             ;;
         close)
-            cmd_close "${2:-}"
+            shift
+            cmd_close "$@"
             ;;
         help|--help|-h)
             show_usage

@@ -165,7 +165,7 @@ default_content: |
 ./ticket.sh list [--status todo|doing|done] [--count N]  # List tickets
 ./ticket.sh start <ticket-name> [--no-push]  # Start ticket/create branch
 ./ticket.sh restore                       # Restore current-ticket link
-./ticket.sh close [--no-push]             # Complete ticket/merge process
+./ticket.sh close [--no-push] [--force|-f]  # Complete ticket/merge process
 ```
 
 ---
