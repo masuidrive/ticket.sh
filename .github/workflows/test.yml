@@ -9,6 +9,7 @@ on:
 jobs:
   test:
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     
     strategy:
       matrix:
@@ -49,6 +50,7 @@ jobs:
       
     - name: Run all tests
       run: ./test-all.sh
+      timeout-minutes: 10
         
   yaml-sh-test:
     runs-on: ${{ matrix.os }}

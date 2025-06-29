@@ -104,8 +104,10 @@ echo -e "Failed: ${RED}$TOTAL_FAILED${NC}"
 
 if [ $TOTAL_FAILED -eq 0 ]; then
     echo -e "\n${GREEN}All tests passed!${NC}"
+    echo "Exit code: 0"
     exit 0
 else
     echo -e "\n${RED}Some tests failed.${NC}"
+    echo "Exit code: 1"
     exit 1
 fi
