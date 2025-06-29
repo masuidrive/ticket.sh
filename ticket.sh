@@ -915,7 +915,26 @@ set -euo pipefail
 # Ensure UTF-8 support and locale-independent behavior
 export LANG=C.UTF-8
 export LC_ALL=C.UTF-8
-unset GREP_OPTIONS
+
+# Unset environment variables that could affect behavior
+unset GREP_OPTIONS  # Prevent user's grep options from affecting behavior
+unset CDPATH       # Prevent unexpected directory changes
+unset IFS          # Reset Internal Field Separator to default
+
+# Git-related - ensure we use the current directory's git repo
+unset GIT_DIR
+unset GIT_WORK_TREE
+
+# Shell behavior - prevent unexpected script execution
+unset BASH_ENV
+unset ENV
+
+# Ensure consistent behavior
+unset POSIXLY_CORRECT  # We rely on bash-specific features
+
+# Set secure defaults
+set -o noclobber   # Prevent accidental file overwrites with >
+umask 0022         # Ensure created files have proper permissions
 
 # Get the directory where this script is located
 
