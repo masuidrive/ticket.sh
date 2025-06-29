@@ -1,0 +1,14 @@
+# Auto-generated test directories
+test-*/
+test-additional-*/
+test-basic-*/
+test-comprehensive-*/
+test-final-*/
+test-simple-*/
+test-investigate-*/
+
+# Temporary files
+*.tmp
+*.temp
+temp-*
+tmp-*
