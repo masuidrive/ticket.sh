@@ -40,6 +40,9 @@ TICKET_NAME=$(ls tickets/*.md | head -1 | xargs basename | sed 's/\.md$//')
 git add -A
 git commit -m "Add test ticket" -q
 "$TICKET_SH" start "$TICKET_NAME"
+# Commit the started_at change
+git add -A
+git commit -m "Start ticket" -q
 
 # Add some work
 echo "test" > work.txt
@@ -93,6 +96,9 @@ TICKET_NAME2=$(ls tickets/*.md | grep -v done | tail -1 | xargs basename | sed '
 git add -A
 git commit -m "Add second test ticket" -q
 "$TICKET_SH" start "$TICKET_NAME2"
+# Commit the started_at change
+git add -A
+git commit -m "Start second ticket" -q
 
 # Add work and close
 echo "test2" > work2.txt
