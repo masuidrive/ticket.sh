@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+# IMPORTANT NOTE: This file is generated from source files. DO NOT EDIT DIRECTLY!
+# To make changes, edit the source files in src/ directory and run ./build.sh
+# Source file: src/ticket.sh
+
 # ticket.sh - Git-based Ticket Management System for Development
 # Version: 1.0.0
 # Built from source files
@@ -964,54 +968,77 @@ Additional notes or requirements.'
 # Show usage information
 show_usage() {
     cat << 'EOF'
-Ticket Management System for Coding Agents
+# Ticket Management System for Coding Agents
 
-OVERVIEW:
+## Overview
+
 This is a self-contained ticket management system using shell script + files + Git.
 Each ticket is a single Markdown file with YAML frontmatter metadata.
 
-USAGE:
-  ./ticket.sh init                     Initialize system (create config, directories, .gitignore)
-  ./ticket.sh new <slug>               Create new ticket file (slug: lowercase, numbers, hyphens only)
-  ./ticket.sh list [--status STATUS] [--count N]  List tickets (default: todo + doing, count: 20)
-  ./ticket.sh start <ticket-name> [--no-push]     Start working on ticket (creates feature branch)
-  ./ticket.sh restore                  Restore current-ticket.md symlink from branch name
-  ./ticket.sh close [--no-push] [--force|-f]  Complete current ticket (squash merge to default branch)
+## Usage
 
-TICKET NAMING:
-- Format: YYMMDD-hhmmss-<slug>
-- Example: 241225-143502-implement-user-auth
+- `./ticket.sh init` - Initialize system (create config, directories, .gitignore)
+- `./ticket.sh new <slug>` - Create new ticket file (slug: lowercase, numbers, hyphens only)
+- `./ticket.sh list [--status STATUS] [--count N]` - List tickets (default: todo + doing, count: 20)
+- `./ticket.sh start <ticket-name> [--no-push]` - Start working on ticket (creates feature branch)
+- `./ticket.sh restore` - Restore current-ticket.md symlink from branch name
+- `./ticket.sh close [--no-push] [--force|-f]` - Complete current ticket (squash merge to default branch)
+
+## Ticket Naming
+
+- Format: `YYMMDD-hhmmss-<slug>`
+- Example: `241225-143502-implement-user-auth`
 - Generated automatically when creating tickets
 
-TICKET STATUS:
-- todo: not started (started_at: null)
-- doing: in progress (started_at set, closed_at: null)
-- done: completed (closed_at set)
+## Ticket Status
 
-CONFIGURATION:
-- Config file: .ticket-config.yml (in project root)
-- Initialize with: ./ticket.sh init
+- `todo`: not started (started_at: null)
+- `doing`: in progress (started_at set, closed_at: null)
+- `done`: completed (closed_at set)
+
+## Configuration
+
+- Config file: `.ticket-config.yml` (in project root)
+- Initialize with: `./ticket.sh init`
 - Edit to customize directories, branches, and templates
 
-PUSH CONTROL:
-- Set auto_push: false in config to disable automatic pushing
-- Use --no-push flag to override auto_push: true for single command
+## Push Control
+
+- Set `auto_push: false` in config to disable automatic pushing
+- Use `--no-push` flag to override `auto_push: true` for single command
 - Git commands and outputs are displayed for transparency
 
-WORKFLOW:
-1. Create ticket: ./ticket.sh new feature-name
-2. Edit ticket content and description
-3. Start work: ./ticket.sh start 241225-143502-feature-name
-4. Develop on feature branch (current-ticket.md shows active ticket)
-5. Complete: ./ticket.sh close
+## Workflow
 
-TROUBLESHOOTING:
-- Run from project root (where .git and .ticket-config.yml exist)
-- Use 'restore' if current-ticket.md is missing after clone/pull
-- Check 'list' to see available tickets and their status
+### Create New Ticket
+
+1. Create ticket: `./ticket.sh new feature-name`
+2. Edit ticket content and description in the generated file
+
+### Start Work
+
+1. Check available tickets: `./ticket.sh list` or browse tickets directory
+2. Start work: `./ticket.sh start 241225-143502-feature-name`
+3. Develop on feature branch (`current-ticket.md` shows active ticket)
+
+### Closing
+
+1. Before closing:
+   - Review ticket content and description
+   - Check all tasks in checklist are completed (mark with `[x]`)
+   - Get user confirmation before proceeding
+2. Complete: `./ticket.sh close`
+
+**Note**: If specific workflow instructions are provided elsewhere (e.g., in project documentation or CLAUDE.md), those take precedence over this general workflow.
+
+## Troubleshooting
+
+- Run from project root (where `.git` and `.ticket-config.yml` exist)
+- Use `restore` if `current-ticket.md` is missing after clone/pull
+- Check `list` to see available tickets and their status
 - Ensure Git working directory is clean before start/close
 
-Note: current-ticket.md is git-ignored and needs 'restore' after clone/pull.
+**Note**: `current-ticket.md` is git-ignored and needs `restore` after clone/pull.
 EOF
 }
 

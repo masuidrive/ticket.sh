@@ -3,8 +3,8 @@ priority: 2
 tags: ["documentation", "help", "workflow"]
 description: "ヘルプメッセージの改善とワークフロー説明の更新"
 created_at: "2025-06-29T15:16:00Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2025-06-29T16:07:17Z # Do not modify manually
+closed_at: 2025-06-29T16:24:52Z # Do not modify manually
 ---
 
 # ヘルプメッセージの改善
@@ -20,14 +20,14 @@ ticket.shのヘルプメッセージを改善し、実際の使用方法をよ�
 
 ## Tasks
 
-- [ ] ヘルプメッセージ全体をMarkdown形式に統一
-- [ ] WORKFLOWセクションにcloseコマンドの注意事項を追加
-  - [ ] closeはユーザーの確認を取ってから実行すること
-  - [ ] close前にチケット内容を確認すること
-  - [ ] チェックリストがある場合は完了状態を確認してチェックすること
-- [ ] 他の場所で指示されたワークフローがある場合はそちらを優先する旨を追記
-- [ ] 実装後、`./ticket.sh help`で表示確認
-- [ ] テストが壊れていないことを確認
+- [x] ヘルプメッセージ全体をMarkdown形式に統一
+- [x] WORKFLOWセクションにcloseコマンドの注意事項を追加
+  - [x] closeはユーザーの確認を取ってから実行すること
+  - [x] close前にチケット内容を確認すること
+  - [x] チェックリストがある場合は完了状態を確認してチェックすること
+- [x] 他の場所で指示されたワークフローがある場合はそちらを優先する旨を追記
+- [x] 実装後、`./ticket.sh help`で表示確認
+- [x] テストが壊れていないことを確認
 
 ## 詳細仕様
 
@@ -60,3 +60,26 @@ ticket.shのヘルプメッセージを改善し、実際の使用方法をよ�
 ## Notes
 
 この変更により、AIアシスタントや開発者がより適切にticket.shを使用できるようになる。特にcloseコマンドの実行前の確認プロセスが明確になることで、不完全な状態でのチケットクローズを防げる。
+
+---
+
+## 追加実装：ビルドファイルへの編集禁止警告
+
+### 概要
+`./ticket.sh`はソースファイルからビルドされたファイルであり、直接編集してはいけないことを明示的に警告するヘッダーを追加した。
+
+### 実装内容
+build.shを修正して、生成されるticket.shの先頭に以下の警告コメントを追加：
+
+```bash
+#!/usr/bin/env bash
+
+# IMPORTANT NOTE: This file is generated from source files. DO NOT EDIT DIRECTLY!
+# To make changes, edit the source files in src/ directory and run ./build.sh
+# Source file: src/ticket.sh
+```
+
+### 変更ファイル
+- `build.sh`: 警告ヘッダーの追加処理を実装
+
+この警告により、開発者やAIアシスタントが誤ってビルドファイルを直接編集することを防げる。
