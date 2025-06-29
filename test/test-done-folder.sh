@@ -5,6 +5,11 @@ set -euo pipefail
 
 echo "=== Testing done folder functionality ==="
 
+# Get ticket.sh path
+if [[ -z "${TICKET_SH:-}" ]]; then
+    TICKET_SH="../ticket.sh"
+fi
+
 # Setup
 TEST_DIR=$(mktemp -d)
 # Copy ticket.sh to test directory
