@@ -30,6 +30,9 @@ echo "1. Testing close moves ticket to done folder..."
 # Create and start a ticket
 "$TICKET_SH" new test-done-folder
 TICKET_NAME=$(ls tickets/*.md | head -1 | xargs basename | sed 's/\.md$//')
+# Commit the new ticket
+git add -A
+git commit -m "Add test ticket" -q
 "$TICKET_SH" start "$TICKET_NAME"
 
 # Add some work
@@ -80,6 +83,9 @@ rm -rf tickets/done
 # Create another ticket
 "$TICKET_SH" new test-auto-create
 TICKET_NAME2=$(ls tickets/*.md | grep -v done | tail -1 | xargs basename | sed 's/\.md$//')
+# Commit the new ticket
+git add -A
+git commit -m "Add second test ticket" -q
 "$TICKET_SH" start "$TICKET_NAME2"
 
 # Add work and close
