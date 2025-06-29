@@ -351,7 +351,7 @@ EOF
         [[ -z "$yaml_content" ]] && continue
         
         # Parse YAML in a temporary file
-        echo "$yaml_content" > "${temp_file}.yml"
+        echo "$yaml_content" >| "${temp_file}.yml"
         yaml_parse "${temp_file}.yml" 2>/dev/null || continue
         
         # Get fields
@@ -460,7 +460,7 @@ EOF
     
     # Check if ticket is already started
     local yaml_content=$(extract_yaml_frontmatter "$ticket_file")
-    echo "$yaml_content" > /tmp/ticket_yaml.yml
+    echo "$yaml_content" >| /tmp/ticket_yaml.yml
     yaml_parse /tmp/ticket_yaml.yml
     local started_at=$(yaml_get "started_at" || echo "null")
     rm -f /tmp/ticket_yaml.yml
@@ -667,7 +667,7 @@ EOF
     
     # Check ticket status
     local yaml_content=$(extract_yaml_frontmatter "$ticket_file")
-    echo "$yaml_content" > /tmp/ticket_yaml.yml
+    echo "$yaml_content" >| /tmp/ticket_yaml.yml
     yaml_parse /tmp/ticket_yaml.yml
     local started_at=$(yaml_get "started_at" || echo "null")
     local closed_at=$(yaml_get "closed_at" || echo "null")

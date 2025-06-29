@@ -22,8 +22,8 @@ FAILED_TESTS=()
 
 # Find and run all test scripts
 for test_script in "$TEST_DIR"/test-*.sh; do
-    # Skip this script itself
-    if [[ "$(basename "$test_script")" == "test-all.sh" ]]; then
+    # Skip this script itself and docker runner
+    if [[ "$(basename "$test_script")" == "test-all.sh" ]] || [[ "$(basename "$test_script")" == "test-all-on-docker.sh" ]]; then
         continue
     fi
     
