@@ -25,27 +25,29 @@ set -euo pipefail
 EOF
 
 # Inline library files (excluding shebang and source statements)
-echo "# === Inlined Libraries ===" >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
-
-# Process yaml-sh.sh from yaml-sh directory
-echo "# --- yaml-sh.sh ---" >> "$OUTPUT_FILE"
-tail -n +2 "yaml-sh/yaml-sh.sh" >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
-
-# Process yaml-frontmatter.sh
-echo "# --- yaml-frontmatter.sh ---" >> "$OUTPUT_FILE"
-tail -n +2 "$LIB_DIR/yaml-frontmatter.sh" >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
-
-# Process utils.sh
-echo "# --- utils.sh ---" >> "$OUTPUT_FILE"
-tail -n +2 "$LIB_DIR/utils.sh" >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
-
-# Process main script (excluding shebang and source statements)
-echo "# === Main Script ===" >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
+{
+    echo "# === Inlined Libraries ==="
+    echo ""
+    
+    # Process yaml-sh.sh from yaml-sh directory
+    echo "# --- yaml-sh.sh ---"
+    tail -n +2 "yaml-sh/yaml-sh.sh"
+    echo ""
+    
+    # Process yaml-frontmatter.sh
+    echo "# --- yaml-frontmatter.sh ---"
+    tail -n +2 "$LIB_DIR/yaml-frontmatter.sh"
+    echo ""
+    
+    # Process utils.sh
+    echo "# --- utils.sh ---"
+    tail -n +2 "$LIB_DIR/utils.sh"
+    echo ""
+    
+    # Process main script (excluding shebang and source statements)
+    echo "# === Main Script ==="
+    echo ""
+} >> "$OUTPUT_FILE"
 
 # Remove shebang, source statements, and SCRIPT_DIR references
 tail -n +2 "$SRC_DIR/ticket.sh" | \
@@ -57,6 +59,6 @@ tail -n +2 "$SRC_DIR/ticket.sh" | \
 chmod +x "$OUTPUT_FILE"
 
 echo "Build complete: $OUTPUT_FILE"
-echo "File size: $(ls -lh "$OUTPUT_FILE" | awk '{print $5}')"
+echo "File size: $(stat -f%z "$OUTPUT_FILE" 2>/dev/null || stat -c%s "$OUTPUT_FILE" 2>/dev/null || echo "unknown") bytes"
 echo ""
 echo "You can now use: ./$OUTPUT_FILE"
