@@ -568,16 +568,20 @@ EOF
     local ticket_name="${current_branch#"$branch_prefix"}"
     local ticket_file="${tickets_dir}/${ticket_name}.md"
     
-    # Check if ticket file exists
+    # Check if ticket file exists in regular location or done folder
     if [[ ! -f "$ticket_file" ]]; then
-        cat >&2 << EOF
+        # Check in done folder
+        ticket_file="${tickets_dir}/done/${ticket_name}.md"
+        if [[ ! -f "$ticket_file" ]]; then
+            cat >&2 << EOF
 Error: No matching ticket found
 No ticket file found for branch '$current_branch'. Please:
-1. Check if ticket file exists in $tickets_dir/
+1. Check if ticket file exists in $tickets_dir/ or $tickets_dir/done/
 2. Ensure branch name matches ticket name format
 3. Or start a new ticket if this is a new feature
 EOF
-        return 1
+            return 1
+        fi
     fi
     
     # Create symlink
