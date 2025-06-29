@@ -1014,7 +1014,16 @@ auto_push: $DEFAULT_AUTO_PUSH
 
 # Ticket template
 default_content: |
-$DEFAULT_CONTENT
+  # Ticket Overview
+  
+  Write the overview and tasks for this ticket here.
+  
+  ## Tasks
+  - [ ] Task 1
+  - [ ] Task 2
+  
+  ## Notes
+  Additional notes or requirements.
 EOF
         echo "Created configuration file: $CONFIG_FILE"
     else
@@ -1022,8 +1031,13 @@ EOF
     fi
     
     # Parse config to get tickets_dir
-    yaml_parse "$CONFIG_FILE"
-    local tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
+    if ! yaml_parse "$CONFIG_FILE"; then
+        echo "Warning: Could not parse config file, using defaults" >&2
+        local tickets_dir="$DEFAULT_TICKETS_DIR"
+    else
+        local tickets_dir
+        tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
+    fi
     
     # Create tickets directory
     if [[ ! -d "$tickets_dir" ]]; then
