@@ -115,9 +115,9 @@ for i in {1..5}; do
 done
 
 # Use more explicit grep pattern and ensure clean counting
-COUNT_1=$(./ticket.sh list --count 1 2>&1 | grep -E "^[[:space:]]*ticket_name:" | wc -l | tr -d ' ')
-COUNT_3=$(./ticket.sh list --count 3 2>&1 | grep -E "^[[:space:]]*ticket_name:" | wc -l | tr -d ' ')
-COUNT_10=$(./ticket.sh list --count 10 2>&1 | grep -E "^[[:space:]]*ticket_name:" | wc -l | tr -d ' ')
+COUNT_1=$(./ticket.sh list --count 1 2>&1 | grep -E "^[[:space:]]*ticket_path:" | wc -l | tr -d ' ')
+COUNT_3=$(./ticket.sh list --count 3 2>&1 | grep -E "^[[:space:]]*ticket_path:" | wc -l | tr -d ' ')
+COUNT_10=$(./ticket.sh list --count 10 2>&1 | grep -E "^[[:space:]]*ticket_path:" | wc -l | tr -d ' ')
 
 if [[ $COUNT_1 -eq 1 ]] && [[ $COUNT_3 -eq 3 ]] && [[ $COUNT_10 -eq 5 ]]; then
     test_result 0 "Count parameter works correctly"
@@ -251,7 +251,7 @@ git merge --no-ff -q "feature/$TICKET_2" -m "Merge feature branch" >/dev/null 2>
 # Now check order in list from develop branch
 LIST_OUTPUT=$(./ticket.sh list 2>&1)
 # Get the first ticket name (should be priority-2 with doing status)
-FIRST_TICKET=$(echo "$LIST_OUTPUT" | grep "ticket_name:" | head -1 | awk '{print $2}')
+FIRST_TICKET=$(echo "$LIST_OUTPUT" | grep "ticket_path:" | head -1 | awk '{print $2}')
 if [[ "$FIRST_TICKET" == *"priority-2"* ]]; then
     test_result 0 "Doing status shown first (status > priority)"
 else

@@ -155,8 +155,8 @@ else
     echo "  Current branch: $BRANCH"
 fi
 
-# Check if any ticket has been closed
-if ls tickets/*.md 2>/dev/null | xargs grep -l "closed_at: 20" >/dev/null 2>&1; then
+# Check if any ticket has been closed (check in done folder)
+if ls tickets/done/*.md 2>/dev/null | xargs grep -l "closed_at: 20" >/dev/null 2>&1; then
     test_case "Close updates ticket" "PASS"
 else
     test_case "Close updates ticket" "FAIL"
