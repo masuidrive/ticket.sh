@@ -49,7 +49,7 @@ echo "" >> "$OUTPUT_FILE"
 
 # Remove shebang, source statements, and SCRIPT_DIR references
 tail -n +2 "$SRC_DIR/ticket.sh" | \
-    grep -v '^source.*lib/' | \
+    grep -v '^source' | \
     grep -v '^SCRIPT_DIR=' | \
     cat >> "$OUTPUT_FILE"
 

@@ -21,7 +21,7 @@ echo
 echo "Setting up test environment..."
 mkdir -p "$TEST_DIR"
 cd "$TEST_DIR"
-cp ../ticket.sh .
+cp ../../ticket.sh .
 chmod +x ticket.sh
 
 # Track results

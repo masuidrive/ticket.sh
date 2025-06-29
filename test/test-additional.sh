@@ -20,7 +20,7 @@ setup_test() {
     rm -rf "$TEST_DIR"
     mkdir "$TEST_DIR"
     cd "$TEST_DIR"
-    cp ../ticket.sh .
+    cp ../../ticket.sh .
     git init -q
     git config user.name "Test"
     git config user.email "test@test.com"

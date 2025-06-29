@@ -11,7 +11,7 @@ TEST_DIR="test-basic"
 rm -rf "$TEST_DIR"
 mkdir "$TEST_DIR"
 cd "$TEST_DIR"
-cp ../ticket.sh .
+cp ../../ticket.sh .
 
 # Initialize git
 git init -q

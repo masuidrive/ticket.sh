@@ -12,7 +12,7 @@ mkdir -p "$TEST_DIR"
 cd "$TEST_DIR"
 
 # Copy ticket.sh
-cp ../ticket.sh .
+cp ../../ticket.sh .
 
 echo "1. Testing without git repo..."
 if ! ./ticket.sh init 2>&1 | grep -q "Error: Not in a git repository"; then
