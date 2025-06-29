@@ -1,7 +1,9 @@
+# default_content: abc
 tickets_dir: "tickets"
 default_branch: "develop"
 branch_prefix: "feature/"
 repository: "origin"
+# This is a YAML file for ticket management configuration
 default_content: |
   # Ticket Overview
   
@@ -13,3 +15,20 @@ default_content: |
   
   ## Notes
   Additional notes or requirements.
+# This is a YAML file for user configuration
+user:
+  name: "John Doe"
+  email: "john@example.com"
+  hobbies:
+    - "Reading"
+    - "Hiking"
+    - "Coding"
+  address: >
+    123 Main St,
+    Springfield,
+    IL 62701
+  preferences:
+    notifications: true
+foo: 1.23
+bar: true
+baz: null

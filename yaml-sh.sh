@@ -3,6 +3,34 @@
 # yaml-sh: A simple YAML parser for Bash 3.2+
 # Version: 2.0.0
 # Usage: source yaml-sh.sh
+#
+# Supported YAML syntax:
+# - Key-value pairs: key: value
+# - Lists with dash notation: - item
+# - Inline lists: [item1, item2, item3]
+# - Multiline strings:
+#   - Literal style (|): Preserves newlines
+#   - Folded style (>): Converts newlines to spaces
+#   - Strip modifier (-): Removes final newline
+#   - Keep modifier (+): Keeps all trailing newlines
+# - Quoted strings: 'single quotes' and "double quotes"
+# - Comments: # comment (except in multiline strings)
+# - Flat structure only (no nested objects support)
+#
+# Known limitations:
+# - Pipe multiline strings (|): May lose the final newline
+# - Folded strings (>): May lose the trailing space
+# - No support for nested objects or complex data structures
+# - No support for anchors, aliases, or tags
+# - No support for flow style mappings
+#
+# API Functions:
+# - yaml_parse <file>: Parse a YAML file
+# - yaml_get <key>: Get value by key
+# - yaml_keys: List all keys
+# - yaml_has_key <key>: Check if key exists
+# - yaml_list_size <prefix>: Get size of a list
+# - yaml_load <file> [prefix]: Load YAML into environment variables
 
 # Global variables to store parsed data
 declare -a _YAML_KEYS
