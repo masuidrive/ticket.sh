@@ -220,16 +220,22 @@ done
 git add . && git commit -q -m "add all"
 TICKET_2=$(ls tickets/*priority-2.md | xargs basename | sed 's/.md$//')
 ./ticket.sh start "$TICKET_2" --no-push >/dev/null 2>&1
-git add . && git commit -q -m "start"
-git checkout -q develop
 
-# Check order in list
+# Stay on feature branch to commit the started_at change
+git add . && git commit -q -m "start ticket"
+
+# Merge the change back to develop so started_at is visible
+git checkout -q develop
+git merge --no-ff -q "feature/$TICKET_2" -m "Merge feature branch" >/dev/null 2>&1
+
+# Now check order in list from develop branch
 LIST_OUTPUT=$(./ticket.sh list 2>&1)
-FIRST=$(echo "$LIST_OUTPUT" | grep -A1 "ticket_name:" | head -1)
-if echo "$FIRST" | grep -q "priority-2"; then
+# Get the first ticket name (should be priority-2 with doing status)
+FIRST_TICKET=$(echo "$LIST_OUTPUT" | grep "ticket_name:" | head -1 | awk '{print $2}')
+if [[ "$FIRST_TICKET" == *"priority-2"* ]]; then
     test_result 0 "Doing status shown first (status > priority)"
 else
-    test_result 1 "Priority sorting may be incorrect"
+    test_result 1 "Priority sorting may be incorrect" "First ticket was: $FIRST_TICKET"
 fi
 
 # Test 12: Auto-push configuration
