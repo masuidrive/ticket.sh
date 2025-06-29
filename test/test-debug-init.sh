@@ -2,6 +2,9 @@
 
 # Debug init problems
 
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 echo "=== Testing ticket.sh init ==="
 
 # Create test directory
@@ -10,7 +13,8 @@ mkdir -p "$TEST_DIR"
 cd "$TEST_DIR"
 
 # Copy ticket.sh
-cp ../../ticket.sh .
+cp "${SCRIPT_DIR}/../src/ticket.sh" .
+chmod +x ticket.sh
 
 echo -e "\n1. Setting up git repo..."
 git init -q

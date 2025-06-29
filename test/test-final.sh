@@ -3,6 +3,9 @@
 # Final test suite for ticket.sh
 # This version handles errors more gracefully
 
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Test configuration
 TEST_DIR="test-final-$(date +%s)"
 ORIGINAL_DIR=$(pwd)
@@ -21,7 +24,7 @@ echo
 echo "Setting up test environment..."
 mkdir -p "$TEST_DIR"
 cd "$TEST_DIR"
-cp ../../ticket.sh .
+cp "${SCRIPT_DIR}/../src/ticket.sh" .
 chmod +x ticket.sh
 
 # Track results

@@ -24,17 +24,7 @@ echo
 
 # Setup
 setup_test() {
-    rm -rf "$TEST_DIR"
-    mkdir "$TEST_DIR"
-    cd "$TEST_DIR"
-    cp ../../ticket.sh .
-    git init -q
-    git config user.name "Test"
-    git config user.email "test@test.com"
-    echo "test" > README.md
-    git add . && git commit -q -m "init"
-    git checkout -q -b develop
-    ./ticket.sh init >/dev/null
+    setup_test_repo "$TEST_DIR"
 }
 
 # Test result
@@ -85,10 +75,10 @@ fi
 
 # Test 2: Start already started ticket
 echo -e "\n2. Testing start on already started ticket..."
-git add . && git commit -q -m "add tickets"
+git add tickets .ticket-config.yml && git commit -q -m "add tickets"
 TICKET_NAME=$(basename "$FIRST_TICKET" .md)
 ./ticket.sh start "$TICKET_NAME" --no-push >/dev/null 2>&1
-git add . && git commit -q -m "update"
+git add tickets current-ticket.md && git commit -q -m "update"
 git checkout -q develop
 if ./ticket.sh start "$TICKET_NAME" --no-push >/dev/null 2>&1; then
     test_result 1 "Should not allow starting already started ticket"
@@ -153,19 +143,11 @@ fi
 echo -e "\n7. Testing custom branch prefix..."
 cd .. && setup_test
 # Modify config
-# Portable sed that works on both macOS and Linux
-if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    sed -i 's/branch_prefix: "feature\/"/branch_prefix: "ticket\/"/' .ticket-config.yml
-elif [[ "$OSTYPE" == "darwin"* ]]; then
-    sed -i '' 's/branch_prefix: "feature\/"/branch_prefix: "ticket\/"/' .ticket-config.yml
-else
-    # Try both syntaxes
-    sed -i 's/branch_prefix: "feature\/"/branch_prefix: "ticket\/"/' .ticket-config.yml 2>/dev/null || \
-    sed -i '' 's/branch_prefix: "feature\/"/branch_prefix: "ticket\/"/' .ticket-config.yml
-fi
+# Use portable sed
+sed_i 's/branch_prefix: "feature\/"/branch_prefix: "ticket\/"/' .ticket-config.yml
 
 ./ticket.sh new custom-branch >/dev/null 2>&1
-git add . && git commit -q -m "add"
+git add tickets .ticket-config.yml && git commit -q -m "add"
 TICKET=$(safe_get_ticket_name "*custom-branch.md")
 ./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1
 
@@ -192,20 +174,20 @@ cd .. && setup_test
 
 # Create and start first ticket
 ./ticket.sh new "feature-a" >/dev/null 2>&1
-git add . && git commit -q -m "add a"
+git add tickets .ticket-config.yml && git commit -q -m "add a"
 TICKET_A=$(safe_get_ticket_name "*feature-a.md")
 ./ticket.sh start "$TICKET_A" --no-push >/dev/null 2>&1
-git add . && git commit -q -m "start a"
+git add tickets current-ticket.md && git commit -q -m "start a"
 echo "work a" > work-a.txt
-git add . && git commit -q -m "work a"
+git add work-a.txt && git commit -q -m "work a"
 
 # Go back and start second ticket
 git checkout -q develop
 ./ticket.sh new "feature-b" >/dev/null 2>&1
-git add . && git commit -q -m "add b"
+git add tickets .ticket-config.yml && git commit -q -m "add b"
 TICKET_B=$(safe_get_ticket_name "*feature-b.md")
 ./ticket.sh start "$TICKET_B" --no-push >/dev/null 2>&1
-git add . && git commit -q -m "start b"
+git add tickets current-ticket.md && git commit -q -m "start b"
 
 # Check both branches exist using more reliable method
 BRANCHES=$(git for-each-ref --format='%(refname:short)' refs/heads/ | grep -c "^feature/")
@@ -250,24 +232,17 @@ for i in 3 1 2; do
     TICKET=$(safe_get_first_file "*priority-$i.md" "tickets")
     if [[ -n "$TICKET" ]]; then
         # Portable sed for priority update
-        if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-            sed -i "s/priority: 2/priority: $i/" "$TICKET"
-        elif [[ "$OSTYPE" == "darwin"* ]]; then
-            sed -i '' "s/priority: 2/priority: $i/" "$TICKET"
-        else
-            sed -i "s/priority: 2/priority: $i/" "$TICKET" 2>/dev/null || \
-            sed -i '' "s/priority: 2/priority: $i/" "$TICKET"
-        fi
+        sed_i "s/priority: 2/priority: $i/" "$TICKET"
     fi
 done
 
 # Start one to test status+priority sorting
-git add . && git commit -q -m "add all"
+git add tickets .ticket-config.yml && git commit -q -m "add all"
 TICKET_2=$(safe_get_ticket_name "*priority-2.md")
 ./ticket.sh start "$TICKET_2" --no-push >/dev/null 2>&1
 
 # Stay on feature branch to commit the started_at change
-git add . && git commit -q -m "start ticket"
+git add tickets current-ticket.md && git commit -q -m "start ticket"
 
 # Merge the change back to develop so started_at is visible
 git checkout -q develop
@@ -289,7 +264,7 @@ cd .. && setup_test
 
 # Test with auto_push: true (default)
 ./ticket.sh new "push-test" >/dev/null 2>&1
-git add . && git commit -q -m "add"
+git add tickets .ticket-config.yml && git commit -q -m "add"
 TICKET=$(safe_get_ticket_name "*push-test.md")
 
 # Should show push command in output when auto_push is true

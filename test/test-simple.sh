@@ -3,6 +3,12 @@
 # Simple test script for ticket.sh
 set -e
 
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source helper functions
+source "${SCRIPT_DIR}/test-helpers.sh"
+
 echo "=== ticket.sh Test Suite ==="
 echo
 
@@ -12,7 +18,8 @@ mkdir -p "$TEST_DIR"
 cd "$TEST_DIR"
 
 # Copy ticket.sh
-cp ../../ticket.sh .
+cp "${SCRIPT_DIR}/../src/ticket.sh" .
+chmod +x ticket.sh
 
 echo "1. Testing without git repo..."
 if ! ./ticket.sh init 2>&1 | grep -q "Error: Not in a git repository"; then

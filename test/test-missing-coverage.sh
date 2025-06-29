@@ -20,17 +20,7 @@ echo
 
 # Setup
 setup_test() {
-    rm -rf "$TEST_DIR"
-    mkdir "$TEST_DIR"
-    cd "$TEST_DIR"
-    cp ../../ticket.sh .
-    git init -q
-    git config user.name "Test"
-    git config user.email "test@test.com"
-    echo "test" > README.md
-    git add . && git commit -q -m "init"
-    git checkout -q -b develop
-    ./ticket.sh init >/dev/null
+    setup_test_repo "$TEST_DIR"
 }
 
 # Test result
@@ -47,12 +37,12 @@ test_result() {
 echo "1. Testing file specification flexibility..."
 setup_test
 ./ticket.sh new test-file >/dev/null 2>&1
-git add . && git commit -q -m "add ticket"
+git add tickets .ticket-config.yml && git commit -q -m "add ticket"
 TICKET_NAME=$(safe_get_ticket_name "*test-file.md")
 
 # Test all three ways to specify ticket
 ./ticket.sh start "tickets/${TICKET_NAME}.md" --no-push >/dev/null 2>&1
-git add . && git commit -q -m "start" && git checkout -q develop
+git add tickets current-ticket.md && git commit -q -m "start" && git checkout -q develop
 
 if ./ticket.sh start "${TICKET_NAME}.md" --no-push >/dev/null 2>&1; then
     test_result 1 "Should not allow starting already started ticket"
@@ -91,14 +81,12 @@ fi
 echo -e "\n3. Testing operations on closed ticket..."
 cd .. && setup_test
 ./ticket.sh new closed-test >/dev/null 2>&1
-git add . && git commit -q -m "add"
+git add tickets .ticket-config.yml && git commit -q -m "add"
 TICKET_NAME=$(safe_get_ticket_name "*closed-test.md")
 # Manually set closed_at
 TICKET_FILE="tickets/${TICKET_NAME}.md"
-sed -i.bak 's/started_at: null/started_at: "2025-01-01T00:00:00Z"/' "$TICKET_FILE" 2>/dev/null || \
-sed -i '' 's/started_at: null/started_at: "2025-01-01T00:00:00Z"/' "$TICKET_FILE"
-sed -i.bak 's/closed_at: null/closed_at: "2025-01-01T01:00:00Z"/' "$TICKET_FILE" 2>/dev/null || \
-sed -i '' 's/closed_at: null/closed_at: "2025-01-01T01:00:00Z"/' "$TICKET_FILE"
+sed_i 's/started_at: null/started_at: "2025-01-01T00:00:00Z"/' "$TICKET_FILE"
+sed_i 's/closed_at: null/closed_at: "2025-01-01T01:00:00Z"/' "$TICKET_FILE"
 
 # Try to start a closed ticket
 if ./ticket.sh start "$TICKET_NAME" --no-push >/dev/null 2>&1; then
@@ -172,11 +160,10 @@ fi
 echo -e "\n9. Testing custom branch prefix with multiple slashes..."
 cd .. && setup_test
 # Modify config for complex branch prefix
-sed -i.bak 's|branch_prefix: "feature/"|branch_prefix: "feature/team/"|' .ticket-config.yml 2>/dev/null || \
-sed -i '' 's|branch_prefix: "feature/"|branch_prefix: "feature/team/"|' .ticket-config.yml
+sed_i 's|branch_prefix: "feature/"|branch_prefix: "feature/team/"|' .ticket-config.yml
 
 ./ticket.sh new slash-test >/dev/null 2>&1
-git add . && git commit -q -m "add"
+git add tickets .ticket-config.yml && git commit -q -m "add"
 TICKET=$(safe_get_ticket_name "*slash-test.md")
 
 if ./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1; then
@@ -196,10 +183,10 @@ cd .. && setup_test  # Start fresh
 # Create tickets with different statuses
 ./ticket.sh new multi-1 >/dev/null 2>&1
 ./ticket.sh new multi-2 >/dev/null 2>&1
-git add . && git commit -q -m "add tickets"
+git add tickets .ticket-config.yml && git commit -q -m "add tickets"
 TICKET=$(safe_get_ticket_name "*multi-1.md")
 ./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1
-git add . && git commit -q -m "start"
+git add tickets current-ticket.md && git commit -q -m "start"
 # Merge back to develop so the started_at is visible
 git checkout -q develop
 git merge --no-ff -q "feature/$TICKET" -m "Merge" >/dev/null 2>&1

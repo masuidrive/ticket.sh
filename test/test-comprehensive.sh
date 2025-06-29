@@ -3,6 +3,9 @@
 # Comprehensive test suite for ticket.sh
 set -euo pipefail
 
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Test configuration
 TEST_DIR="test-comprehensive-$(date +%s)"
 ORIGINAL_DIR=$(pwd)
@@ -38,7 +41,8 @@ section() {
 setup() {
     mkdir -p "$TEST_DIR"
     cd "$TEST_DIR"
-    cp ../../ticket.sh .
+    cp "${SCRIPT_DIR}/../src/ticket.sh" .
+    chmod +x ticket.sh
     chmod +x ticket.sh
 }
 

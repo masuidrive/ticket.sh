@@ -18,16 +18,7 @@ echo -e "${YELLOW}=== Testing close --force option ===${NC}"
 echo
 
 # Setup
-mkdir "$TEST_DIR"
-cd "$TEST_DIR"
-cp ../../ticket.sh .
-git init -q
-git config user.name "Test"
-git config user.email "test@test.com"
-echo "test" > README.md
-git add . && git commit -q -m "init"
-git checkout -q -b develop
-./ticket.sh init >/dev/null
+setup_test_repo "$TEST_DIR"
 
 # Test result
 test_result() {
@@ -41,10 +32,12 @@ test_result() {
 
 echo "1. Testing close with uncommitted changes (should fail)..."
 ./ticket.sh new test-force >/dev/null 2>&1
-git add . && git commit -q -m "add ticket"
+git add tickets .ticket-config.yml && git commit -q -m "add ticket"
 TICKET=$(safe_get_ticket_name "*.md")
 if [[ -n "$TICKET" ]]; then
     ./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1
+    # Commit the started_at change
+    git add tickets && git commit -q -m "start ticket"
 fi
 
 # Create uncommitted changes
@@ -78,21 +71,18 @@ else
 fi
 
 echo -e "\n3. Testing close -f (short form)..."
-# Setup again
-rm -rf .git tickets .ticket-config.yml current-ticket.md
-git init -q
-git config user.name "Test"
-git config user.email "test@test.com"
-echo "test" > README.md
-git add . && git commit -q -m "init"
-git checkout -q -b develop
-./ticket.sh init >/dev/null
+# Setup again with a fresh test directory
+cd ..
+rm -rf "$TEST_DIR"
+setup_test_repo "$TEST_DIR"
 
 ./ticket.sh new test-short >/dev/null 2>&1
-git add . && git commit -q -m "add ticket"
+git add tickets .ticket-config.yml && git commit -q -m "add ticket"
 TICKET=$(safe_get_ticket_name "*.md")
 if [[ -n "$TICKET" ]]; then
     ./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1
+    # Commit the started_at change
+    git add tickets && git commit -q -m "start ticket"
 fi
 
 # Create uncommitted changes
@@ -106,21 +96,18 @@ else
 fi
 
 echo -e "\n4. Testing combined options..."
-# Setup again
-rm -rf .git tickets .ticket-config.yml current-ticket.md
-git init -q
-git config user.name "Test"
-git config user.email "test@test.com"
-echo "test" > README.md
-git add . && git commit -q -m "init"
-git checkout -q -b develop
-./ticket.sh init >/dev/null
+# Setup again with a fresh test directory
+cd ..
+rm -rf "$TEST_DIR"
+setup_test_repo "$TEST_DIR"
 
 ./ticket.sh new test-combined >/dev/null 2>&1
-git add . && git commit -q -m "add ticket"
+git add tickets .ticket-config.yml && git commit -q -m "add ticket"
 TICKET=$(safe_get_ticket_name "*.md")
 if [[ -n "$TICKET" ]]; then
     ./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1
+    # Commit the started_at change
+    git add tickets && git commit -q -m "start ticket"
 fi
 
 # Create uncommitted changes

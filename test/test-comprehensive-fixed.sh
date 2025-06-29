@@ -3,6 +3,9 @@
 # Fixed comprehensive test suite for ticket.sh
 # Removed set -e to prevent early exit on test failures
 
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Source helper functions
 source "$(dirname "$0")/test-helpers.sh"
 
@@ -41,7 +44,8 @@ section() {
 setup() {
     mkdir -p "$TEST_DIR"
     cd "$TEST_DIR"
-    cp ../../ticket.sh .
+    cp "${SCRIPT_DIR}/../src/ticket.sh" .
+    chmod +x ticket.sh
     chmod +x ticket.sh
 }
 
