@@ -76,10 +76,11 @@ jobs:
       
     - name: Check shell scripts
       run: |
-        shellcheck build.sh
-        shellcheck src/ticket.sh
-        shellcheck lib/*.sh
-        shellcheck yaml-sh/yaml-sh.sh
-        # Test scripts are allowed to have some warnings
-        shellcheck test-all.sh || true
-        shellcheck yaml-sh/test.sh || true
+        # Run shellcheck with error severity to allow warnings
+        shellcheck --severity=error build.sh
+        shellcheck --severity=error src/ticket.sh
+        shellcheck --severity=error lib/*.sh
+        shellcheck --severity=error yaml-sh/yaml-sh.sh
+        # Test scripts are allowed to have more warnings
+        shellcheck --severity=error test-all.sh
+        shellcheck --severity=error yaml-sh/test.sh
