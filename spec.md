@@ -336,6 +336,7 @@ Displays ticket list:
 - **Default count**: `--count 20` (configurable)
 - **Sort order**: Evaluated by `status` → `priority`
 - State auto-determined from datetime fields
+- **Multiple --status flags**: When multiple `--status` flags are provided, the last one takes precedence
 
 **Display Format:**
 ```yaml
@@ -507,16 +508,21 @@ Permission denied creating symlink. Please:
 3. Run with appropriate permissions if needed
 ```
 
-### `close [--no-push]`
+### `close [--no-push] [--force|-f]`
 Completes ticket and merge process:
 
+**Options:**
+- `--no-push`: Skip automatic push operations even when `auto_push: true`
+- `--force` or `-f`: Bypass uncommitted changes check and force close the ticket
+
 **Execution Flow:**
-1. **Update ticket**: Sets current time to `closed_at` of ticket referenced by current-ticket.md
-2. **Commit**: Commits with `"Close ticket"` message
-3. **Push (conditional)**: Pushes feature branch only when `auto_push: true` and `--no-push` not specified
-4. **Squash Merge**: Squash merges feature branch to `{default_branch}`
-5. **Push (conditional)**: Pushes `{default_branch}` only when `auto_push: true` and `--no-push` not specified
-6. Displays executed Git commands and output in detail
+1. **Check working directory**: Ensures no uncommitted changes (unless `--force` is used)
+2. **Update ticket**: Sets current time to `closed_at` of ticket referenced by current-ticket.md
+3. **Commit**: Commits with `"Close ticket"` message
+4. **Push (conditional)**: Pushes feature branch only when `auto_push: true` and `--no-push` not specified
+5. **Squash Merge**: Squash merges feature branch to `{default_branch}`
+6. **Push (conditional)**: Pushes `{default_branch}` only when `auto_push: true` and `--no-push` not specified
+7. Displays executed Git commands and output in detail
 
 **Git Operation Details:**
 ```bash
@@ -672,6 +678,12 @@ Note: Changes not pushed to remote. Use 'git push origin develop' and 'git push 
   2. Review changes: git status
   3. Then retry closing the ticket
   ```
+  **Note**: Use `--force` or `-f` option to bypass this check and close the ticket with uncommitted changes:
+  ```bash
+  ./ticket.sh close --force
+  # or
+  ./ticket.sh close -f
+  ```
 - Push failed: 
   ```
   Error: Push failed
@@ -767,3 +779,58 @@ TROUBLESHOOTING:
 
 Note: current-ticket.md is git-ignored and needs 'restore' after clone/pull.
 ```
+
+---
+
+## 🛡️ Error Handling and Resilience
+
+### YAML Parsing Behavior
+
+The system is designed to be resilient when handling YAML frontmatter:
+
+- **Graceful Degradation**: Corrupted or invalid YAML files are handled gracefully
+- **Partial Parsing**: The parser extracts what it can from malformed YAML
+- **Silent Skipping**: `list` command silently skips tickets with unparseable YAML
+- **No Strict Validation**: System prioritizes operation continuity over strict YAML compliance
+
+**Examples of handled scenarios:**
+- Unclosed quotes or brackets
+- Invalid indentation
+- Missing end delimiter (`---`)
+- Non-standard data types
+- Corrupted frontmatter structure
+
+**Note**: While the system continues operating with corrupted YAML, it may produce unexpected results. Always verify ticket files are properly formatted.
+
+---
+
+## 🔒 Implementation Limitations
+
+### Slug Constraints
+- **Format**: Only lowercase letters (a-z), numbers (0-9), and hyphens (-) allowed
+- **Pattern**: Must match `^[a-z0-9-]+$`
+- **Length**: No explicit maximum length enforced (tested up to 100 characters)
+
+### YAML Parser Limitations
+- No support for nested objects or complex data structures
+- No support for YAML anchors, aliases, or tags
+- Only flat structure support
+- Limited multiline string handling
+
+### Operational Constraints
+- Must run from git repository root
+- Requires clean working directory for start/close (unless `--force` used)
+- Cannot start already started tickets
+- Cannot close unstarted tickets
+- Current ticket symlink requires manual restoration after clone/pull
+
+### Platform Requirements
+- Bash 3.2 or higher
+- UTF-8 locale support (automatically set)
+- Standard UNIX commands: git, awk, sed, grep, ln, date, mktemp
+
+### No Enforced Limits On
+- Number of tickets
+- Ticket file size
+- Description or content length
+- File path or branch name length

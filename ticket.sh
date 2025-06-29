@@ -963,7 +963,19 @@ Additional notes or requirements.'
 
 # Show usage information
 show_usage() {
-    cat << 'EOF'
+    # Load config values if available
+    local tickets_dir="$DEFAULT_TICKETS_DIR"
+    local default_branch="$DEFAULT_BRANCH"
+    local branch_prefix="$DEFAULT_BRANCH_PREFIX"
+    
+    if [[ -f "$CONFIG_FILE" ]]; then
+        yaml_parse "$CONFIG_FILE" 2>/dev/null
+        tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
+        default_branch=$(yaml_get "default_branch" || echo "$DEFAULT_BRANCH")
+        branch_prefix=$(yaml_get "branch_prefix" || echo "$DEFAULT_BRANCH_PREFIX")
+    fi
+    
+    cat << EOF
 Ticket Management System for Coding Agents
 
 OVERVIEW:
@@ -974,9 +986,9 @@ USAGE:
   ./ticket.sh init                     Initialize system (create config, directories, .gitignore)
   ./ticket.sh new <slug>               Create new ticket file (slug: lowercase, numbers, hyphens only)
   ./ticket.sh list [--status STATUS] [--count N]  List tickets (default: todo + doing, count: 20)
-  ./ticket.sh start <ticket-name> [--no-push]     Start working on ticket (creates feature branch)
+  ./ticket.sh start <ticket-name> [--no-push]     Start working on ticket (creates ${branch_prefix}<ticket-name> branch)
   ./ticket.sh restore                  Restore current-ticket.md symlink from branch name
-  ./ticket.sh close [--no-push] [--force|-f]  Complete current ticket (squash merge to default branch)
+  ./ticket.sh close [--no-push] [--force|-f]  Complete current ticket (squash merge to $default_branch branch)
 
 TICKET NAMING:
 - Format: YYMMDD-hhmmss-<slug>
@@ -1000,10 +1012,13 @@ PUSH CONTROL:
 
 WORKFLOW:
 1. Create ticket: ./ticket.sh new feature-name
-2. Edit ticket content and description
-3. Start work: ./ticket.sh start 241225-143502-feature-name
-4. Develop on feature branch (current-ticket.md shows active ticket)
-5. Complete: ./ticket.sh close
+2. Edit ticket content and description in $tickets_dir/
+3. Check available tickets: ./ticket.sh list --status todo
+   (You can also browse files directly in $tickets_dir/)
+4. Start work: ./ticket.sh start <ticket-name>
+   (Use the ticket name from list output, e.g., 241225-143502-feature-name)
+5. Develop on ${branch_prefix}<ticket-name> branch (current-ticket.md shows active ticket)
+6. Complete: ./ticket.sh close
 
 TROUBLESHOOTING:
 - Run from project root (where .git and .ticket-config.yml exist)
