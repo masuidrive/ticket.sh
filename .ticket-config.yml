@@ -4,7 +4,7 @@
 tickets_dir: "tickets"
 
 # Git settings
-default_branch: "develop"
+default_branch: "main"
 branch_prefix: "feature/"
 repository: "origin"
 auto_push: true
