@@ -171,21 +171,29 @@ _yaml_parse_awk() {
     # Empty line
     length(line) == 0 { next }
     
-    # List item
-    match(line, /^- /) {
-        item = substr(line, 3)
-        gsub(/^[ \t]+|[ \t]+$/, "", item)
-        print "LIST", indent, item
-        next
-    }
-    
-    # Key-value pair
-    match(line, /^[^:]+:/) {
-        # Split key and value
-        pos = index(line, ":")
-        key = substr(line, 1, pos - 1)
-        value = substr(line, pos + 1)
-        gsub(/^[ \t]+|[ \t]+$/, "", value)
+    # Process non-empty lines
+    {
+        # Get stripped line for processing
+        stripped_line = line
+        if (indent > 0) {
+            stripped_line = substr(original, indent + 1)
+        }
+        
+        # List item
+        if (match(stripped_line, /^- /)) {
+            item = substr(stripped_line, 3)
+            gsub(/^[ \t]+|[ \t]+$/, "", item)
+            print "LIST", indent, item
+            next
+        }
+        
+        # Key-value pair
+        if (match(stripped_line, /^[^:]+:/)) {
+            # Split key and value
+            pos = index(stripped_line, ":")
+            key = substr(stripped_line, 1, pos - 1)
+            value = substr(stripped_line, pos + 1)
+            gsub(/^[ \t]+|[ \t]+$/, "", value)
         
         # Check for multiline indicator
         if (value == "|" || value == "|-" || value == "|+" || value == ">" || value == ">-" || value == ">+") {
@@ -230,9 +238,10 @@ _yaml_parse_awk() {
             }
             print "KEY", indent, key, content
         }
-        # Regular value
-        else {
-            print "KEY", indent, key, value
+            # Regular value
+            else {
+                print "KEY", indent, key, value
+            }
         }
     }
     
@@ -316,12 +325,15 @@ yaml_parse() {
         
         case "$type" in
             KEY)
+                # Only reset in_list if we're changing to a different key
+                if [[ "$current_path" != "$key" ]]; then
+                    in_list=0
+                fi
                 current_path="$key"
                 if [[ -n "$value" ]]; then
                     _YAML_KEYS+=("$current_path")
                     _YAML_VALUES+=("$value")
                 fi
-                in_list=0
                 ;;
                 
             VALUE)
