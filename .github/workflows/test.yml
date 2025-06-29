@@ -28,7 +28,7 @@ jobs:
     
     - name: Make scripts executable
       run: |
-        chmod +x ./build.sh ./test-all.sh
+        chmod +x ./build.sh
         chmod +x ./test/*.sh
         chmod +x ./yaml-sh/*.sh
     
@@ -49,7 +49,7 @@ jobs:
       run: ./ticket.sh
       
     - name: Run all tests
-      run: ./test-all.sh
+      run: ./test/run-all.sh
       timeout-minutes: 10
         
   yaml-sh-test:
@@ -84,5 +84,4 @@ jobs:
         shellcheck --severity=error lib/*.sh
         shellcheck --severity=error yaml-sh/yaml-sh.sh
         # Test scripts are allowed to have more warnings
-        shellcheck --severity=error test-all.sh
         shellcheck --severity=error yaml-sh/test.sh

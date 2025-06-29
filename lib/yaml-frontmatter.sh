@@ -35,7 +35,7 @@ update_yaml_frontmatter_field() {
             frontmatter_end=$line_num
             break
         fi
-    done < "$file"
+    done < "$file" || true
     
     if [[ $frontmatter_start -eq 0 ]] || [[ $frontmatter_end -eq 0 ]]; then
         echo "Error: No YAML frontmatter found in file" >&2
@@ -81,7 +81,7 @@ update_yaml_frontmatter_field() {
         else
             echo "$line" >> "$temp_file"
         fi
-    done < "$file"
+    done < "$file" || true
     
     if [[ $field_updated -eq 0 ]]; then
         echo "Error: Field '$field' not found in frontmatter" >&2

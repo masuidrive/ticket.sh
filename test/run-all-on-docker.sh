@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 
 # Test script to run tests in Docker environments (Ubuntu and Alpine)
+# Usage: ./run-all-on-docker.sh
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 echo "=== Testing in Docker Environments ==="
 echo
@@ -14,7 +19,7 @@ run_docker_tests() {
     echo
     
     docker run --rm \
-      -v "$(pwd):/workspace" \
+      -v "$ROOT_DIR:/workspace" \
       -w /workspace \
       "$image" \
       sh -c '
@@ -35,11 +40,11 @@ run_docker_tests() {
         
         echo "Running tests..."
         # Make scripts executable
-        chmod +x ./test-all.sh ./build.sh ./ticket.sh
+        chmod +x ./build.sh ./ticket.sh
         chmod +x ./test/*.sh
         
         # Run tests
-        ./test-all.sh
+        ./test/run-all.sh
       '
     
     echo

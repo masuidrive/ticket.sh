@@ -123,6 +123,20 @@ Completes the current ticket
 - Removes `current-ticket.md` symlink
 - Use `--no-push` to skip automatic push
 
+## Testing
+
+Run all tests:
+```bash
+# From project root
+test/run-all.sh
+
+# From test directory
+cd test && ./run-all.sh
+
+# Run tests in Docker environments (Ubuntu and Alpine)
+test/run-all-on-docker.sh
+```
+
 ## Configuration
 
 Edit `.ticket-config.yml` to customize:

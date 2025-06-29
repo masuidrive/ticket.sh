@@ -18,14 +18,9 @@ rm -rf "$TEST_DIR"
 mkdir -p "$TEST_DIR"
 cd "$TEST_DIR"
 
-# Use built ticket.sh if available, otherwise build it
-if [[ -f "${SCRIPT_DIR}/../ticket.sh" ]]; then
-    cp "${SCRIPT_DIR}/../ticket.sh" .
-else
-    # Build ticket.sh if not found
-    (cd "${SCRIPT_DIR}/.." && ./build.sh >/dev/null 2>&1)
-    cp "${SCRIPT_DIR}/../ticket.sh" .
-fi
+# Always rebuild to ensure latest version
+(cd "${SCRIPT_DIR}/.." && ./build.sh >/dev/null 2>&1)
+cp "${SCRIPT_DIR}/../ticket.sh" .
 chmod +x ticket.sh
 
 echo "1. Testing without git repo..."
@@ -71,12 +66,19 @@ echo "  PASS: Ticket created: $TICKET"
 
 echo
 echo "5. Testing list command..."
-OUTPUT=$(./ticket.sh list 2>&1)
-if ! echo "$OUTPUT" | grep -q "test-feature"; then
-    echo "  FAIL: Ticket not in list"
+# Capture output with error handling
+if OUTPUT=$(./ticket.sh list 2>&1); then
+    if echo "$OUTPUT" | grep -q "test-feature"; then
+        echo "  PASS: Ticket appears in list"
+    else
+        echo "  FAIL: Ticket not in list"
+        echo "  Output: $OUTPUT"
+        exit 1
+    fi
+else
+    echo "  FAIL: List command failed with exit code $?"
     exit 1
 fi
-echo "  PASS: Ticket appears in list"
 
 echo
 echo "6. Testing start command..."

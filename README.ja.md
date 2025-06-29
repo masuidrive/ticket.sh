@@ -123,6 +123,20 @@ chmod +x ticket.sh
 - `current-ticket.md` シンボリックリンクを削除
 - `--no-push` で自動プッシュをスキップ
 
+## テスト
+
+すべてのテストを実行：
+```bash
+# プロジェクトルートから
+test/run-all.sh
+
+# testディレクトリから
+cd test && ./run-all.sh
+
+# Docker環境でテスト（UbuntuとAlpine）
+test/run-all-on-docker.sh
+```
+
 ## 設定
 
 `.ticket-config.yml` を編集してカスタマイズ：

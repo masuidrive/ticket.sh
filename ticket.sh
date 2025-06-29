@@ -387,7 +387,7 @@ yaml_parse() {
                 _YAML_VALUES+=("$key")  # key contains the list item
                 ;;
         esac
-    done < <(_yaml_parse_awk "$file")
+    done < <(_yaml_parse_awk "$file") || true
     
     # Handle last multiline value if any
     if [[ $reading_multiline -eq 1 ]]; then
@@ -599,7 +599,7 @@ update_yaml_frontmatter_field() {
             frontmatter_end=$line_num
             break
         fi
-    done < "$file"
+    done < "$file" || true
     
     if [[ $frontmatter_start -eq 0 ]] || [[ $frontmatter_end -eq 0 ]]; then
         echo "Error: No YAML frontmatter found in file" >&2
@@ -645,7 +645,7 @@ update_yaml_frontmatter_field() {
         else
             echo "$line" >> "$temp_file"
         fi
-    done < "$file"
+    done < "$file" || true
     
     if [[ $field_updated -eq 0 ]]; then
         echo "Error: Field '$field' not found in frontmatter" >&2
@@ -1269,6 +1269,9 @@ EOF
     
     # Sort and display
     # Sort by: status (doing first, then todo, then done), then by priority
+    local sorted_file=$(mktemp)
+    sort -t'|' -k1,1 -k2,2n "$temp_file" | sed 's/^doing|/0|/; s/^todo|/1|/; s/^done|/2|/' | sort -t'|' -k1,1n -k2,2n | sed 's/^0|/doing|/; s/^1|/todo|/; s/^2|/done|/' > "$sorted_file"
+    
     while IFS='|' read -r status priority ticket_name description created_at started_at; do
         [[ $displayed -ge $count ]] && break
         
@@ -1281,7 +1284,9 @@ EOF
         echo
         
         ((displayed++))
-    done < <(sort -t'|' -k1,1 -k2,2n "$temp_file" | sed 's/^doing|/0|/; s/^todo|/1|/; s/^done|/2|/' | sort -t'|' -k1,1n -k2,2n | sed 's/^0|/doing|/; s/^1|/todo|/; s/^2|/done|/')
+    done < "$sorted_file" || true
+    
+    rm -f "$sorted_file"
     
     # Cleanup
     rm -f "$temp_file" "${temp_file}.yml"
@@ -1289,6 +1294,9 @@ EOF
     if [[ $displayed -eq 0 ]]; then
         echo "(No tickets found)"
     fi
+    
+    # Always return success
+    return 0
 }
 
 # Start working on a ticket

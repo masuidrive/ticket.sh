@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 
 # Run all tests for ticket.sh and yaml-sh
-# Usage: ./test-all.sh
+# Usage: ./run-all.sh
 
 set -euo pipefail
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Colors for output
 RED='\033[0;31m'
@@ -28,7 +32,7 @@ run_test() {
     echo -e "${BLUE}Running $test_name...${NC}"
     
     # Run test and capture output
-    output=$($test_command 2>&1) || true
+    output=$(eval "$test_command" 2>&1) || true
     
     # Show the output
     echo "$output"
@@ -63,7 +67,7 @@ run_test() {
 
 # Build ticket.sh first
 echo -e "${BLUE}Building ticket.sh...${NC}"
-if ./build.sh > /dev/null 2>&1; then
+if (cd "$ROOT_DIR" && ./build.sh > /dev/null 2>&1); then
     echo -e "  ${GREEN}Build successful${NC}"
 else
     echo -e "  ${RED}Build failed${NC}"
@@ -75,26 +79,25 @@ echo
 echo -e "${YELLOW}=== ticket.sh Tests ===${NC}"
 echo
 
-# Navigate to test directory
-cd test
-
-# Run each test file
-for test_file in test-*.sh; do
+# Run each test file in test directory
+for test_file in "$SCRIPT_DIR"/test-*.sh; do
+    # Skip run-all scripts
+    if [[ "$(basename "$test_file")" == "run-all.sh" ]] || [[ "$(basename "$test_file")" == "run-all-on-docker.sh" ]] || [[ "$(basename "$test_file")" == "run-all-tests.sh" ]]; then
+        continue
+    fi
+    
     if [[ -f "$test_file" ]]; then
-        run_test "${test_file%.sh}" "./$test_file"
+        run_test "$(basename "${test_file%.sh}")" "$test_file"
     fi
 done
-
-# Return to root directory
-cd ..
 
 # Run yaml-sh tests
 echo -e "${YELLOW}=== yaml-sh Tests ===${NC}"
 echo
 
-cd yaml-sh
-run_test "yaml-sh parser" "./test.sh"
-cd ..
+if [[ -f "$ROOT_DIR/yaml-sh/test.sh" ]]; then
+    run_test "yaml-sh parser" "cd $ROOT_DIR/yaml-sh && ./test.sh"
+fi
 
 # Summary
 echo -e "${YELLOW}=== Overall Test Summary ===${NC}"

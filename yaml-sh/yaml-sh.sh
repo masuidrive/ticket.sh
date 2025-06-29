@@ -359,7 +359,7 @@ yaml_parse() {
                 _YAML_VALUES+=("$key")  # key contains the list item
                 ;;
         esac
-    done < <(_yaml_parse_awk "$file")
+    done < <(_yaml_parse_awk "$file") || true
     
     # Handle last multiline value if any
     if [[ $reading_multiline -eq 1 ]]; then

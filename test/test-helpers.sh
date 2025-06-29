@@ -48,14 +48,9 @@ setup_test_repo() {
     mkdir "$test_dir"
     cd "$test_dir"
     
-    # Use built ticket.sh if available, otherwise build it
-    if [[ -f "${SCRIPT_DIR}/../ticket.sh" ]]; then
-        cp "${SCRIPT_DIR}/../ticket.sh" .
-    else
-        # Build ticket.sh if not found
-        (cd "${SCRIPT_DIR}/.." && ./build.sh >/dev/null 2>&1)
-        cp "${SCRIPT_DIR}/../ticket.sh" .
-    fi
+    # Always rebuild to ensure latest version
+    (cd "${SCRIPT_DIR}/.." && ./build.sh >/dev/null 2>&1)
+    cp "${SCRIPT_DIR}/../ticket.sh" .
     chmod +x ticket.sh
     
     # Initialize git with proper gitignore
