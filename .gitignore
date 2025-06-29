@@ -1,3 +1,15 @@
 .DS_Store
 .claude
 tmpcurrent-ticket.md
+
+# Test artifacts
+test-tmp/
+test-basic/
+test-comprehensive-*/
+test-additional-*/
+test-simple-*/
+test-final-*/
+test-close-force-*/
+test-missing-*/
+test-debug-init-*/
+test/test-tmp/
