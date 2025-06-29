@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Run all tests for ticket.sh and yaml-sh
-# Usage: ./tmp/test-all.sh
+# Usage: ./test-all.sh
 
 set -euo pipefail
 
@@ -78,11 +78,12 @@ echo
 # Navigate to test directory
 cd test
 
-# Run core tests
-run_test "Core functionality tests" "./test-final.sh"
-
-# Run additional tests
-run_test "Additional edge case tests" "./test-additional.sh"
+# Run each test file
+for test_file in test-*.sh; do
+    if [[ -f "$test_file" ]]; then
+        run_test "${test_file%.sh}" "./$test_file"
+    fi
+done
 
 # Return to root directory
 cd ..
@@ -92,7 +93,7 @@ echo -e "${YELLOW}=== yaml-sh Tests ===${NC}"
 echo
 
 cd yaml-sh
-run_test "yaml-sh parser tests" "./test.sh"
+run_test "yaml-sh parser" "./test.sh"
 cd ..
 
 # Summary
