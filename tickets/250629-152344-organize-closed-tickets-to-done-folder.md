@@ -3,8 +3,8 @@ priority: 2
 tags: ["feature", "organization", "workflow"]
 description: "完了したチケットをdoneフォルダに移動する機能の実装"
 created_at: "2025-06-29T15:23:44Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2025-06-29T15:40:16Z # Do not modify manually
+closed_at: 2025-06-29T16:05:28Z # Do not modify manually
 ---
 
 # 完了チケットのdoneフォルダ整理機能
@@ -20,14 +20,15 @@ closed_at: null   # Do not modify manually
 
 ## Tasks
 
-- [ ] `close`コマンドで`tickets/done/`フォルダへの移動処理を追加
-- [ ] `tickets/done/`フォルダが存在しない場合は自動作成
-- [ ] `git mv`を使用してGit履歴を保持
-- [ ] `list`コマンドを更新して`done/`フォルダ内も検索対象に
-- [ ] 既存の完了済みチケットの移行スクリプトを作成（オプション）
-- [ ] テストケースの追加
-- [ ] ドキュメント（spec.md、spec.ja.md）の更新
-- [ ] run-all-on-docker.shでテスト確認
+- [x] `close`コマンドで`tickets/done/`フォルダへの移動処理を追加
+- [x] `tickets/done/`フォルダが存在しない場合は自動作成
+- [x] `git mv`を使用してGit履歴を保持
+- [x] `list`コマンドを更新して`done/`フォルダ内も検索対象に
+- [x] `restore`コマンドを更新して`done/`フォルダ内のチケットも復元可能に
+- [x] 既存の完了済みチケットの移行スクリプトを作成（オプション） - 手動で実施
+- [x] テストケースの追加
+- [x] ドキュメント（spec.md、spec.ja.md）の更新
+- [x] run-all-on-docker.shでテスト確認
 
 ## 技術仕様
 
@@ -49,7 +50,8 @@ tickets/
 
 ### listコマンドの変更点
 - `tickets/*.md`に加えて`tickets/done/*.md`も検索
-- パスは表示せず、チケット名のみ表示（現状維持）
+- `ticket_name:`を`ticket_path:`に変更し、プロジェクトルートからの相対パスを表示
+- doneステータスのチケットには`closed_at`も表示
 
 ## 考慮事項
 

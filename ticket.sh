@@ -1228,7 +1228,7 @@ EOF
     local temp_file=$(mktemp)
     
     # Collect all tickets with their metadata
-    for ticket_file in "$tickets_dir"/*.md; do
+    for ticket_file in "$tickets_dir"/*.md "$tickets_dir"/done/*.md; do
         [[ -f "$ticket_file" ]] || continue
         
         # Extract YAML frontmatter
@@ -1259,12 +1259,12 @@ EOF
             continue
         fi
         
-        # Get ticket name
-        local ticket_name=$(basename "$ticket_file" .md)
+        # Get relative path from project root
+        local ticket_path="${ticket_file#./}"
         
         # Store in temp file for sorting
-        # Format: status|priority|ticket_name|description|created_at|started_at
-        echo "${status}|${priority}|${ticket_name}|${description}|${created_at}|${started_at}" >> "$temp_file"
+        # Format: status|priority|ticket_path|description|created_at|started_at|closed_at
+        echo "${status}|${priority}|${ticket_path}|${description}|${created_at}|${started_at}|${closed_at}" >> "$temp_file"
     done
     
     # Sort and display
@@ -1272,15 +1272,16 @@ EOF
     local sorted_file=$(mktemp)
     sort -t'|' -k1,1 -k2,2n "$temp_file" | sed 's/^doing|/0|/; s/^todo|/1|/; s/^done|/2|/' | sort -t'|' -k1,1n -k2,2n | sed 's/^0|/doing|/; s/^1|/todo|/; s/^2|/done|/' > "$sorted_file"
     
-    while IFS='|' read -r status priority ticket_name description created_at started_at; do
+    while IFS='|' read -r status priority ticket_path description created_at started_at closed_at; do
         [[ $displayed -ge $count ]] && break
         
         echo "- status: $status"
-        echo "  ticket_name: $ticket_name"
+        echo "  ticket_path: $ticket_path"
         [[ -n "$description" ]] && echo "  description: $description"
         echo "  priority: $priority"
         echo "  created_at: $created_at"
         [[ "$status" != "todo" ]] && echo "  started_at: $started_at"
+        [[ "$status" == "done" ]] && [[ "$closed_at" != "null" ]] && echo "  closed_at: $closed_at"
         echo
         
         ((displayed++))
@@ -1440,16 +1441,20 @@ EOF
     local ticket_name="${current_branch#"$branch_prefix"}"
     local ticket_file="${tickets_dir}/${ticket_name}.md"
     
-    # Check if ticket file exists
+    # Check if ticket file exists in regular location or done folder
     if [[ ! -f "$ticket_file" ]]; then
-        cat >&2 << EOF
+        # Check in done folder
+        ticket_file="${tickets_dir}/done/${ticket_name}.md"
+        if [[ ! -f "$ticket_file" ]]; then
+            cat >&2 << EOF
 Error: No matching ticket found
 No ticket file found for branch '$current_branch'. Please:
-1. Check if ticket file exists in $tickets_dir/
+1. Check if ticket file exists in $tickets_dir/ or $tickets_dir/done/
 2. Ensure branch name matches ticket name format
 3. Or start a new ticket if this is a new feature
 EOF
-        return 1
+            return 1
+        fi
     fi
     
     # Create symlink
@@ -1636,6 +1641,37 @@ Failed to push to '$repository'. Please:
 EOF
             return 1
         }
+    fi
+    
+    # Move ticket to done folder
+    local tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
+    local done_dir="${tickets_dir}/done"
+    
+    # Create done directory if it doesn't exist
+    if [[ ! -d "$done_dir" ]]; then
+        mkdir -p "$done_dir" || {
+            echo "Warning: Failed to create done directory: $done_dir" >&2
+        }
+    fi
+    
+    # Move the ticket file to done folder
+    if [[ -d "$done_dir" ]]; then
+        local new_ticket_path="${done_dir}/$(basename "$ticket_file")"
+        run_git_command "git mv \"$ticket_file\" \"$new_ticket_path\"" || {
+            echo "Warning: Failed to move ticket to done folder" >&2
+        }
+        
+        # Commit the move
+        run_git_command "git commit -m \"Move completed ticket to done folder\"" || {
+            echo "Warning: Failed to commit ticket move" >&2
+        }
+        
+        # Push the move if auto_push
+        if [[ "$auto_push" == "true" ]] && [[ "$no_push" == "false" ]]; then
+            run_git_command "git push $repository $default_branch" || {
+                echo "Warning: Failed to push ticket move to remote" >&2
+            }
+        fi
     fi
     
     # Remove current ticket link

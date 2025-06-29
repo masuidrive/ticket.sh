@@ -92,17 +92,49 @@ Auto-restores from branch name when current-ticket.md is lost after clone/pull
 
 ### Complete Work
 ```bash
-./ticket.sh close <ticket-file>
+./ticket.sh close [--no-push] [--force|-f]
 ```
 - Squashes commits for organization
 - Merges to default_branch
 - Updates ticket status to completed
+- Moves ticket file to `tickets/done/` folder
 
 ### List View
 ```bash
-./ticket.sh list [--status todo|doing|done]
+./ticket.sh list [--status todo|doing|done] [--count N]
 ```
 Displays ticket status list (default: todo+doing)
+
+**Output Format:**
+```
+📋 Ticket List
+---------------------------
+- status: doing
+  ticket_path: tickets/240628-153245-implement-auth.md
+  description: User authentication implementation
+  priority: 1
+  created_at: 2025-06-28T15:32:45Z
+  started_at: 2025-06-28T16:15:30Z
+
+- status: todo
+  ticket_path: tickets/240628-162130-add-tests.md
+  description: Add unit tests for auth module
+  priority: 2
+  created_at: 2025-06-28T16:21:30Z
+
+- status: done
+  ticket_path: tickets/done/240627-142030-setup-project.md
+  description: Initial project setup
+  priority: 1
+  created_at: 2025-06-27T14:20:30Z
+  started_at: 2025-06-27T14:25:00Z
+  closed_at: 2025-06-27T15:45:20Z
+```
+
+**Note**: 
+- `ticket_path` shows the relative path from project root
+- `closed_at` is only displayed for done tickets
+- Completed tickets are moved to `tickets/done/` folder
 
 ---
 
@@ -111,7 +143,9 @@ Displays ticket status list (default: todo+doing)
 ```
 project-root/
 ├── tickets/                    # All ticket files (configurable)
-│   └── 240628-153245-foo.md
+│   ├── 240628-153245-foo.md    # Active/todo tickets
+│   └── done/                   # Completed tickets (auto-created)
+│       └── 240627-142030-bar.md
 ├── current-ticket.md           # Symlink to working ticket (.gitignore'd)
 ├── ticket.sh                   # Main script
 ├── .ticket-config.yml          # Configuration file
@@ -522,7 +556,10 @@ Completes ticket and merge process:
 4. **Push (conditional)**: Pushes feature branch only when `auto_push: true` and `--no-push` not specified
 5. **Squash Merge**: Squash merges feature branch to `{default_branch}`
 6. **Push (conditional)**: Pushes `{default_branch}` only when `auto_push: true` and `--no-push` not specified
-7. Displays executed Git commands and output in detail
+7. **Move to done folder**: Moves ticket file to `tickets/done/` directory
+8. **Commit move**: Commits the file move with `"Move completed ticket to done folder"` message
+9. **Push move (conditional)**: Pushes the move commit when `auto_push: true` and `--no-push` not specified
+10. Displays executed Git commands and output in detail
 
 **Git Operation Details:**
 ```bash

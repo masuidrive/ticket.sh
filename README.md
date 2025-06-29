@@ -83,6 +83,7 @@ cp ticket.sh /usr/local/bin/  # Or anywhere in your PATH
    ticket.sh close
    # Squash merges to develop branch
    # Updates ticket status to completed
+   # Moves ticket to tickets/done/ folder
    ```
 
 ## Commands
@@ -103,6 +104,8 @@ Lists tickets with filtering options
 - `--status todo|doing|done`: Filter by status
 - `--count N`: Limit number of results (default: 20)
 - Default shows only `todo` and `doing` tickets
+- Shows `ticket_path` (relative path from project root)
+- Displays `closed_at` for done tickets
 
 ### `ticket.sh start <ticket-name> [--no-push]`
 Starts work on a ticket
@@ -116,12 +119,14 @@ Restores the `current-ticket.md` symlink
 - Useful after clone/pull operations
 - Automatically detects ticket from current branch
 
-### `ticket.sh close [--no-push]`
+### `ticket.sh close [--no-push] [--force|-f]`
 Completes the current ticket
 - Updates ticket's `closed_at` timestamp
 - Squash merges to develop branch
+- Moves ticket file to `tickets/done/` folder
 - Removes `current-ticket.md` symlink
 - Use `--no-push` to skip automatic push
+- Use `--force` or `-f` to bypass uncommitted changes check
 
 ## Testing
 
