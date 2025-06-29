@@ -2,6 +2,11 @@
 
 AIアシスタントを使用したコーディングワークフローを強化するシェルスクリプトツール集です。
 
+**重要**: このファイルを更新した場合、他言語の README.mdファイルも変更すること
+
+- [English ver.](README.md)
+- [Japanese ver.](README.ja.md)
+
 ## プロジェクト
 
 ### 🎫 ticket-sh

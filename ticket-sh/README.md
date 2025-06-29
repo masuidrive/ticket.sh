@@ -1,12 +1,11 @@
+# ticket.sh - Git-Based Ticket Management System
+
+A self-contained ticket management system using shell script, files, and Git. Perfect for managing coding tasks, especially when working with AI coding assistants.
+
 **IMPORTANT**: When updating this file, also update README.md files in other languages
 
 - [English ver.](README.md)
 - [Japanese ver.](README.ja.md)
-
----
-# ticket.sh - Git-Based Ticket Management System
-
-A self-contained ticket management system using shell script, files, and Git. Perfect for managing coding tasks, especially when working with AI coding assistants.
 
 ## Overview
 
@@ -239,3 +238,4 @@ cd ticket-sh/test
 ## License
 
 MIT License - see LICENSE file for details
+

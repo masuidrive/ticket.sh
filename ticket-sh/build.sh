@@ -7,8 +7,8 @@ set -euo pipefail
 
 # Configuration
 OUTPUT_FILE="ticket.sh"
-SRC_DIR="ticket-sh/src"
-LIB_DIR="ticket-sh/lib"
+SRC_DIR="src"
+LIB_DIR="lib"
 
 echo "Building $OUTPUT_FILE..."
 

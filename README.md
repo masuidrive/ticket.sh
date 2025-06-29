@@ -2,6 +2,11 @@
 
 A collection of shell script tools designed to enhance AI-assisted coding workflows.
 
+**IMPORTANT**: When updating this file, also update spec.md files in other languages
+
+- [English ver.](README.md)
+- [Japanese ver.](README.ja.md)
+
 ## Projects
 
 ### 🎫 ticket-sh
