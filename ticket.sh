@@ -912,6 +912,11 @@ get_ticket_status() {
 
 set -euo pipefail
 
+# Ensure UTF-8 support and locale-independent behavior
+export LANG=C.UTF-8
+export LC_ALL=C.UTF-8
+unset GREP_OPTIONS
+
 # Get the directory where this script is located
 
 # Source required libraries

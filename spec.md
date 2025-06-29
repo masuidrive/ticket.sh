@@ -17,6 +17,18 @@ A self-contained ticket management system using a single shell script + files + 
 
 ---
 
+## 📋 System Requirements
+
+- **Bash**: Version 3.2 or higher
+- **Git**: Any recent version
+- **Standard UNIX commands**: ls, ln, sed, grep, etc.
+- **Character encoding**: UTF-8 support required
+  - ticket.sh automatically sets UTF-8 locale (LANG=C.UTF-8, LC_ALL=C.UTF-8)
+  - Supports UTF-8 in ticket titles, descriptions, and content
+  - Locale-independent operation ensured
+
+---
+
 ## 🚀 System Overview
 
 ### Ticket Management Mechanism
