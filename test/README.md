@@ -95,6 +95,20 @@ The test suite consists of multiple test files that verify different aspects of 
   - Done folder auto-creation
 - **Dependencies**: test-helpers.sh
 
+#### test-file-permissions.sh
+- **Purpose**: Comprehensive file system permission error testing
+- **Coverage**:
+  - Read-only directory for init command
+  - Write-protected tickets directory
+  - Symlink creation failures
+  - Read-only ticket files
+  - Done directory creation failures
+  - Read-only config file handling
+  - Disk space issues (platform-dependent)
+  - File ownership issues
+- **Dependencies**: test-helpers.sh
+- **Note**: Skips tests when running as root; some tests are platform-specific
+
 ## Helper Files
 
 ### test-helpers.sh
