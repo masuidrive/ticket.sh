@@ -4,7 +4,7 @@ tags: ["documentation", "spec"]
 description: "仕様書に記載されていない実装済み機能のドキュメント化"
 created_at: "2025-06-29T13:18:59Z"
 started_at: 2025-06-29T13:48:48Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2025-06-29T14:16:19Z # Do not modify manually
 ---
 
 # 仕様書に記載されていない機能のドキュメント化
