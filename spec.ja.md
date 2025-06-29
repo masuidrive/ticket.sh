@@ -92,17 +92,49 @@ clone/pull後など、current-ticket.mdが失われた際にブランチ名か�
 
 ### 作業完了
 ```bash
-./ticket.sh close <ticket-file>
+./ticket.sh close [--no-push] [--force|-f]
 ```
 - コミットをsquashして整理
 - default_branchにマージ
 - チケット状態を完了に更新
+- チケットファイルを `tickets/done/` フォルダに移動
 
 ### 一覧表示
 ```bash
-./ticket.sh list [--status todo|doing|done]
+./ticket.sh list [--status todo|doing|done] [--count N]
 ```
 チケット状況を一覧表示（デフォルトはtodo+doing）
+
+**出力フォーマット:**
+```
+📋 Ticket List
+---------------------------
+- status: doing
+  ticket_path: tickets/240628-153245-implement-auth.md
+  description: ユーザー認証の実装
+  priority: 1
+  created_at: 2025-06-28T15:32:45Z
+  started_at: 2025-06-28T16:15:30Z
+
+- status: todo
+  ticket_path: tickets/240628-162130-add-tests.md
+  description: 認証モジュールのユニットテストを追加
+  priority: 2
+  created_at: 2025-06-28T16:21:30Z
+
+- status: done
+  ticket_path: tickets/done/240627-142030-setup-project.md
+  description: プロジェクトの初期設定
+  priority: 1
+  created_at: 2025-06-27T14:20:30Z
+  started_at: 2025-06-27T14:25:00Z
+  closed_at: 2025-06-27T15:45:20Z
+```
+
+**注意**: 
+- `ticket_path` はプロジェクトルートからの相対パスを表示
+- `closed_at` はdoneチケットのみ表示
+- 完了したチケットは `tickets/done/` フォルダに移動されます
 
 ---
 
@@ -111,7 +143,9 @@ clone/pull後など、current-ticket.mdが失われた際にブランチ名か�
 ```
 project-root/
 ├── tickets/                    # 全チケットファイル（設定可能）
-│   └── 240628-153245-foo.md
+│   ├── 240628-153245-foo.md    # アクティブ/todoチケット
+│   └── done/                   # 完了済みチケット（自動作成）
+│       └── 240627-142030-bar.md
 ├── current-ticket.md           # 作業中チケットへのsymlink (.gitignore対象)
 ├── ticket.sh                   # メインスクリプト
 ├── .ticket-config.yml          # 設定ファイル

@@ -83,6 +83,7 @@ chmod +x ticket.sh
    ticket.sh close
    # developブランチへスカッシュマージ
    # チケットステータスを完了に更新
+   # チケットをtickets/done/フォルダに移動
    ```
 
 ## コマンド
@@ -103,6 +104,8 @@ chmod +x ticket.sh
 - `--status todo|doing|done`: ステータスでフィルタ
 - `--count N`: 結果数を制限（デフォルト: 20）
 - デフォルトでは `todo` と `doing` のチケットのみ表示
+- `ticket_path`（プロジェクトルートからの相対パス）を表示
+- doneチケットには `closed_at` を表示
 
 ### `ticket.sh start <ticket-name> [--no-push]`
 チケットの作業を開始
@@ -116,12 +119,14 @@ chmod +x ticket.sh
 - clone/pull操作後に便利
 - 現在のブランチから自動的にチケットを検出
 
-### `ticket.sh close [--no-push]`
+### `ticket.sh close [--no-push] [--force|-f]`
 現在のチケットを完了
 - チケットの `closed_at` タイムスタンプを更新
 - developブランチへスカッシュマージ
+- チケットファイルを `tickets/done/` フォルダに移動
 - `current-ticket.md` シンボリックリンクを削除
 - `--no-push` で自動プッシュをスキップ
+- `--force` または `-f` で未コミットの変更チェックをバイパス
 
 ## テスト
 
