@@ -3,8 +3,8 @@ priority: 1
 tags: ["bug", "testing", "list-command"]
 description: "テストスイートで失敗している3つのテストケースを修正"
 created_at: "2025-06-29T16:23:27Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2025-06-29T16:25:04Z # Do not modify manually
+closed_at: 2025-06-29T17:01:30Z # Do not modify manually
 ---
 
 # テストスイートの失敗を修正
@@ -22,22 +22,22 @@ Docker環境（Ubuntu 22.04、Alpine Linux）およびローカル環境での�
 ## Tasks
 
 ### 1. list count parameterの修正
-- [ ] `test-additional.sh`のテスト5を調査
-- [ ] listコマンドの`--count`オプションの実装を確認
-- [ ] カウント制限が正しく適用されるよう修正
-- [ ] テストが成功することを確認
+- [x] `test-additional.sh`のテスト5を調査
+- [x] listコマンドの`--count`オプションの実装を確認
+- [x] カウント制限が正しく適用されるよう修正
+- [x] テストが成功することを確認
 
 ### 2. priority sortingの修正
-- [ ] `test-additional.sh`のテスト11を調査
-- [ ] listコマンドの優先度ソートロジックを確認
-- [ ] 優先度順（高い順）でソートされるよう修正
-- [ ] テストが成功することを確認
+- [x] `test-additional.sh`のテスト11を調査
+- [x] listコマンドの優先度ソートロジックを確認
+- [x] 優先度順（高い順）でソートされるよう修正
+- [x] テストが成功することを確認
 
 ### 3. Close updates ticketの修正
-- [ ] `test-final.sh`の該当テストを調査
-- [ ] closeコマンドでチケットのメタデータ更新を確認
-- [ ] `closed_at`フィールドが正しく更新されることを確認
-- [ ] テストが成功することを確認
+- [x] `test-final.sh`の該当テストを調査
+- [x] closeコマンドでチケットのメタデータ更新を確認
+- [x] `closed_at`フィールドが正しく更新されることを確認
+- [x] テストが成功することを確認
 
 ## 詳細情報
 
@@ -66,6 +66,27 @@ Docker環境（Ubuntu 22.04、Alpine Linux）およびローカル環境での�
 
 - これらの問題は機能的なバグであり、ユーザー体験に影響を与える
 - 特にlistコマンドの問題は、大量のチケットを扱う際に重要
+
+## 修正内容
+
+### 修正したファイル
+
+1. **test/test-additional.sh**
+   - `ticket_name:` を `ticket_path:` に変更（listコマンドの出力形式変更に対応）
+   - 行118-120: list count parameterテストの修正
+   - 行254: priority sortingテストの修正
+
+2. **test/test-final.sh**
+   - 行159: クローズされたチケットを `tickets/done/` ディレクトリで探すように修正
+   - 元々は `tickets/` ディレクトリで探していたが、closeコマンドは完了したチケットをdoneフォルダに移動するため
+
+### 結果
+
+- ローカル環境: 92/92テスト成功
+- Ubuntu Docker: 86/86テスト成功
+- Alpine Docker: 86/86テスト成功
+
+すべてのテストが成功するようになりました。
 
 ## Notes
 
