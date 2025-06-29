@@ -4,7 +4,7 @@ tags: ["testing", "i18n", "unicode"]
 description: "UTF-8およびUnicode文字の処理を検証するテストケースの追加"
 created_at: "2025-06-29T13:20:20Z"
 started_at: 2025-06-29T17:33:35Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2025-06-29T17:34:38Z # Do not modify manually
 ---
 
 # UTF-8/Unicode処理のテストケース追加
