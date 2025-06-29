@@ -12,8 +12,14 @@ TEST_DIR="test-debug-init-$(date +%s)"
 mkdir -p "$TEST_DIR"
 cd "$TEST_DIR"
 
-# Copy ticket.sh
-cp "${SCRIPT_DIR}/../src/ticket.sh" .
+# Use built ticket.sh if available, otherwise build it
+if [[ -f "${SCRIPT_DIR}/../ticket.sh" ]]; then
+    cp "${SCRIPT_DIR}/../ticket.sh" .
+else
+    # Build ticket.sh if not found
+    (cd "${SCRIPT_DIR}/.." && ./build.sh >/dev/null 2>&1)
+    cp "${SCRIPT_DIR}/../ticket.sh" .
+fi
 chmod +x ticket.sh
 
 echo -e "\n1. Setting up git repo..."

@@ -44,16 +44,28 @@ unset ENV
 unset POSIXLY_CORRECT  # We rely on bash-specific features
 
 # Set secure defaults
-set -o noclobber   # Prevent accidental file overwrites with >
+# Note: noclobber is disabled because it causes issues with mktemp in some environments
+# set -o noclobber   # Prevent accidental file overwrites with >
 umask 0022         # Ensure created files have proper permissions
 
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source required libraries
-source "${SCRIPT_DIR}/../yaml-sh/yaml-sh.sh"
-source "${SCRIPT_DIR}/../lib/yaml-frontmatter.sh"
-source "${SCRIPT_DIR}/../lib/utils.sh"
+# First try local paths (for testing), then production paths
+if [[ -f "${SCRIPT_DIR}/yaml-sh/yaml-sh.sh" ]]; then
+    source "${SCRIPT_DIR}/yaml-sh/yaml-sh.sh"
+    source "${SCRIPT_DIR}/lib/yaml-frontmatter.sh"
+    source "${SCRIPT_DIR}/lib/utils.sh"
+elif [[ -f "${SCRIPT_DIR}/../yaml-sh/yaml-sh.sh" ]]; then
+    source "${SCRIPT_DIR}/../yaml-sh/yaml-sh.sh"
+    source "${SCRIPT_DIR}/../lib/yaml-frontmatter.sh"
+    source "${SCRIPT_DIR}/../lib/utils.sh"
+else
+    echo "Error: Cannot find required yaml-sh.sh library" >&2
+    echo "Make sure yaml-sh and lib directories are in the correct location" >&2
+    exit 1
+fi
 
 # Global variables
 CONFIG_FILE=".ticket-config.yml"

@@ -13,3 +13,4 @@ test-close-force-*/
 test-missing-*/
 test-debug-init-*/
 test/test-tmp/
+current-ticket.md

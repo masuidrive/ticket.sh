@@ -67,11 +67,19 @@ EOF
     echo ""
 } >> "$OUTPUT_FILE"
 
-# Remove shebang, source statements, and SCRIPT_DIR references
-tail -n +2 "$SRC_DIR/ticket.sh" | \
-    grep -v '^source' | \
-    grep -v '^SCRIPT_DIR=' | \
-    cat >> "$OUTPUT_FILE"
+# Process main script, removing:
+# - shebang line
+# - SCRIPT_DIR definition
+# - entire source block (from "# Source required libraries" to "fi")
+awk '
+    BEGIN { skip = 0 }
+    /^#!/ { next }
+    /^SCRIPT_DIR=/ { next }
+    /^# Source required libraries/ { skip = 1; next }
+    skip && /^fi$/ { skip = 0; next }
+    skip { next }
+    { print }
+' "$SRC_DIR/ticket.sh" >> "$OUTPUT_FILE"
 
 # Make executable
 chmod +x "$OUTPUT_FILE"

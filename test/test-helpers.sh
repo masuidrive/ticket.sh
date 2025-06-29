@@ -48,23 +48,27 @@ setup_test_repo() {
     mkdir "$test_dir"
     cd "$test_dir"
     
-    # Copy ticket.sh and required libraries
-    cp "${SCRIPT_DIR}/../src/ticket.sh" .
+    # Use built ticket.sh if available, otherwise build it
+    if [[ -f "${SCRIPT_DIR}/../ticket.sh" ]]; then
+        cp "${SCRIPT_DIR}/../ticket.sh" .
+    else
+        # Build ticket.sh if not found
+        (cd "${SCRIPT_DIR}/.." && ./build.sh >/dev/null 2>&1)
+        cp "${SCRIPT_DIR}/../ticket.sh" .
+    fi
     chmod +x ticket.sh
-    
-    # Create required directory structure for dependencies
-    mkdir -p yaml-sh lib
-    cp "${SCRIPT_DIR}/../yaml-sh/yaml-sh.sh" yaml-sh/
-    cp "${SCRIPT_DIR}/../lib/yaml-frontmatter.sh" lib/
-    cp "${SCRIPT_DIR}/../lib/utils.sh" lib/
     
     # Initialize git with proper gitignore
     git init -q
     git config user.name "Test"
     git config user.email "test@test.com"
     
-    # Create gitignore to exclude ticket.sh
-    echo "ticket.sh" > .gitignore
+    # Create gitignore to exclude ticket.sh and dependencies
+    cat > .gitignore << 'EOF'
+ticket.sh
+yaml-sh/
+lib/
+EOF
     echo "test" > README.md
     
     # Only add specific files

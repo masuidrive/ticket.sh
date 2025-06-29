@@ -9,31 +9,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "=== Basic ticket.sh Tests ==="
 echo
 
+# Source helper functions
+source "${SCRIPT_DIR}/test-helpers.sh"
+
 # Setup
 TEST_DIR="test-basic"
 rm -rf "$TEST_DIR"
-mkdir "$TEST_DIR"
-cd "$TEST_DIR"
-cp "${SCRIPT_DIR}/../src/ticket.sh" .
-chmod +x ticket.sh
-
-# Initialize git
-git init -q
-git config user.name "Test"
-git config user.email "test@test.com"
-echo "ticket.sh" > .gitignore
-echo "test" > README.md
-git add .gitignore README.md && git commit -q -m "init"
-git checkout -q -b develop
+setup_test_repo "$TEST_DIR"
 
 # Test 1: Init
 echo "1. Testing init..."
 ./ticket.sh init >/dev/null
-# Commit .gitignore changes from init
-if git status --porcelain | grep -q .gitignore; then
-    git add .gitignore
-    git commit -q -m "Update .gitignore from ticket init"
-fi
 echo "   ✓ Init completed"
 
 # Test 2: New ticket
@@ -48,7 +34,7 @@ echo "3. Testing list..."
 
 # Test 4: Start
 echo "4. Testing start..."
-git add tickets .ticket-config.yml && git commit -q -m "add ticket"
+git add tickets .ticket-config.yml .gitignore && git commit -q -m "add ticket and config"
 TICKET_NAME=$(basename "$TICKET" .md)
 ./ticket.sh start "$TICKET_NAME" --no-push >/dev/null
 echo "   ✓ Started on branch: $(git branch --show-current)"
