@@ -12,13 +12,31 @@ LIB_DIR="lib"
 
 echo "Building $OUTPUT_FILE..."
 
-# Create output file with shebang
+# Create output file with shebang and header from source
 cat > "$OUTPUT_FILE" << 'EOF'
 #!/usr/bin/env bash
 
-# ticket.sh - Ticket Management System for Coding Agents
+# ticket.sh - Git-based Ticket Management System for Development
 # Version: 1.0.0
 # Built from source files
+#
+# A lightweight ticket management system that uses Git branches and Markdown files.
+# Perfect for small teams, solo developers, and AI coding assistants.
+#
+# Features:
+#   - Each ticket is a Markdown file with YAML frontmatter
+#   - Automatic Git branch creation/management per ticket
+#   - Simple CLI interface for common workflows
+#   - No external dependencies (pure Bash + Git)
+#
+# For detailed documentation, installation instructions, and examples:
+# https://github.com/masuidrive/ticket.sh
+#
+# Quick Start:
+#   ./ticket.sh init          # Initialize in your project
+#   ./ticket.sh new my-task   # Create a new ticket
+#   ./ticket.sh start <name>  # Start working on a ticket
+#   ./ticket.sh close         # Complete and merge ticket
 
 set -euo pipefail
 

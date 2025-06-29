@@ -37,18 +37,18 @@ ticket.sh is a lightweight ticket management system that:
 
 ## Installation
 
-### Option 1: Build from Source
+### Option 1: Download Pre-built Script
+```bash
+curl -O https://raw.githubusercontent.com/masuidrive/ticket.sh/main/ticket.sh
+chmod +x ticket.sh
+```
+
+### Option 2: Build from Source
 ```bash
 git clone https://github.com/masuidrive/ticket.sh.git
 cd ticket.sh
 ./build.sh
 cp ticket.sh /usr/local/bin/  # Or anywhere in your PATH
-```
-
-### Option 2: Download Pre-built Script
-```bash
-curl -O https://raw.githubusercontent.com/masuidrive/ticket.sh/main/ticket.sh
-chmod +x ticket.sh
 ```
 
 ## Workflow
