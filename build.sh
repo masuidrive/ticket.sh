@@ -28,9 +28,9 @@ EOF
 echo "# === Inlined Libraries ===" >> "$OUTPUT_FILE"
 echo "" >> "$OUTPUT_FILE"
 
-# Process yaml-sh.sh
+# Process yaml-sh.sh from yaml-sh directory
 echo "# --- yaml-sh.sh ---" >> "$OUTPUT_FILE"
-tail -n +2 "$LIB_DIR/yaml-sh.sh" >> "$OUTPUT_FILE"
+tail -n +2 "yaml-sh/yaml-sh.sh" >> "$OUTPUT_FILE"
 echo "" >> "$OUTPUT_FILE"
 
 # Process yaml-frontmatter.sh

@@ -9,7 +9,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source required libraries
-source "${SCRIPT_DIR}/../lib/yaml-sh.sh"
+source "${SCRIPT_DIR}/../yaml-sh/yaml-sh.sh"
 source "${SCRIPT_DIR}/../lib/yaml-frontmatter.sh"
 source "${SCRIPT_DIR}/../lib/utils.sh"
 

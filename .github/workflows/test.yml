@@ -1,0 +1,77 @@
+name: Test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Build ticket.sh
+      run: ./build.sh
+      
+    - name: Verify build
+      run: |
+        test -f ticket.sh
+        test -x ticket.sh
+        
+    - name: Test help command
+      run: |
+        ./ticket.sh --help
+        ./ticket.sh help
+        
+    - name: Test with no arguments
+      run: ./ticket.sh
+      
+    - name: Run core tests
+      run: |
+        cd test
+        ./test-final.sh
+        
+    - name: Run additional tests
+      run: |
+        cd test
+        ./test-additional.sh
+        
+  yaml-sh-test:
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Test yaml-sh
+      run: |
+        cd yaml-sh
+        ./test.sh
+        
+  shellcheck:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install shellcheck
+      run: sudo apt-get update && sudo apt-get install -y shellcheck
+      
+    - name: Check shell scripts
+      run: |
+        shellcheck build.sh
+        shellcheck src/ticket.sh
+        shellcheck lib/*.sh
+        shellcheck yaml-sh/yaml-sh.sh
+        shellcheck yaml-sh/test.sh
+        shellcheck test/*.sh || true  # Allow test scripts to have some warnings
