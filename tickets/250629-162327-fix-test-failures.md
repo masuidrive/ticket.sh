@@ -4,7 +4,7 @@ tags: ["bug", "testing", "list-command"]
 description: "テストスイートで失敗している3つのテストケースを修正"
 created_at: "2025-06-29T16:23:27Z"
 started_at: 2025-06-29T16:25:04Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2025-06-29T17:01:30Z # Do not modify manually
 ---
 
 # テストスイートの失敗を修正
