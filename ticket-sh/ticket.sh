@@ -906,11 +906,20 @@ USAGE:
   ./ticket.sh restore                  Restore current-ticket.md symlink from branch name
   ./ticket.sh close [--no-push]       Complete current ticket (squash merge to default branch)
 
-TICKET STRUCTURE:
-- File: tickets/YYMMDD-hhmmss-<slug>.md
-- Metadata in YAML frontmatter (priority, description, timestamps)
-- Status determined by started_at/closed_at fields
-- Work done on feature/<ticket-name> branches
+TICKET NAMING:
+- Format: YYMMDD-hhmmss-<slug>
+- Example: 241225-143502-implement-user-auth
+- Generated automatically when creating tickets
+
+TICKET STATUS:
+- todo: not started (started_at: null)
+- doing: in progress (started_at set, closed_at: null)
+- done: completed (closed_at set)
+
+CONFIGURATION:
+- Config file: .ticket-config.yml (in project root)
+- Initialize with: ./ticket.sh init
+- Edit to customize directories, branches, and templates
 
 PUSH CONTROL:
 - Set auto_push: false in config to disable automatic pushing
@@ -918,13 +927,19 @@ PUSH CONTROL:
 - Git commands and outputs are displayed for transparency
 
 WORKFLOW:
-1. Create ticket: ./ticket.sh new feature-name (use lowercase, numbers, hyphens only)
+1. Create ticket: ./ticket.sh new feature-name
 2. Edit ticket content and description
-3. Start work: ./ticket.sh start YYMMDD-hhmmss-feature-name
+3. Start work: ./ticket.sh start 241225-143502-feature-name
 4. Develop on feature branch (current-ticket.md shows active ticket)
 5. Complete: ./ticket.sh close
 
-Note: current-ticket.md is git-ignored. Use 'restore' after clone/pull.
+TROUBLESHOOTING:
+- Run from project root (where .git and .ticket-config.yml exist)
+- Use 'restore' if current-ticket.md is missing after clone/pull
+- Check 'list' to see available tickets and their status
+- Ensure Git working directory is clean before start/close
+
+Note: current-ticket.md is git-ignored and needs 'restore' after clone/pull.
 EOF
 }
 
