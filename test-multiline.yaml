@@ -1,0 +1,36 @@
+# Multiline string tests
+description: |
+  This is a multiline string
+  that preserves newlines.
+  
+  It can have empty lines too.
+
+compact: |-
+  This multiline string
+  strips the final newline
+
+keep_all: |+
+  This keeps all trailing
+  newlines
+
+
+folded: >
+  This is a folded string
+  where newlines become
+  spaces.
+
+folded_strip: >-
+  This folded string
+  strips the final newline
+
+folded_keep: >+
+  This folded string
+  keeps trailing newlines
+
+
+# Quoted strings
+single_quoted: 'This is a single-quoted string with "double quotes" inside'
+double_quoted: "This is a double-quoted string with 'single quotes' inside"
+
+# String with special characters
+special: "Line 1\nLine 2\tTabbed"

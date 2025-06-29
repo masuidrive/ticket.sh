@@ -1,0 +1,19 @@
+# Simple test YAML file
+name: John Doe
+age: 30
+email: john.doe@example.com
+
+# Nested structure
+address:
+  street: 123 Main St
+  city: Tokyo
+  country: Japan
+  postal_code: 100-0001
+
+# Boolean-like values
+active: true
+verified: false
+
+# Numbers
+score: 98.5
+rank: 1

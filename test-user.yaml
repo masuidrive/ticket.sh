@@ -1,0 +1,15 @@
+tickets_dir: "tickets"
+default_branch: "develop"
+branch_prefix: "feature/"
+repository: "origin"
+default_content: |
+  # Ticket Overview
+  
+  Write the overview and tasks for this ticket here.
+  
+  ## Tasks
+  - [ ] Task 1
+  - [ ] Task 2
+  
+  ## Notes
+  Additional notes or requirements.

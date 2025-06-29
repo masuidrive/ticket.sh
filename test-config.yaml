@@ -1,0 +1,59 @@
+# Application configuration
+app:
+  name: MyApp
+  version: 1.2.3
+  debug: false
+
+# Database configuration
+database:
+  host: localhost
+  port: 5432
+  name: myapp_db
+  credentials:
+    user: dbuser
+    password: secret123
+  options:
+    ssl: true
+    pool_size: 10
+    timeout: 30
+
+# Server configuration
+servers:
+  - name: web-1
+    host: 192.168.1.10
+    roles:
+      - web
+      - api
+    config:
+      max_connections: 1000
+      timeout: 60
+  - name: web-2
+    host: 192.168.1.11
+    roles:
+      - web
+      - api
+    config:
+      max_connections: 1000
+      timeout: 60
+  - name: db-1
+    host: 192.168.1.20
+    roles:
+      - database
+    config:
+      max_connections: 500
+      timeout: 120
+
+# Logging configuration
+logging:
+  level: info
+  outputs:
+    - type: file
+      path: /var/log/app.log
+      format: json
+    - type: console
+      format: text
+  rules:
+    - pattern: "*.debug"
+      level: debug
+    - pattern: "database.*"
+      level: warn
