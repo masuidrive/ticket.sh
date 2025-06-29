@@ -1,14 +1,71 @@
 #!/usr/bin/env bash
 
+# Ubuntu compatibility fixes for test-additional.sh
+
+# This patch addresses the following Ubuntu-specific issues:
+# 1. sed -i syntax differences between macOS and Linux
+# 2. grep counting issues with ticket_name output
+# 3. git branch parsing differences
+# 4. temporary file handling
+
+# Function to detect OS and use appropriate sed syntax
+portable_sed_inplace() {
+    local file="$1"
+    shift
+    
+    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        # Linux (GNU sed)
+        sed -i "$@" "$file"
+    elif [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS (BSD sed)
+        sed -i '' "$@" "$file"
+    else
+        # Try GNU sed first, fall back to BSD
+        sed -i "$@" "$file" 2>/dev/null || sed -i '' "$@" "$file"
+    fi
+}
+
+# Export for use in tests
+export -f portable_sed_inplace
+
+# Fix for grep counting - ensure consistent output format
+ensure_grep_count() {
+    # Force grep to use consistent line counting
+    export GREP_OPTIONS=""
+    export LC_ALL=C
+}
+
+# Fix for git branch detection
+portable_git_branch_count() {
+    # Use git for-each-ref for more reliable branch counting
+    git for-each-ref --format='%(refname:short)' refs/heads/ | grep -c "$1"
+}
+
+# Debug function to help diagnose issues
+debug_ticket_list_output() {
+    local output="$1"
+    echo "=== DEBUG: ticket.sh list output ===" >&2
+    echo "$output" >&2
+    echo "=== DEBUG: grep for ticket_name ===" >&2
+    echo "$output" | grep "ticket_name:" >&2
+    echo "=== DEBUG: count ===" >&2
+    echo "$output" | grep -c "ticket_name:" >&2
+    echo "=== END DEBUG ===" >&2
+}
+
+# Apply fixes to test-additional.sh
+apply_test_fixes() {
+    local test_file="test-additional.sh"
+    
+    # Create a fixed version of the test file
+    cat > "test-additional-fixed.sh" << 'EOF'
+#!/usr/bin/env bash
+
 # Additional test cases for ticket.sh
 # Tests edge cases and error conditions not covered by other tests
 
 # Source helper functions
 source "$(dirname "$0")/test-helpers.sh"
-
-# Ensure consistent environment for cross-platform compatibility
-export LC_ALL=C
-export GREP_OPTIONS=""
 
 # Colors
 RED='\033[0;31m'
@@ -19,8 +76,27 @@ NC='\033[0m'
 # Test directory
 TEST_DIR="test-additional-$(date +%s)"
 
+# Ensure consistent environment
+export LC_ALL=C
+export GREP_OPTIONS=""
+
 echo -e "${YELLOW}=== Additional ticket.sh Tests ===${NC}"
 echo
+
+# Portable sed in-place editing
+portable_sed_inplace() {
+    local file="$1"
+    shift
+    
+    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        sed -i "$@" "$file"
+    elif [[ "$OSTYPE" == "darwin"* ]]; then
+        sed -i '' "$@" "$file"
+    else
+        # Try both syntaxes
+        sed -i "$@" "$file" 2>/dev/null || sed -i '' "$@" "$file"
+    fi
+}
 
 # Setup
 setup_test() {
@@ -124,10 +200,16 @@ for i in {1..5}; do
     sleep 0.1  # Small delay to ensure different timestamps
 done
 
-# Use more explicit grep pattern and ensure clean counting
+# Debug output
+echo "Debug: Listing all tickets..." >&2
+./ticket.sh list >&2
+
+# Count tickets with explicit grep pattern
 COUNT_1=$(./ticket.sh list --count 1 2>&1 | grep -E "^[[:space:]]*ticket_name:" | wc -l | tr -d ' ')
 COUNT_3=$(./ticket.sh list --count 3 2>&1 | grep -E "^[[:space:]]*ticket_name:" | wc -l | tr -d ' ')
 COUNT_10=$(./ticket.sh list --count 10 2>&1 | grep -E "^[[:space:]]*ticket_name:" | wc -l | tr -d ' ')
+
+echo "Debug: Counts are 1=$COUNT_1, 3=$COUNT_3, 10=$COUNT_10" >&2
 
 if [[ $COUNT_1 -eq 1 ]] && [[ $COUNT_3 -eq 3 ]] && [[ $COUNT_10 -eq 5 ]]; then
     test_result 0 "Count parameter works correctly"
@@ -152,17 +234,8 @@ fi
 # Test 7: Custom branch prefix
 echo -e "\n7. Testing custom branch prefix..."
 cd .. && setup_test
-# Modify config
-# Portable sed that works on both macOS and Linux
-if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    sed -i 's/branch_prefix: "feature\/"/branch_prefix: "ticket\/"/' .ticket-config.yml
-elif [[ "$OSTYPE" == "darwin"* ]]; then
-    sed -i '' 's/branch_prefix: "feature\/"/branch_prefix: "ticket\/"/' .ticket-config.yml
-else
-    # Try both syntaxes
-    sed -i 's/branch_prefix: "feature\/"/branch_prefix: "ticket\/"/' .ticket-config.yml 2>/dev/null || \
-    sed -i '' 's/branch_prefix: "feature\/"/branch_prefix: "ticket\/"/' .ticket-config.yml
-fi
+# Modify config with portable sed
+portable_sed_inplace .ticket-config.yml 's/branch_prefix: "feature\/"/branch_prefix: "ticket\/"/'
 
 ./ticket.sh new custom-branch >/dev/null 2>&1
 git add . && git commit -q -m "add"
@@ -207,7 +280,7 @@ TICKET_B=$(safe_get_ticket_name "*feature-b.md")
 ./ticket.sh start "$TICKET_B" --no-push >/dev/null 2>&1
 git add . && git commit -q -m "start b"
 
-# Check both branches exist using more reliable method
+# Check both branches exist using portable method
 BRANCHES=$(git for-each-ref --format='%(refname:short)' refs/heads/ | grep -c "^feature/")
 if [[ $BRANCHES -eq 2 ]]; then
     test_result 0 "Multiple feature branches can coexist"
@@ -220,7 +293,7 @@ echo -e "\n10. Testing YAML frontmatter handling..."
 cd .. && setup_test
 
 # Create ticket with special characters in description
-cat > tickets/test-yaml.md << 'EOF'
+cat > tickets/test-yaml.md << 'YAML_EOF'
 ---
 priority: 1
 tags: []
@@ -231,7 +304,7 @@ closed_at: null   # Do not modify manually
 ---
 
 # Test Ticket
-EOF
+YAML_EOF
 
 OUTPUT=$(./ticket.sh list 2>&1)
 if echo "$OUTPUT" | grep -q "Test with: colons"; then
@@ -249,15 +322,7 @@ for i in 3 1 2; do
     ./ticket.sh new "priority-$i" >/dev/null 2>&1
     TICKET=$(safe_get_first_file "*priority-$i.md" "tickets")
     if [[ -n "$TICKET" ]]; then
-        # Portable sed for priority update
-        if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-            sed -i "s/priority: 2/priority: $i/" "$TICKET"
-        elif [[ "$OSTYPE" == "darwin"* ]]; then
-            sed -i '' "s/priority: 2/priority: $i/" "$TICKET"
-        else
-            sed -i "s/priority: 2/priority: $i/" "$TICKET" 2>/dev/null || \
-            sed -i '' "s/priority: 2/priority: $i/" "$TICKET"
-        fi
+        portable_sed_inplace "$TICKET" "s/priority: 2/priority: $i/"
     fi
 done
 
@@ -305,3 +370,23 @@ cd ..
 rm -rf "$TEST_DIR"
 
 echo -e "\n${YELLOW}=== Additional tests completed ===${NC}"
+EOF
+
+    chmod +x test-additional-fixed.sh
+    echo "Created fixed test file: test-additional-fixed.sh"
+}
+
+# Summary of fixes needed:
+cat << 'SUMMARY'
+Ubuntu Compatibility Issues Found:
+1. sed -i syntax: Linux uses 'sed -i' while macOS uses 'sed -i ""'
+2. grep counting: May need explicit pattern matching with spaces
+3. git branch counting: Use git for-each-ref for reliability
+4. Environment variables: Set LC_ALL=C and clear GREP_OPTIONS
+
+Recommended fixes:
+1. Use the portable_sed_inplace function for all sed operations
+2. Use explicit grep patterns with proper escaping
+3. Use wc -l | tr -d ' ' for consistent counting
+4. Set environment variables at test start
+SUMMARY
