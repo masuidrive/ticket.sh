@@ -29,6 +29,6 @@ user:
     IL 62701
   preferences:
     notifications: true
-foo: 1.23
+foo: 2.46 
 bar: true
 baz: null

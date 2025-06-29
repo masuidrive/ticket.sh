@@ -31,6 +31,7 @@
 # - yaml_has_key <key>: Check if key exists
 # - yaml_list_size <prefix>: Get size of a list
 # - yaml_load <file> [prefix]: Load YAML into environment variables
+# - yaml_update <file> <key> <value>: Update a top-level single-line value
 
 # Global variables to store parsed data
 declare -a _YAML_KEYS
@@ -449,4 +450,75 @@ yaml_load() {
     done
     
     return 0
+}
+
+# Update a top-level single-line string value in a YAML file
+# Only updates simple key: value pairs, preserves comments
+yaml_update() {
+    local file="$1"
+    local key="$2"
+    local new_value="$3"
+    
+    if [[ ! -f "$file" ]]; then
+        echo "Error: File not found: $file" >&2
+        return 1
+    fi
+    
+    if [[ -z "$key" ]] || [[ -z "$new_value" ]]; then
+        echo "Error: Key and value are required" >&2
+        return 1
+    fi
+    
+    # Create a temporary file
+    local temp_file=$(mktemp)
+    local found=0
+    
+    # Process the file line by line
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        # Check if this line contains the key we're looking for
+        if [[ "$line" =~ ^[[:space:]]*${key}:[[:space:]]* ]]; then
+            # Extract the value part after the colon
+            local after_colon="${line#*:}"
+            
+            # Check for comment
+            local comment=""
+            local value_part="$after_colon"
+            if [[ "$after_colon" =~ \# ]]; then
+                # Split at the hash
+                value_part="${after_colon%%#*}"
+                comment=" #${after_colon#*#}"
+            fi
+            
+            # Trim the value
+            value_part="${value_part#"${value_part%%[![:space:]]*}"}"  # Trim leading
+            value_part="${value_part%"${value_part##*[![:space:]]}"}"  # Trim trailing
+            
+            # Only update if it's not a multiline indicator or empty
+            if [[ "$value_part" != "|" ]] && [[ "$value_part" != "|-" ]] && \
+               [[ "$value_part" != "|+" ]] && [[ "$value_part" != ">" ]] && \
+               [[ "$value_part" != ">-" ]] && [[ "$value_part" != ">+" ]] && \
+               [[ -n "$value_part" ]]; then
+                # Write the updated line
+                echo "${key}: ${new_value}${comment}" >> "$temp_file"
+                found=1
+            else
+                # Keep the original line for multiline or complex values
+                echo "$line" >> "$temp_file"
+            fi
+        else
+            # Keep the original line
+            echo "$line" >> "$temp_file"
+        fi
+    done < "$file"
+    
+    if [[ $found -eq 1 ]]; then
+        # Replace the original file
+        mv "$temp_file" "$file"
+        return 0
+    else
+        # Key not found or not updatable
+        rm "$temp_file"
+        echo "Error: Key '$key' not found or is not a simple value" >&2
+        return 1
+    fi
 }
