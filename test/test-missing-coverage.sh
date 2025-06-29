@@ -185,12 +185,31 @@ else
     test_result 1 "Failed to create branch with multi-level prefix"
 fi
 
-# Test 10: List with invalid status multiple values
-echo -e "\n10. Testing list with multiple invalid status values..."
-if ./ticket.sh list --status todo --status doing >/dev/null 2>&1; then
-    test_result 1 "Should not accept multiple --status flags"
+# Test 10: List with multiple status values (last one wins)
+echo -e "\n10. Testing list with multiple status values..."
+cd .. && setup_test  # Start fresh
+# Create tickets with different statuses
+./ticket.sh new multi-1 >/dev/null 2>&1
+./ticket.sh new multi-2 >/dev/null 2>&1
+git add . && git commit -q -m "add tickets"
+TICKET=$(ls tickets/*multi-1.md | xargs basename | sed 's/.md$//')
+./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1
+git add . && git commit -q -m "start"
+# Merge back to develop so the started_at is visible
+git checkout -q develop
+git merge --no-ff -q "feature/$TICKET" -m "Merge" >/dev/null 2>&1
+
+# With multiple --status flags, the last one should win
+OUTPUT=$(./ticket.sh list --status todo --status doing 2>&1)
+if echo "$OUTPUT" | grep -q "status: doing"; then
+    # Should only show "doing" tickets (last --status value)
+    if echo "$OUTPUT" | grep -q "status: todo"; then
+        test_result 1 "Should only show tickets matching last --status value"
+    else
+        test_result 0 "Correctly uses last --status value when multiple given"
+    fi
 else
-    test_result 0 "Correctly handles multiple status flags"
+    test_result 1 "Should show doing tickets when --status doing is last"
 fi
 
 # Cleanup
