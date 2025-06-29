@@ -48,9 +48,15 @@ setup_test_repo() {
     mkdir "$test_dir"
     cd "$test_dir"
     
-    # Copy ticket.sh from src directory
+    # Copy ticket.sh and required libraries
     cp "${SCRIPT_DIR}/../src/ticket.sh" .
     chmod +x ticket.sh
+    
+    # Create required directory structure for dependencies
+    mkdir -p yaml-sh lib
+    cp "${SCRIPT_DIR}/../yaml-sh/yaml-sh.sh" yaml-sh/
+    cp "${SCRIPT_DIR}/../lib/yaml-frontmatter.sh" lib/
+    cp "${SCRIPT_DIR}/../lib/utils.sh" lib/
     
     # Initialize git with proper gitignore
     git init -q

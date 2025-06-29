@@ -22,6 +22,7 @@ docker run --rm -v "$PROJECT_DIR:/workspace" -w /workspace ubuntu:22.04 bash -c 
     git config --global user.name 'Test User'
     git config --global user.email 'test@example.com'
     git config --global --add safe.directory /workspace
+    git config --global --add safe.directory '*'
     echo 'Running tests on Ubuntu 22.04...'
     cd test && ./test-all.sh
 "
@@ -35,6 +36,7 @@ docker run --rm -v "$PROJECT_DIR:/workspace" -w /workspace alpine:latest sh -c "
     git config --global user.name 'Test User'
     git config --global user.email 'test@example.com'
     git config --global --add safe.directory /workspace
+    git config --global --add safe.directory '*'
     echo 'Running tests on Alpine Linux...'
     cd test && bash ./test-all.sh
 "
