@@ -16,6 +16,10 @@ echo "Building $OUTPUT_FILE..."
 cat > "$OUTPUT_FILE" << 'EOF'
 #!/usr/bin/env bash
 
+# IMPORTANT NOTE: This file is generated from source files. DO NOT EDIT DIRECTLY!
+# To make changes, edit the source files in src/ directory and run ./build.sh
+# Source file: src/ticket.sh
+
 # ticket.sh - Git-based Ticket Management System for Development
 # Version: 1.0.0
 # Built from source files
