@@ -4,7 +4,7 @@ tags: ["feature", "organization", "workflow"]
 description: "完了したチケットをdoneフォルダに移動する機能の実装"
 created_at: "2025-06-29T15:23:44Z"
 started_at: 2025-06-29T15:40:16Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2025-06-29T16:05:28Z # Do not modify manually
 ---
 
 # 完了チケットのdoneフォルダ整理機能
