@@ -89,6 +89,13 @@ update_yaml_frontmatter_field() {
         return 1
     fi
     
+    # Check if the file is writable before replacing
+    if [[ ! -w "$file" ]]; then
+        echo "Error: File '$file' is not writable" >&2
+        rm "$temp_file"
+        return 1
+    fi
+    
     # Replace original file
     mv "$temp_file" "$file"
     return 0

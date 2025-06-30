@@ -18,7 +18,8 @@ The default ticket template was modified outside of a ticket. This ticket captur
 - [x] Update src/ticket.sh to match the new template format
 - [x] Ensure both .ticket-config.yml and src/ticket.sh have the same template
 - [x] Build and test
-- [ ] Get developer approval before closing
+- [x] Run tests before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 ## Notes
 
