@@ -657,6 +657,13 @@ update_yaml_frontmatter_field() {
         return 1
     fi
     
+    # Check if the file is writable before replacing
+    if [[ ! -w "$file" ]]; then
+        echo "Error: File '$file' is not writable" >&2
+        rm "$temp_file"
+        return 1
+    fi
+    
     # Replace original file
     mv "$temp_file" "$file"
     return 0
@@ -805,6 +812,9 @@ Working directory has uncommitted changes. Please:
 1. Commit your changes: git add . && git commit -m "message"
 2. Or stash changes: git stash
 3. Then retry the ticket operation
+
+IMPORTANT: Never use 'git restore' or 'rm' to discard file changes without
+explicit user permission. User's work must be preserved.
 EOF
         return 1
     fi
@@ -1001,12 +1011,16 @@ DEFAULT_CONTENT='# Ticket Overview
 
 Write the overview and tasks for this ticket here.
 
+
 ## Tasks
+
 - [ ] Task 1
 - [ ] Task 2
+...
+- [ ] Get developer approval before closing
+
 
 ## Notes
-When closing this ticket, please show the ticket content to the user and get explicit permission before closing.
 
 Additional notes or requirements.'
 
@@ -1140,18 +1154,18 @@ default_content: |
   # Ticket Overview
   
   Write the overview and tasks for this ticket here.
-
-
+  
+  
   ## Tasks
-
+  
   - [ ] Task 1
   - [ ] Task 2
   ...
   - [ ] Get developer approval before closing
-
+  
 
   ## Notes
-
+  
   Additional notes or requirements.
 EOF
         echo "Created configuration file: $CONFIG_FILE"
@@ -1217,41 +1231,41 @@ EOF
     echo "\`\`\`markdown"
     echo "# Ticket Management Instructions"
     echo ""
-    echo "Use ./ticket.sh for ticket management. When receiving requests from users,"
+    echo "Use \`./ticket.sh\` for ticket management. When receiving requests from users,"
     echo "create tickets and perform work within tickets. Even small user requests"
-    echo "should be documented in current-ticket.md while progressing."
+    echo "should be documented in \`current-ticket.md\` while progressing."
     echo ""
-    echo "For detailed help and tool documentation, run: ./ticket.sh help"
+    echo "For detailed help and tool documentation, run: \`./ticket.sh help\`"
     echo ""
     echo "## Create New Ticket"
     echo ""
-    echo "1. Create ticket: ./ticket.sh new feature-name"
+    echo "1. Create ticket: \`./ticket.sh new feature-name\`"
     echo "2. Edit ticket content and description in the generated file"
     echo ""
     echo "## Start Working on Ticket"
     echo ""
-    echo "1. Check available tickets: ./ticket.sh list or browse tickets directory"
-    echo "2. Start work: ./ticket.sh start 241225-143502-feature-name"
+    echo "1. Check available tickets: \`./ticket.sh\` list or browse tickets directory"
+    echo "2. Start work: \`./ticket.sh start 241225-143502-feature-name\`"
     echo "3. Develop on feature branch (\`current-ticket.md\` shows active ticket)"
     echo ""
     echo "## Closing Tickets"
     echo ""
     echo "1. Before closing:"
     echo "   - Review \`current-ticket.md\` content and description"
-    echo "   - Check all tasks in checklist are completed (mark with [x])"
+    echo "   - Check all tasks in checklist are completed (mark with \`[x]\`)"
     echo "   - Get user approval before proceeding"
-    echo "2. Complete: ./ticket.sh close"
+    echo "2. Complete: \`./ticket.sh close\`"
     echo "\`\`\`"
     echo ""
     echo "   **Note**: These instructions are critical for proper ticket workflow!"
     echo ""
     echo "3. **Quick start**:"
-    echo "   - Create a ticket: './ticket.sh new <slug>'"
-    echo "   - List tickets: './ticket.sh list'"
-    echo "   - Start work: './ticket.sh start <ticket-name>'"
-    echo "   - Complete: './ticket.sh close'"
+    echo "   - Create a ticket: \`./ticket.sh new <slug>\`"
+    echo "   - List tickets: \`./ticket.sh list\`"
+    echo "   - Start work: \`./ticket.sh start <ticket-name>\`"
+    echo "   - Complete: \`./ticket.sh close\`"
     echo ""
-    echo "For detailed help: './ticket.sh help'"
+    echo "For detailed help: \`./ticket.sh help\`"
 }
 
 # Create new ticket
@@ -1659,7 +1673,8 @@ To ignore uncommitted changes and force close, use:
 Or handle the changes:
   1. Commit your changes: git add . && git commit -m "message"
   2. Stash changes: git stash
-  3. Discard changes: git checkout -- .
+
+IMPORTANT: Never discard changes without explicit user permission.
 EOF
             return 1
         fi

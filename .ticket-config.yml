@@ -15,12 +15,13 @@ default_content: |
   
   Write the overview and tasks for this ticket here.
   
-  
+
   ## Tasks
   
   - [ ] Task 1
   - [ ] Task 2
   ...
+  - [ ] Run tests before closing and pass all tests (No exceptions)
   - [ ] Get developer approval before closing
   
 

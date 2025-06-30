@@ -147,13 +147,23 @@ fi
 echo -e "\n5. Testing close command when cannot create done directory..."
 cd .. && setup_test
 ./ticket.sh init >/dev/null 2>&1
-# Need to create develop branch first
-git checkout -q -b develop
+
+# Create ticket and commit it
 ./ticket.sh new "done-dir-test" >/dev/null 2>&1
 git add . && git commit -q -m "add ticket"
 TICKET=$(safe_get_ticket_name "*done-dir-test.md")
+
+# Now start the ticket from main/master branch (start command will create feature branch)
 ./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1
-git add . && git commit -q -m "start ticket"
+
+# We should now be on the feature branch - verify
+CURRENT_BRANCH=$(git branch --show-current)
+if [[ "$CURRENT_BRANCH" != feature/* ]]; then
+    echo "Warning: Not on feature branch after start, on $CURRENT_BRANCH" >&2
+fi
+
+# Add any changes and commit
+git add -A && git commit -q -m "start ticket" || true
 
 # Create a work file and commit
 echo "work" > work.txt
