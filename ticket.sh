@@ -1006,6 +1006,8 @@ Write the overview and tasks for this ticket here.
 - [ ] Task 2
 
 ## Notes
+When closing this ticket, please show the ticket content to the user and get explicit permission before closing.
+
 Additional notes or requirements.'
 
 # Show usage information
@@ -1118,6 +1120,8 @@ default_content: |
   - [ ] Task 2
   
   ## Notes
+  When closing this ticket, please show the ticket content to the user and get explicit permission before closing.
+  
   Additional notes or requirements.
 EOF
         echo "Created configuration file: $CONFIG_FILE"

@@ -3,19 +3,19 @@ priority: 2
 tags: []
 description: "Further improvements to init command message based on user feedback"
 created_at: "2025-06-30T02:22:50Z"
-started_at: null  # Do not modify manually
+started_at: 2025-06-30T02:23:14Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
 # Further improve init command message
 
-The user has indicated there are still improvements needed for the init command message.
-Waiting for specific feedback on what needs to be changed.
+The user requested to add a message to the default ticket template's Notes section
+to remind AI agents to get explicit permission before closing tickets.
 
 ## Tasks
-- [ ] Wait for user to specify the required changes
-- [ ] Implement the requested improvements
-- [ ] Test the changes
+- [x] Add message to DEFAULT_CONTENT about getting permission before closing
+- [x] Update the config file template in init command
+- [x] Build and test the changes
 - [ ] Get user approval before closing
 
 ## Notes
