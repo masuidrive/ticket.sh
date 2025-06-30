@@ -4,7 +4,7 @@ tags: []
 description: "Fix default ticket template formatting changes"
 created_at: "2025-06-30T04:16:11Z"
 started_at: 2025-06-30T04:17:04Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2025-06-30T04:48:13Z # Do not modify manually
 ---
 
 # Fix default ticket template formatting
