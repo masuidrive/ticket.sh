@@ -1007,6 +1007,7 @@ DEFAULT_BRANCH="develop"
 DEFAULT_BRANCH_PREFIX="feature/"
 DEFAULT_REPOSITORY="origin"
 DEFAULT_AUTO_PUSH="true"
+DEFAULT_DELETE_REMOTE_ON_CLOSE="true"
 DEFAULT_CONTENT='# Ticket Overview
 
 Write the overview and tasks for this ticket here.
@@ -1041,7 +1042,7 @@ Each ticket is a single Markdown file with YAML frontmatter metadata.
 - `./ticket.sh list [--status STATUS] [--count N]` - List tickets (default: todo + doing, count: 20)
 - `./ticket.sh start <ticket-name>` - Start working on ticket (creates feature branch locally)
 - `./ticket.sh restore` - Restore current-ticket.md symlink from branch name
-- `./ticket.sh close [--no-push] [--force|-f]` - Complete current ticket (squash merge to default branch)
+- `./ticket.sh close [--no-push] [--force|-f] [--no-delete-remote]` - Complete current ticket (squash merge to default branch)
 
 ## Ticket Naming
 
@@ -1648,6 +1649,7 @@ EOF
 cmd_close() {
     local no_push=false
     local force=false
+    local no_delete_remote=false
     
     # Parse arguments
     while [[ $# -gt 0 ]]; do
@@ -1660,9 +1662,13 @@ cmd_close() {
                 force=true
                 shift
                 ;;
+            --no-delete-remote)
+                no_delete_remote=true
+                shift
+                ;;
             *)
                 echo "Error: Unknown option: $1" >&2
-                echo "Usage: ticket.sh close [--no-push] [--force|-f]" >&2
+                echo "Usage: ticket.sh close [--no-push] [--force|-f] [--no-delete-remote]" >&2
                 return 1
                 ;;
         esac
@@ -1721,6 +1727,7 @@ EOF
     local branch_prefix=$(yaml_get "branch_prefix" || echo "$DEFAULT_BRANCH_PREFIX")
     local repository=$(yaml_get "repository" || echo "$DEFAULT_REPOSITORY")
     local auto_push=$(yaml_get "auto_push" || echo "$DEFAULT_AUTO_PUSH")
+    local delete_remote_on_close=$(yaml_get "delete_remote_on_close" || echo "$DEFAULT_DELETE_REMOTE_ON_CLOSE")
     
     # Check current branch
     local current_branch=$(get_current_branch)
@@ -1843,6 +1850,20 @@ EOF
             run_git_command "git push $repository $default_branch" || {
                 echo "Warning: Failed to push ticket move to remote" >&2
             }
+        fi
+    fi
+    
+    # Delete remote branch if configured
+    if [[ "$delete_remote_on_close" == "true" ]] && [[ "$no_delete_remote" == "false" ]]; then
+        if [[ "$auto_push" == "true" ]] || [[ "$no_push" == "false" ]]; then
+            # Check if remote branch exists
+            if git ls-remote --heads "$repository" "$current_branch" | grep -q "$current_branch"; then
+                run_git_command "git push $repository --delete $current_branch" || {
+                    echo "Warning: Failed to delete remote branch '$current_branch'" >&2
+                }
+            else
+                echo "Note: Remote branch '$current_branch' not found (may have been already deleted)"
+            fi
         fi
     fi
     

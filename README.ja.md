@@ -53,7 +53,7 @@ cp ticket.sh /usr/local/bin/
 - `new <slug>` - 新しいチケットを作成
 - `list [--status todo|doing|done]` - チケット一覧
 - `start <ticket> [--no-push]` - チケットの作業を開始
-- `close [--no-push] [--force]` - チケットを完了
+- `close [--no-push] [--force] [--no-delete-remote]` - チケットを完了
 - `restore` - current-ticket.mdシンボリックリンクを復元
 
 ## 設定
@@ -65,6 +65,12 @@ tickets_dir: "tickets"
 default_branch: "develop"
 branch_prefix: "feature/"
 auto_push: true
+
+# リモートブランチ自動削除設定
+# 有効にすると、チケットクローズ時に自動的にリモートのfeatureブランチを削除します。
+# これによりGitHubの「Compare & pull request」バナーが表示されなくなります。
+# 履歴として残したい場合はfalseに設定してください。
+delete_remote_on_close: true  # デフォルト: true
 ```
 
 ## 動作要件

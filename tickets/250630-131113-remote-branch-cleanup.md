@@ -3,8 +3,8 @@ priority: 2
 tags: [feature]
 description: "Delete remote feature branch automatically when closing tickets"
 created_at: "2025-06-30T13:11:13Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2025-06-30T13:24:52Z # Do not modify manually
+closed_at: 2025-06-30T14:03:04Z # Do not modify manually
 ---
 
 # Automatic Remote Branch Cleanup on Close
@@ -14,11 +14,11 @@ Implement automatic deletion of remote feature branches when closing tickets to 
 
 ## Tasks
 
-- [ ] Add configuration option for remote branch deletion (default: enabled)
-- [ ] Implement remote branch deletion in close command
-- [ ] Add command-line flag `--no-delete-remote` to override config setting
-- [ ] Handle errors gracefully (e.g., remote branch already deleted)
-- [ ] Update documentation with new feature
+- [x] Add configuration option for remote branch deletion (default: enabled)
+- [x] Implement remote branch deletion in close command
+- [x] Add command-line flag `--no-delete-remote` to override config setting
+- [x] Handle errors gracefully (e.g., remote branch already deleted)
+- [x] Update documentation with new feature
 - [ ] Run tests before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
 

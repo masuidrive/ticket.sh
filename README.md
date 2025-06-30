@@ -53,7 +53,7 @@ cp ticket.sh /usr/local/bin/
 - `new <slug>` - Create new ticket
 - `list [--status todo|doing|done]` - List tickets
 - `start <ticket> [--no-push]` - Start working on ticket
-- `close [--no-push] [--force]` - Complete ticket
+- `close [--no-push] [--force] [--no-delete-remote]` - Complete ticket
 - `restore` - Restore current-ticket.md symlink
 
 ## Configuration
@@ -65,6 +65,12 @@ tickets_dir: "tickets"
 default_branch: "develop"
 branch_prefix: "feature/"
 auto_push: true
+
+# Remote branch cleanup settings
+# When enabled, automatically deletes the remote feature branch after closing a ticket.
+# This prevents GitHub's "Compare & pull request" banner from appearing for already-merged branches.
+# Set to false if you want to keep remote branches for historical reference.
+delete_remote_on_close: true  # Default: true
 ```
 
 ## Requirements
