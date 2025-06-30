@@ -71,6 +71,14 @@ auto_push: true
 # これによりGitHubの「Compare & pull request」バナーが表示されなくなります。
 # 履歴として残したい場合はfalseに設定してください。
 delete_remote_on_close: true  # デフォルト: true
+
+# 成功メッセージ
+start_success_message: |
+  Please review the ticket content in `current-ticket.md` and make any
+  necessary adjustments before beginning work.
+
+close_success_message: |
+  # デフォルトは空
 ```
 
 ## 動作要件

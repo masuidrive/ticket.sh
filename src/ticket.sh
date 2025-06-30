@@ -78,6 +78,8 @@ DEFAULT_BRANCH_PREFIX="feature/"
 DEFAULT_REPOSITORY="origin"
 DEFAULT_AUTO_PUSH="true"
 DEFAULT_DELETE_REMOTE_ON_CLOSE="true"
+DEFAULT_START_SUCCESS_MESSAGE="Please review the ticket content in \`current-ticket.md\` and make any necessary adjustments before beginning work."
+DEFAULT_CLOSE_SUCCESS_MESSAGE=""
 DEFAULT_CONTENT='# Ticket Overview
 
 Write the overview and tasks for this ticket here.
@@ -574,6 +576,7 @@ cmd_start() {
     local branch_prefix=$(yaml_get "branch_prefix" || echo "$DEFAULT_BRANCH_PREFIX")
     local repository=$(yaml_get "repository" || echo "$DEFAULT_REPOSITORY")
     local auto_push=$(yaml_get "auto_push" || echo "$DEFAULT_AUTO_PUSH")
+    local start_success_message=$(yaml_get "start_success_message" || echo "$DEFAULT_START_SUCCESS_MESSAGE")
     
     # Check current branch
     local current_branch=$(get_current_branch)
@@ -651,6 +654,12 @@ EOF
     echo "Started ticket: $ticket_name"
     echo "Current ticket linked: $CURRENT_TICKET_LINK -> $ticket_file"
     echo "Note: Branch created locally. Use 'git push -u $repository $branch_name' when ready to share."
+    
+    # Display success message if configured
+    if [[ -n "$start_success_message" ]]; then
+        echo ""
+        echo "$start_success_message"
+    fi
 }
 
 # Restore current ticket link
@@ -798,6 +807,7 @@ EOF
     local repository=$(yaml_get "repository" || echo "$DEFAULT_REPOSITORY")
     local auto_push=$(yaml_get "auto_push" || echo "$DEFAULT_AUTO_PUSH")
     local delete_remote_on_close=$(yaml_get "delete_remote_on_close" || echo "$DEFAULT_DELETE_REMOTE_ON_CLOSE")
+    local close_success_message=$(yaml_get "close_success_message" || echo "$DEFAULT_CLOSE_SUCCESS_MESSAGE")
     
     # Check current branch
     local current_branch=$(get_current_branch)
@@ -945,6 +955,12 @@ EOF
     
     if [[ "$auto_push" == "false" ]] || [[ "$no_push" == "true" ]]; then
         echo "Note: Changes not pushed to remote. Use 'git push $repository $default_branch' and 'git push $repository $current_branch' when ready."
+    fi
+    
+    # Display success message if configured
+    if [[ -n "$close_success_message" ]]; then
+        echo ""
+        echo "$close_success_message"
     fi
 }
 

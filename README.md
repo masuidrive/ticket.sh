@@ -71,6 +71,14 @@ auto_push: true
 # This prevents GitHub's "Compare & pull request" banner from appearing for already-merged branches.
 # Set to false if you want to keep remote branches for historical reference.
 delete_remote_on_close: true  # Default: true
+
+# Success messages
+start_success_message: |
+  Please review the ticket content in `current-ticket.md` and make any
+  necessary adjustments before beginning work.
+
+close_success_message: |
+  # Empty by default
 ```
 
 ## Requirements
