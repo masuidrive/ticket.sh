@@ -3,8 +3,8 @@ priority: 2
 tags: [feature, enhancement]
 description: "Add remote branch cleanup on close and configurable success messages"
 created_at: "2025-06-30T13:05:19Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2025-06-30T13:06:46Z # Do not modify manually
+closed_at: 2025-06-30T13:10:56Z # Do not modify manually
 ---
 
 # Remote Branch Cleanup and Configurable Messages
