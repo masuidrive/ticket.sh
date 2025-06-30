@@ -4,7 +4,7 @@ tags: [enhancement]
 description: "Add initialization success message about setup completion"
 created_at: "2025-06-30T09:08:13Z"
 started_at: 2025-06-30T09:09:23Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2025-06-30T10:07:50Z # Do not modify manually
 ---
 
 # Add initialization success message
