@@ -10,10 +10,14 @@ OUTPUT_FILE="ticket.sh"
 SRC_DIR="src"
 LIB_DIR="lib"
 
+# Generate version number from current timestamp (YYYYMMDD.HHMMSS)
+VERSION=$(date -u '+%Y%m%d.%H%M%S')
+
 echo "Building $OUTPUT_FILE..."
+echo "Version: $VERSION"
 
 # Create output file with shebang and header from source
-cat > "$OUTPUT_FILE" << 'EOF'
+cat > "$OUTPUT_FILE" << EOF
 #!/usr/bin/env bash
 
 # IMPORTANT NOTE: This file is generated from source files. DO NOT EDIT DIRECTLY!
@@ -21,7 +25,7 @@ cat > "$OUTPUT_FILE" << 'EOF'
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 1.0.0
+# Version: $VERSION
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -75,13 +79,15 @@ EOF
 # - shebang line
 # - SCRIPT_DIR definition
 # - entire source block (from "# Source required libraries" to "fi")
-awk '
+# And replacing version number
+awk -v version="$VERSION" '
     BEGIN { skip = 0 }
     /^#!/ { next }
     /^SCRIPT_DIR=/ { next }
     /^# Source required libraries/ { skip = 1; next }
     skip && /^fi$/ { skip = 0; next }
     skip { next }
+    /^# Version:/ { print "# Version: " version; next }
     { print }
 ' "$SRC_DIR/ticket.sh" >> "$OUTPUT_FILE"
 

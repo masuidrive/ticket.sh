@@ -3,8 +3,8 @@ priority: 2
 tags: [feature]
 description: "Add selfupdate command to update ticket.sh from GitHub"
 created_at: "2025-06-30T14:22:45Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2025-06-30T14:23:14Z # Do not modify manually
+closed_at: 2025-06-30T15:37:43Z # Do not modify manually
 ---
 
 # Self-Update Command Implementation
@@ -14,15 +14,15 @@ Implement a `selfupdate` command that allows ticket.sh to update itself from the
 
 ## Tasks
 
-- [ ] Implement selfupdate command
-- [ ] Download latest version from GitHub to temporary file
-- [ ] Verify download was successful
-- [ ] Create update script in tmp directory to handle replacement
-- [ ] Execute update script and exit cleanly
-- [ ] Add error handling for network issues
-- [ ] Update documentation with new command
-- [ ] Run tests before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] Implement selfupdate command
+- [x] Download latest version from GitHub to temporary file
+- [x] Verify download was successful
+- [x] Create update script in tmp directory to handle replacement
+- [x] Execute update script and exit cleanly
+- [x] Add error handling for network issues
+- [x] Update documentation with new command
+- [x] Run tests before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 ## Notes
 

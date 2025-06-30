@@ -1,3 +1,7 @@
+# 書き換えていいソースコード
+- src/、yaml-sh/、lib/のソースコードのみ書き換えてください
+- project rootの`ticket.sh`は、`build.sh`から生成されるので直接書き換えないようにしてください
+
 # Ticket Management Instructions
 
 Use `./ticket.sh` for ticket management. When receiving requests from users,

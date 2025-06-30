@@ -1,7 +1,953 @@
 #!/usr/bin/env bash
 
+# IMPORTANT NOTE: This file is generated from source files. DO NOT EDIT DIRECTLY!
+# To make changes, edit the source files in src/ directory and run ./build.sh
+# Source file: src/ticket.sh
+
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 1.0.0
+# Version: 2.0.0-test
+# Built from source files
+#
+# A lightweight ticket management system that uses Git branches and Markdown files.
+# Perfect for small teams, solo developers, and AI coding assistants.
+#
+# Features:
+#   - Each ticket is a Markdown file with YAML frontmatter
+#   - Automatic Git branch creation/management per ticket
+#   - Simple CLI interface for common workflows
+#   - No external dependencies (pure Bash + Git)
+#
+# For detailed documentation, installation instructions, and examples:
+# https://github.com/masuidrive/ticket.sh
+#
+# Quick Start:
+#   ./ticket.sh init          # Initialize in your project
+#   ./ticket.sh new my-task   # Create a new ticket
+#   ./ticket.sh start <name>  # Start working on a ticket
+#   ./ticket.sh close         # Complete and merge ticket
+
+set -euo pipefail
+
+# === Inlined Libraries ===
+
+# --- yaml-sh.sh ---
+
+# yaml-sh: A simple YAML parser for Bash 3.2+
+# Version: 2.0.0
+# Usage: source yaml-sh.sh
+#
+# Supported YAML syntax:
+# - Key-value pairs: key: value
+# - Lists with dash notation: - item
+# - Inline lists: [item1, item2, item3]
+# - Multiline strings:
+#   - Literal style (|): Preserves newlines
+#   - Folded style (>): Converts newlines to spaces
+#   - Strip modifier (-): Removes final newline
+#   - Keep modifier (+): Keeps all trailing newlines
+# - Quoted strings: 'single quotes' and "double quotes"
+# - Comments: # comment (except in multiline strings)
+# - Flat structure only (no nested objects support)
+#
+# Known limitations:
+# - Pipe multiline strings (|): May lose the final newline
+# - Folded strings (>): May lose the trailing space
+# - No support for nested objects or complex data structures
+# - No support for anchors, aliases, or tags
+# - No support for flow style mappings
+#
+# API Functions:
+# - yaml_parse <file>: Parse a YAML file
+# - yaml_get <key>: Get value by key
+# - yaml_keys: List all keys
+# - yaml_has_key <key>: Check if key exists
+# - yaml_list_size <prefix>: Get size of a list
+# - yaml_load <file> [prefix]: Load YAML into environment variables
+# - yaml_update <file> <key> <value>: Update a top-level single-line value
+
+# Global variables to store parsed data
+declare -a _YAML_KEYS
+declare -a _YAML_VALUES
+_YAML_CURRENT_FILE=""
+
+# Simple AWK parser for YAML
+_yaml_parse_awk() {
+    awk '
+    BEGIN {
+        in_multiline = 0
+        multiline_key = ""
+        multiline_value = ""
+        multiline_type = ""
+        key_indent = 0
+        multiline_base_indent = -1
+    }
+    
+    {
+        # Store original line
+        original = $0
+        
+        # Get indent
+        indent = 0
+        if (match(original, /^[ ]+/)) {
+            indent = RLENGTH
+        }
+        
+        # Skip empty lines in normal mode
+        if (!in_multiline && match(original, /^[ ]*$/)) {
+            next
+        }
+        
+        # Remove comments
+        line = original
+        if (!in_multiline) {
+            sub(/[ ]*#.*$/, "", line)
+        }
+        
+        # Trim trailing whitespace
+        sub(/[ \t]+$/, "", line)
+    }
+    
+    # In multiline mode
+    in_multiline {
+        # Check if this line belongs to multiline
+        if (match(original, /^[ ]*$/) || indent > key_indent) {
+            # Extract content preserving internal spacing
+            if (length(original) > key_indent) {
+                content = substr(original, key_indent + 1)
+            } else {
+                content = ""
+            }
+            
+            # For first line, determine base indent
+            if (multiline_base_indent == -1 && content != "") {
+                if (match(content, /^[ ]+/)) {
+                    multiline_base_indent = RLENGTH
+                } else {
+                    multiline_base_indent = 0
+                }
+            }
+            
+            # Strip base indent from content
+            if (multiline_base_indent > 0 && length(content) >= multiline_base_indent) {
+                content = substr(content, multiline_base_indent + 1)
+            } else if (content == "") {
+                # Keep empty lines
+            } else {
+                # Line with less indent than base - should not happen in valid YAML
+                content = ""
+            }
+            
+            # Add to multiline value
+            if (multiline_value == "") {
+                multiline_value = content
+            } else {
+                # For folded strings, replace newlines with spaces
+                if (substr(multiline_type, 1, 1) == ">") {
+                    # Empty line creates paragraph break
+                    if (content == "") {
+                        multiline_value = multiline_value "\n"
+                    } else {
+                        multiline_value = multiline_value " " content
+                    }
+                } else {
+                    # Literal strings preserve newlines
+                    multiline_value = multiline_value "\n" content
+                }
+            }
+            next
+        } else {
+            # End of multiline - output value
+            # For folded strings, process the folding
+            if (substr(multiline_type, 1, 1) == ">") {
+                # First, normalize spaces and newlines
+                gsub(/ +\n/, "\n", multiline_value)
+                gsub(/\n\n+/, "\n\n", multiline_value)
+                # Remove leading spaces from folded strings
+                gsub(/^ +/, "", multiline_value)
+                # Add trailing space if the string doesn'\''t end with newline
+                if (match(multiline_value, /\n$/)) {
+                    # Has newline at end, keep as is
+                } else {
+                    multiline_value = multiline_value " "
+                }
+            }
+            # Handle strip/keep modifiers
+            if (multiline_type ~ /-$/) {
+                # Strip final newline
+                sub(/\n$/, "", multiline_value)
+            } else if (multiline_type ~ /\+$/) {
+                # Keep all trailing newlines (already in multiline_value)
+            } else {
+                # Default: keep single final newline
+                # Ensure exactly one trailing newline
+                sub(/\n*$/, "\n", multiline_value)
+            }
+            print "VALUE", key_indent, multiline_key, multiline_value
+            in_multiline = 0
+            multiline_value = ""
+            multiline_base_indent = -1
+            # Fall through to process current line
+        }
+    }
+    
+    # Empty line
+    length(line) == 0 { next }
+    
+    # Process non-empty lines
+    {
+        # Get stripped line for processing
+        stripped_line = line
+        if (indent > 0) {
+            stripped_line = substr(original, indent + 1)
+        }
+        
+        # List item
+        if (match(stripped_line, /^- /)) {
+            item = substr(stripped_line, 3)
+            gsub(/^[ \t]+|[ \t]+$/, "", item)
+            print "LIST", indent, item
+            next
+        }
+        
+        # Key-value pair
+        if (match(stripped_line, /^[^:]+:/)) {
+            # Split key and value
+            pos = index(stripped_line, ":")
+            key = substr(stripped_line, 1, pos - 1)
+            value = substr(stripped_line, pos + 1)
+            gsub(/^[ \t]+|[ \t]+$/, "", value)
+        
+        # Check for multiline indicator
+        if (value == "|" || value == "|-" || value == "|+" || value == ">" || value == ">-" || value == ">+") {
+            multiline_type = value
+            multiline_key = key
+            key_indent = indent
+            in_multiline = 1
+            multiline_value = ""
+            print "KEY", indent, key, ""
+        }
+        # Inline list
+        else if (match(value, /^\[.*\]$/)) {
+            print "KEY", indent, key, ""
+            # Remove brackets
+            value = substr(value, 2, length(value) - 2)
+            # Split by comma
+            n = split(value, items, ",")
+            for (i = 1; i <= n; i++) {
+                item = items[i]
+                gsub(/^[ \t]+|[ \t]+$/, "", item)
+                # Remove quotes if present
+                if (match(item, /^["'\''].*["'\'']$/)) {
+                    item = substr(item, 2, length(item) - 2)
+                }
+                print "ILIST", indent, item
+            }
+        }
+        # Single/double quoted strings
+        else if (match(value, /^'\''.*/)) {
+            # Extract content between single quotes
+            content = substr(value, 2)
+            if (match(content, /'\''[^'\'']*$/)) {
+                content = substr(content, 1, RSTART - 1)
+            }
+            print "KEY", indent, key, content
+        }
+        else if (match(value, /^".*/)) {
+            # Extract content between double quotes
+            content = substr(value, 2)
+            if (match(content, /"[^"]*$/)) {
+                content = substr(content, 1, RSTART - 1)
+            }
+            print "KEY", indent, key, content
+        }
+            # Regular value
+            else {
+                print "KEY", indent, key, value
+            }
+        }
+    }
+    
+    END {
+        # Output any remaining multiline
+        if (in_multiline) {
+            # Apply same processing as in main block
+            if (substr(multiline_type, 1, 1) == ">") {
+                gsub(/ +\n/, "\n", multiline_value)
+                gsub(/\n\n+/, "\n\n", multiline_value)
+                gsub(/^ +/, "", multiline_value)
+                if (match(multiline_value, /\n$/)) {
+                    # Has newline at end
+                } else {
+                    multiline_value = multiline_value " "
+                }
+            }
+            # Handle strip/keep modifiers
+            if (multiline_type ~ /-$/) {
+                sub(/\n$/, "", multiline_value)
+            } else if (multiline_type ~ /\+$/) {
+                # Keep all trailing newlines
+            } else {
+                # Default: keep single final newline
+                sub(/\n*$/, "\n", multiline_value)
+            }
+            print "VALUE", key_indent, multiline_key, multiline_value
+        }
+    }
+    ' "$1"
+}
+
+# Main parsing function
+yaml_parse() {
+    local file="$1"
+    
+    if [[ ! -f "$file" ]]; then
+        echo "Error: File not found: $file" >&2
+        return 1
+    fi
+    
+    _YAML_CURRENT_FILE="$file"
+    
+    # Clear previous data
+    _YAML_KEYS=()
+    _YAML_VALUES=()
+    
+    local current_path=""
+    local list_index=0
+    local in_list=0
+    
+    local line
+    local multiline_value=""
+    local reading_multiline=0
+    
+    while IFS='' read -r line; do
+        if [[ $reading_multiline -eq 1 ]]; then
+            # Check if this is the start of a new entry
+            if [[ "$line" =~ ^(KEY|VALUE|LIST|ILIST) ]]; then
+                # Save the completed multiline value
+                _YAML_KEYS+=("$current_path")
+                _YAML_VALUES+=("$multiline_value")
+                reading_multiline=0
+                multiline_value=""
+            else
+                # Continue reading multiline value
+                if [[ -n "$multiline_value" ]]; then
+                    multiline_value+=$'\n'"$line"
+                else
+                    multiline_value="$line"
+                fi
+                continue
+            fi
+        fi
+        
+        # Parse the line
+        local type=$(echo "$line" | awk '{print $1}')
+        local indent=$(echo "$line" | awk '{print $2}')
+        local key=$(echo "$line" | awk '{print $3}')
+        local value=$(echo "$line" | cut -d' ' -f4-)
+        
+        case "$type" in
+            KEY)
+                # Only reset in_list if we're changing to a different key
+                if [[ "$current_path" != "$key" ]]; then
+                    in_list=0
+                fi
+                current_path="$key"
+                if [[ -n "$value" ]]; then
+                    _YAML_KEYS+=("$current_path")
+                    _YAML_VALUES+=("$value")
+                fi
+                ;;
+                
+            VALUE)
+                # Check if value continues on next lines
+                if [[ -n "$value" ]]; then
+                    multiline_value="$value"
+                    reading_multiline=1
+                else
+                    _YAML_KEYS+=("$current_path")
+                    _YAML_VALUES+=("")
+                fi
+                ;;
+                
+            LIST)
+                if [[ $in_list -eq 0 ]]; then
+                    list_index=0
+                    in_list=1
+                else
+                    ((list_index++))
+                fi
+                _YAML_KEYS+=("${current_path}.${list_index}")
+                _YAML_VALUES+=("$key")  # key contains the list item
+                ;;
+                
+            ILIST)
+                if [[ $in_list -eq 0 ]]; then
+                    list_index=0
+                    in_list=1
+                else
+                    ((list_index++))
+                fi
+                _YAML_KEYS+=("${current_path}.${list_index}")
+                _YAML_VALUES+=("$key")  # key contains the list item
+                ;;
+        esac
+    done < <(_yaml_parse_awk "$file") || true
+    
+    # Handle last multiline value if any
+    if [[ $reading_multiline -eq 1 ]]; then
+        _YAML_KEYS+=("$current_path")
+        _YAML_VALUES+=("$multiline_value")
+    fi
+    
+    return 0
+}
+
+# Get a value by key
+yaml_get() {
+    local key="$1"
+    local i=0
+    local len=${#_YAML_KEYS[@]}
+    
+    while [[ $i -lt $len ]]; do
+        if [[ "${_YAML_KEYS[$i]}" == "$key" ]]; then
+            echo "${_YAML_VALUES[$i]}"
+            return 0
+        fi
+        ((i++))
+    done
+    
+    return 1
+}
+
+# List all keys
+yaml_keys() {
+    local i=0
+    local len=${#_YAML_KEYS[@]}
+    
+    while [[ $i -lt $len ]]; do
+        echo "${_YAML_KEYS[$i]}"
+        ((i++))
+    done
+}
+
+# Check if a key exists
+yaml_has_key() {
+    local key="$1"
+    local i=0
+    local len=${#_YAML_KEYS[@]}
+    
+    while [[ $i -lt $len ]]; do
+        if [[ "${_YAML_KEYS[$i]}" == "$key" ]]; then
+            return 0
+        fi
+        ((i++))
+    done
+    
+    return 1
+}
+
+# Get the size of a list
+yaml_list_size() {
+    local prefix="$1"
+    local count=0
+    local i=0
+    local len=${#_YAML_KEYS[@]}
+    
+    while [[ $i -lt $len ]]; do
+        if [[ "${_YAML_KEYS[$i]}" =~ ^${prefix}\.([0-9]+)$ ]]; then
+            local index="${BASH_REMATCH[1]}"
+            if [[ $index -ge $count ]]; then
+                count=$((index + 1))
+            fi
+        fi
+        ((i++))
+    done
+    
+    echo "$count"
+}
+
+# Load a YAML file with a prefix (variables are set in the caller's scope)
+yaml_load() {
+    local file="$1"
+    local prefix="${2:-}"
+    
+    yaml_parse "$file" || return 1
+    
+    local i=0
+    local len=${#_YAML_KEYS[@]}
+    
+    while [[ $i -lt $len ]]; do
+        local key="${_YAML_KEYS[$i]}"
+        local value="${_YAML_VALUES[$i]}"
+        
+        # Convert dots to underscores for valid variable names
+        local var_name=$(echo "$key" | tr '.' '_')
+        
+        if [[ -n "$prefix" ]]; then
+            var_name="${prefix}_${var_name}"
+        fi
+        
+        # Export the variable in the caller's scope
+        eval "export $var_name=\"\$value\""
+        
+        ((i++))
+    done
+    
+    return 0
+}
+
+# Update a top-level single-line string value in a YAML file
+# Only updates simple key: value pairs, preserves comments
+yaml_update() {
+    local file="$1"
+    local key="$2"
+    local new_value="$3"
+    
+    if [[ ! -f "$file" ]]; then
+        echo "Error: File not found: $file" >&2
+        return 1
+    fi
+    
+    if [[ -z "$key" ]] || [[ -z "$new_value" ]]; then
+        echo "Error: Key and value are required" >&2
+        return 1
+    fi
+    
+    # Create a temporary file
+    local temp_file=$(mktemp)
+    local found=0
+    
+    # Process the file line by line
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        # Check if this line contains the key we're looking for
+        if [[ "$line" =~ ^[[:space:]]*${key}:[[:space:]]* ]]; then
+            # Extract the value part after the colon
+            local after_colon="${line#*:}"
+            
+            # Check for comment
+            local comment=""
+            local value_part="$after_colon"
+            if [[ "$after_colon" =~ \# ]]; then
+                # Split at the hash
+                value_part="${after_colon%%#*}"
+                comment=" #${after_colon#*#}"
+            fi
+            
+            # Trim the value
+            value_part="${value_part#"${value_part%%[![:space:]]*}"}"  # Trim leading
+            value_part="${value_part%"${value_part##*[![:space:]]}"}"  # Trim trailing
+            
+            # Only update if it's not a multiline indicator or empty
+            if [[ "$value_part" != "|" ]] && [[ "$value_part" != "|-" ]] && \
+               [[ "$value_part" != "|+" ]] && [[ "$value_part" != ">" ]] && \
+               [[ "$value_part" != ">-" ]] && [[ "$value_part" != ">+" ]] && \
+               [[ -n "$value_part" ]]; then
+                # Write the updated line
+                echo "${key}: ${new_value}${comment}" >> "$temp_file"
+                found=1
+            else
+                # Keep the original line for multiline or complex values
+                echo "$line" >> "$temp_file"
+            fi
+        else
+            # Keep the original line
+            echo "$line" >> "$temp_file"
+        fi
+    done < "$file"
+    
+    if [[ $found -eq 1 ]]; then
+        # Replace the original file
+        mv "$temp_file" "$file"
+        return 0
+    else
+        # Key not found or not updatable
+        rm "$temp_file"
+        echo "Error: Key '$key' not found or is not a simple value" >&2
+        return 1
+    fi
+}
+# --- yaml-frontmatter.sh ---
+
+# Functions to handle YAML frontmatter in markdown files
+
+# Update a field in YAML frontmatter using sed
+# Usage: update_yaml_frontmatter_field <file> <field> <value>
+update_yaml_frontmatter_field() {
+    local file="$1"
+    local field="$2"
+    local value="$3"
+    
+    if [[ ! -f "$file" ]]; then
+        echo "Error: File not found: $file" >&2
+        return 1
+    fi
+    
+    # Create temporary file
+    local temp_file=$(mktemp)
+    
+    # State tracking
+    local in_frontmatter=0
+    local frontmatter_start=0
+    local frontmatter_end=0
+    local line_num=0
+    local field_updated=0
+    
+    # First pass: find frontmatter boundaries
+    while IFS= read -r line; do
+        ((line_num++))
+        
+        if [[ $line_num -eq 1 ]] && [[ "$line" == "---" ]]; then
+            frontmatter_start=1
+            in_frontmatter=1
+        elif [[ $in_frontmatter -eq 1 ]] && [[ "$line" == "---" ]]; then
+            frontmatter_end=$line_num
+            break
+        fi
+    done < "$file" || true
+    
+    if [[ $frontmatter_start -eq 0 ]] || [[ $frontmatter_end -eq 0 ]]; then
+        echo "Error: No YAML frontmatter found in file" >&2
+        rm "$temp_file"
+        return 1
+    fi
+    
+    # Second pass: update the field
+    line_num=0
+    in_frontmatter=0
+    
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        ((line_num++))
+        
+        if [[ $line_num -eq 1 ]] && [[ "$line" == "---" ]]; then
+            echo "$line" >> "$temp_file"
+            in_frontmatter=1
+        elif [[ $in_frontmatter -eq 1 ]] && [[ $line_num -eq $frontmatter_end ]]; then
+            echo "$line" >> "$temp_file"
+            in_frontmatter=0
+        elif [[ $in_frontmatter -eq 1 ]]; then
+            # Check if this line contains the field
+            if [[ "$line" =~ ^[[:space:]]*${field}:[[:space:]]* ]]; then
+                # Extract indentation
+                local indent=""
+                if [[ "$line" =~ ^([[:space:]]*) ]]; then
+                    indent="${BASH_REMATCH[1]}"
+                fi
+                
+                # Check for comment
+                local comment=""
+                local after_colon="${line#*:}"
+                if [[ "$after_colon" =~ \# ]]; then
+                    comment=" #${after_colon#*#}"
+                fi
+                
+                # Write updated line
+                echo "${indent}${field}: ${value}${comment}" >> "$temp_file"
+                field_updated=1
+            else
+                echo "$line" >> "$temp_file"
+            fi
+        else
+            echo "$line" >> "$temp_file"
+        fi
+    done < "$file" || true
+    
+    if [[ $field_updated -eq 0 ]]; then
+        echo "Error: Field '$field' not found in frontmatter" >&2
+        rm "$temp_file"
+        return 1
+    fi
+    
+    # Check if the file is writable before replacing
+    if [[ ! -w "$file" ]]; then
+        echo "Error: File '$file' is not writable" >&2
+        rm "$temp_file"
+        return 1
+    fi
+    
+    # Replace original file
+    mv "$temp_file" "$file"
+    return 0
+}
+
+# Extract YAML frontmatter from a markdown file
+# Usage: extract_yaml_frontmatter <file>
+extract_yaml_frontmatter() {
+    local file="$1"
+    
+    if [[ ! -f "$file" ]]; then
+        echo "Error: File not found: $file" >&2
+        return 1
+    fi
+    
+    local in_frontmatter=0
+    local line_num=0
+    local content=""
+    
+    while IFS= read -r line; do
+        ((line_num++))
+        
+        if [[ $line_num -eq 1 ]] && [[ "$line" == "---" ]]; then
+            in_frontmatter=1
+            continue
+        elif [[ $in_frontmatter -eq 1 ]] && [[ "$line" == "---" ]]; then
+            break
+        elif [[ $in_frontmatter -eq 1 ]]; then
+            content+="$line"$'\n'
+        fi
+    done < "$file"
+    
+    if [[ $in_frontmatter -eq 0 ]]; then
+        echo "Error: No YAML frontmatter found" >&2
+        return 1
+    fi
+    
+    echo -n "$content"
+}
+
+# Extract markdown body (content after frontmatter)
+# Usage: extract_markdown_body <file>
+extract_markdown_body() {
+    local file="$1"
+    
+    if [[ ! -f "$file" ]]; then
+        echo "Error: File not found: $file" >&2
+        return 1
+    fi
+    
+    local in_frontmatter=0
+    local past_frontmatter=0
+    local line_num=0
+    local first_body_line=1
+    
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        ((line_num++))
+        
+        if [[ $line_num -eq 1 ]] && [[ "$line" == "---" ]]; then
+            in_frontmatter=1
+        elif [[ $in_frontmatter -eq 1 ]] && [[ "$line" == "---" ]]; then
+            in_frontmatter=0
+            past_frontmatter=1
+        elif [[ $past_frontmatter -eq 1 ]]; then
+            if [[ $first_body_line -eq 1 ]]; then
+                echo -n "$line"
+                first_body_line=0
+            else
+                echo
+                echo -n "$line"
+            fi
+        elif [[ $in_frontmatter -eq 0 ]] && [[ $line_num -eq 1 ]]; then
+            # No frontmatter, output from first line
+            echo -n "$line"
+            past_frontmatter=1
+            first_body_line=0
+        fi
+    done < "$file"
+    
+    # Add final newline if there was content
+    if [[ $past_frontmatter -eq 1 ]] && [[ $first_body_line -eq 0 ]]; then
+        echo
+    fi
+}
+# --- utils.sh ---
+
+# Utility functions for ticket.sh
+
+# Check if we're in a git repository
+check_git_repo() {
+    if [[ ! -d .git ]]; then
+        cat >&2 << EOF
+Error: Not in a git repository
+This directory is not a git repository. Please:
+1. Navigate to your project root directory, or
+2. Initialize a new git repository with 'git init'
+EOF
+        return 1
+    fi
+    return 0
+}
+
+# Check if config file exists
+check_config() {
+    if [[ ! -f .ticket-config.yml ]]; then
+        cat >&2 << EOF
+Error: Ticket system not initialized
+Configuration file '.ticket-config.yml' not found. Please:
+1. Run 'ticket.sh init' to initialize the ticket system, or
+2. Navigate to the project root directory where the config exists
+EOF
+        return 1
+    fi
+    return 0
+}
+
+# Validate slug format (lowercase, numbers, hyphens only)
+validate_slug() {
+    local slug="$1"
+    
+    if [[ ! "$slug" =~ ^[a-z0-9-]+$ ]]; then
+        cat >&2 << EOF
+Error: Invalid slug format
+Slug '$slug' contains invalid characters. Please:
+1. Use only lowercase letters (a-z)
+2. Use only numbers (0-9)
+3. Use only hyphens (-) for separation
+Example: 'implement-user-auth' or 'fix-bug-123'
+EOF
+        return 1
+    fi
+    return 0
+}
+
+# Get current git branch
+get_current_branch() {
+    git rev-parse --abbrev-ref HEAD 2>/dev/null
+}
+
+# Check if git working directory is clean
+check_clean_working_dir() {
+    if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
+        cat >&2 << EOF
+Error: Uncommitted changes
+Working directory has uncommitted changes. Please:
+1. Commit your changes: git add . && git commit -m "message"
+2. Or stash changes: git stash
+3. Then retry the ticket operation
+
+IMPORTANT: Never use 'git restore' or 'rm' to discard file changes without
+explicit user permission. User's work must be preserved.
+EOF
+        return 1
+    fi
+    return 0
+}
+
+# Generate ticket filename from slug
+generate_ticket_filename() {
+    local slug="$1"
+    local timestamp=$(date -u '+%y%m%d-%H%M%S')
+    echo "${timestamp}-${slug}"
+}
+
+# Extract ticket name from various input formats
+extract_ticket_name() {
+    local input="$1"
+    
+    # Remove directory path if present
+    local basename="${input##*/}"
+    
+    # Remove .md extension if present
+    basename="${basename%.md}"
+    
+    echo "$basename"
+}
+
+# Get ticket file path from ticket name
+get_ticket_file() {
+    local ticket_name="$1"
+    local tickets_dir="$2"
+    
+    # Extract just the ticket name
+    ticket_name=$(extract_ticket_name "$ticket_name")
+    
+    echo "${tickets_dir}/${ticket_name}.md"
+}
+
+# Run git command and show output
+run_git_command() {
+    local cmd="$1"
+    
+    echo "# run command" >&2
+    echo "$cmd" >&2
+    
+    # Execute the command and capture both stdout and stderr
+    local output
+    output=$(eval "$cmd" 2>&1)
+    local exit_code=$?
+    
+    # Show output if any
+    if [[ -n "$output" ]]; then
+        echo "$output" >&2
+    fi
+    
+    echo >&2  # Add blank line after command output
+    
+    return $exit_code
+}
+
+# Format ISO 8601 UTC timestamp
+get_utc_timestamp() {
+    date -u '+%Y-%m-%dT%H:%M:%SZ'
+}
+
+# Check if value is null or empty
+is_null_or_empty() {
+    local value="$1"
+    [[ -z "$value" ]] || [[ "$value" == "null" ]]
+}
+
+# Parse ticket status from YAML data
+get_ticket_status() {
+    local started_at="$1"
+    local closed_at="$2"
+    
+    if is_null_or_empty "$closed_at"; then
+        if is_null_or_empty "$started_at"; then
+            echo "todo"
+        else
+            echo "doing"
+        fi
+    else
+        echo "done"
+    fi
+}
+
+# Convert UTC time to local timezone
+# Usage: convert_utc_to_local <utc_time>
+# Returns the original time on error (graceful degradation)
+convert_utc_to_local() {
+    local utc_time="$1"
+    
+    # Return original if empty or null
+    if is_null_or_empty "$utc_time"; then
+        echo "$utc_time"
+        return 0
+    fi
+    
+    # Try GNU date first (Linux)
+    if date --version >/dev/null 2>&1; then
+        local result=$(date -d "${utc_time}" "+%Y-%m-%d %H:%M:%S %Z" 2>/dev/null)
+        if [[ -n "$result" ]]; then
+            echo "$result"
+            return 0
+        fi
+    fi
+    
+    # Try BSD date (macOS)
+    if date -j >/dev/null 2>&1; then
+        # Try with ISO 8601 format first
+        local result=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "${utc_time}" "+%Y-%m-%d %H:%M:%S %Z" 2>/dev/null)
+        if [[ -n "$result" ]]; then
+            echo "$result"
+            return 0
+        fi
+        
+        # Try without Z suffix
+        local time_no_z="${utc_time%Z}"
+        result=$(date -j -f "%Y-%m-%dT%H:%M:%S" "${time_no_z}" "+%Y-%m-%d %H:%M:%S %Z" 2>/dev/null)
+        if [[ -n "$result" ]]; then
+            echo "$result"
+            return 0
+        fi
+    fi
+    
+    # Fallback to original
+    echo "$utc_time"
+}
+# === Main Script ===
+
+
+# ticket.sh - Git-based Ticket Management System for Development
+# Version: 2.0.0-test
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -49,23 +995,7 @@ unset POSIXLY_CORRECT  # We rely on bash-specific features
 umask 0022         # Ensure created files have proper permissions
 
 # Get the directory where this script is located
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Source required libraries
-# First try local paths (for testing), then production paths
-if [[ -f "${SCRIPT_DIR}/yaml-sh/yaml-sh.sh" ]]; then
-    source "${SCRIPT_DIR}/yaml-sh/yaml-sh.sh"
-    source "${SCRIPT_DIR}/lib/yaml-frontmatter.sh"
-    source "${SCRIPT_DIR}/lib/utils.sh"
-elif [[ -f "${SCRIPT_DIR}/../yaml-sh/yaml-sh.sh" ]]; then
-    source "${SCRIPT_DIR}/../yaml-sh/yaml-sh.sh"
-    source "${SCRIPT_DIR}/../lib/yaml-frontmatter.sh"
-    source "${SCRIPT_DIR}/../lib/utils.sh"
-else
-    echo "Error: Cannot find required yaml-sh.sh library" >&2
-    echo "Make sure yaml-sh and lib directories are in the correct location" >&2
-    exit 1
-fi
 
 # Global variables
 CONFIG_FILE=".ticket-config.yml"

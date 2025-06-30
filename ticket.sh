@@ -5,7 +5,7 @@
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 1.0.0
+# Version: 20250630.153507
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -947,7 +947,7 @@ convert_utc_to_local() {
 
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 1.0.0
+# Version: 20250630.153507
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -1045,6 +1045,7 @@ Each ticket is a single Markdown file with YAML frontmatter metadata.
 - `./ticket.sh start <ticket-name>` - Start working on ticket (creates feature branch locally)
 - `./ticket.sh restore` - Restore current-ticket.md symlink from branch name
 - `./ticket.sh close [--no-push] [--force|-f] [--no-delete-remote]` - Complete current ticket (squash merge to default branch)
+- `./ticket.sh selfupdate` - Update ticket.sh to the latest version from GitHub
 
 ## Ticket Naming
 
@@ -1894,6 +1895,62 @@ EOF
     fi
 }
 
+# Command: selfupdate
+# Update ticket.sh from the latest version on GitHub
+cmd_selfupdate() {
+    echo "Starting self-update..."
+    
+    local script_path="$(realpath "$0")"
+    local temp_file=$(mktemp)
+    local update_script=$(mktemp)
+    
+    # Download latest version
+    echo "Downloading latest version from GitHub..."
+    if ! curl -fsSL https://raw.githubusercontent.com/masuidrive/ticket.sh/main/ticket.sh -o "$temp_file"; then
+        echo "Error: Failed to download update" >&2
+        rm -f "$temp_file"
+        return 1
+    fi
+    
+    # Verify download
+    if [[ ! -s "$temp_file" ]]; then
+        echo "Error: Downloaded file is empty" >&2
+        rm -f "$temp_file"
+        return 1
+    fi
+    
+    # Create update script
+    cat > "$update_script" << EOF
+# Wait for parent process to exit
+sleep 1
+
+# Backup current version
+cp "$script_path" "${script_path}.backup"
+
+# Replace with new version
+mv "$temp_file" "$script_path"
+chmod +x "$script_path"
+
+# Show completion message
+echo ""
+echo "✅ Update completed successfully!"
+echo "Backup saved to: ${script_path}.backup"
+echo "Run '$script_path help' to see available commands."
+
+# Clean up
+rm -f "\$0"
+EOF
+    
+    chmod +x "$update_script"
+    
+    # Launch update process
+    echo "Installing update..."
+    nohup bash "$update_script" 2>&1 | tail -n +2 &
+    
+    # Exit to allow update
+    exit 0
+}
+
 # Main command dispatcher
 main() {
     case "${1:-}" in
@@ -1926,6 +1983,9 @@ main() {
         close)
             shift
             cmd_close "$@"
+            ;;
+        selfupdate)
+            cmd_selfupdate
             ;;
         help|--help|-h)
             show_usage
