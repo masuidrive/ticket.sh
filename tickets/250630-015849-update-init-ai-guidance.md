@@ -4,7 +4,7 @@ tags: []
 description: "Update init command AI guidance to emphasize adding to existing AI config files"
 created_at: "2025-06-30T01:58:49Z"
 started_at: 2025-06-30T01:59:30Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2025-06-30T02:00:33Z # Do not modify manually
 ---
 
 # Update init command AI guidance message
