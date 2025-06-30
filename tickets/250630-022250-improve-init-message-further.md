@@ -16,6 +16,9 @@ Improvements requested by user:
 4. Update AI assistant instructions to tell developers to add to their coding agent's custom prompt
 5. Auto-detect current branch (main/master/develop) for default_branch in init
 6. Replace AI instructions with new English version focusing on ticket management workflow
+7. Remove indentation from markdown block for easier copy-paste
+8. Add help command reference to instructions
+9. Change "Ticket Closing" to "Closing Tickets" for better English
 
 ## Tasks
 - [x] Add message to DEFAULT_CONTENT about getting permission before closing
@@ -25,6 +28,9 @@ Improvements requested by user:
 - [x] Update AI instructions message to be clearer about adding to custom prompt
 - [x] Auto-detect current branch for default_branch setting
 - [x] Replace instructions with new English version
+- [x] Remove indentation from markdown instructions
+- [x] Add ./ticket.sh help reference
+- [x] Change section title to "Closing Tickets"
 - [x] Build and test all changes
 - [ ] Get user approval before closing
 
