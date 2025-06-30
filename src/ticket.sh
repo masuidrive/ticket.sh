@@ -170,10 +170,29 @@ EOF
 
 # Initialize ticket system
 cmd_init() {
-    echo "Initializing ticket system..."
-    
     # Check git repository
     check_git_repo || return 1
+    
+    # Check if already initialized
+    local already_initialized=true
+    [[ ! -f "$CONFIG_FILE" ]] && already_initialized=false
+    [[ ! -d "${DEFAULT_TICKETS_DIR}" ]] && already_initialized=false
+    
+    if [[ "$already_initialized" == "true" ]]; then
+        echo "Ticket system is already initialized!"
+        echo ""
+        echo "For help and usage information, run:"
+        echo "  ./ticket.sh help"
+        echo ""
+        echo "Quick reference:"
+        echo "  - Create a ticket: './ticket.sh new <slug>'"
+        echo "  - List tickets: './ticket.sh list'"
+        echo "  - Start work: './ticket.sh start <ticket-name>'"
+        echo "  - Complete: './ticket.sh close'"
+        return 0
+    fi
+    
+    echo "Initializing ticket system..."
     
     # Create config file if it doesn't exist
     if [[ ! -f "$CONFIG_FILE" ]]; then

@@ -9,13 +9,17 @@ closed_at: null   # Do not modify manually
 
 # Further improve init command message
 
-The user requested to add a message to the default ticket template's Notes section
-to remind AI agents to get explicit permission before closing tickets.
+Improvements requested by user:
+1. Add message to default ticket template's Notes section about getting permission before closing
+2. Update this project's .ticket-config.yml file
+3. Change init command behavior for already initialized environments
 
 ## Tasks
 - [x] Add message to DEFAULT_CONTENT about getting permission before closing
 - [x] Update the config file template in init command
-- [x] Build and test the changes
+- [x] Update this project's .ticket-config.yml file
+- [x] Change init command to show simple help for already initialized environments
+- [x] Build and test all changes
 - [ ] Get user approval before closing
 
 ## Notes
