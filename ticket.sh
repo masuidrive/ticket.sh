@@ -1140,14 +1140,18 @@ default_content: |
   # Ticket Overview
   
   Write the overview and tasks for this ticket here.
-  
+
+
   ## Tasks
+
   - [ ] Task 1
   - [ ] Task 2
-  
+  ...
+  - [ ] Get developer approval before closing
+
+
   ## Notes
-  When closing this ticket, please show the ticket content to the user and get explicit permission before closing.
-  
+
   Additional notes or requirements.
 EOF
         echo "Created configuration file: $CONFIG_FILE"
