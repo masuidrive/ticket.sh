@@ -103,7 +103,7 @@ Each ticket is a single Markdown file with YAML frontmatter metadata.
 - `./ticket.sh init` - Initialize system (create config, directories, .gitignore)
 - `./ticket.sh new <slug>` - Create new ticket file (slug: lowercase, numbers, hyphens only)
 - `./ticket.sh list [--status STATUS] [--count N]` - List tickets (default: todo + doing, count: 20)
-- `./ticket.sh start <ticket-name> [--no-push]` - Start working on ticket (creates feature branch)
+- `./ticket.sh start <ticket-name>` - Start working on ticket (creates feature branch locally)
 - `./ticket.sh restore` - Restore current-ticket.md symlink from branch name
 - `./ticket.sh close [--no-push] [--force|-f]` - Complete current ticket (squash merge to default branch)
 
@@ -127,8 +127,9 @@ Each ticket is a single Markdown file with YAML frontmatter metadata.
 
 ## Push Control
 
-- Set `auto_push: false` in config to disable automatic pushing
-- Use `--no-push` flag to override `auto_push: true` for single command
+- Set `auto_push: false` in config to disable automatic pushing for close command
+- Use `--no-push` flag with close command to skip pushing
+- Feature branches are always created locally (no auto-push on start)
 - Git commands and outputs are displayed for transparency
 
 ## Workflow
@@ -458,12 +459,6 @@ EOF
 # Start working on a ticket
 cmd_start() {
     local ticket_input="$1"
-    local no_push=false
-    
-    # Check for --no-push flag
-    if [[ "${2:-}" == "--no-push" ]]; then
-        no_push=true
-    fi
     
     # Check prerequisites
     check_git_repo || return 1
@@ -547,23 +542,13 @@ EOF
     # Create and checkout branch
     run_git_command "git checkout -b $branch_name" || return 1
     
-    # Push to remote if auto_push is true and --no-push not specified
-    if [[ "$auto_push" == "true" ]] && [[ "$no_push" == "false" ]]; then
-        run_git_command "git push -u $repository $branch_name" || {
-            echo "Warning: Failed to push branch to remote" >&2
-        }
-    fi
-    
     # Create symlink
     rm -f "$CURRENT_TICKET_LINK"
     ln -s "$ticket_file" "$CURRENT_TICKET_LINK"
     
     echo "Started ticket: $ticket_name"
     echo "Current ticket linked: $CURRENT_TICKET_LINK -> $ticket_file"
-    
-    if [[ "$auto_push" == "false" ]] || [[ "$no_push" == "true" ]]; then
-        echo "Note: Branch not pushed to remote. Use 'git push -u $repository $branch_name' when ready."
-    fi
+    echo "Note: Branch created locally. Use 'git push -u $repository $branch_name' when ready to share."
 }
 
 # Restore current ticket link
@@ -861,10 +846,10 @@ main() {
         start)
             if [[ -z "${2:-}" ]]; then
                 echo "Error: ticket name required" >&2
-                echo "Usage: ticket.sh start <ticket-name> [--no-push]" >&2
+                echo "Usage: ticket.sh start <ticket-name>" >&2
                 exit 1
             fi
-            cmd_start "$2" "${3:-}"
+            cmd_start "$2"
             ;;
         restore)
             cmd_restore

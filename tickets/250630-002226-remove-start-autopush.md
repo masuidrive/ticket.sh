@@ -1,10 +1,10 @@
 ---
 priority: 2
 tags: []
-description: ""
+description: "startコマンドでの自動プッシュを削除"
 created_at: "2025-06-30T00:22:26Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2025-06-30T00:23:01Z # Do not modify manually
+closed_at: 2025-06-30T00:50:02Z # Do not modify manually
 ---
 
 # startコマンドでの自動プッシュを削除
@@ -19,11 +19,11 @@ closed_at: null   # Do not modify manually
 - squashマージ後もブランチが残り、手動削除が必要
 
 ## Tasks
-- [ ] startコマンドからauto_pushによるプッシュ処理を削除
-- [ ] --no-pushフラグの説明を更新（startでは不要になるため）
-- [ ] ヘルプメッセージの更新
-- [ ] テストケースの修正
-- [ ] 全テストが通ることを確認
+- [x] startコマンドからauto_pushによるプッシュ処理を削除
+- [x] --no-pushフラグの説明を更新（startでは不要になるため）
+- [x] ヘルプメッセージの更新
+- [x] テストケースの修正
+- [x] 全テストが通ることを確認
 
 ## Notes
 - closeコマンドでのauto_pushは維持（完成したコードをリモートに送る必要があるため）

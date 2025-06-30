@@ -258,21 +258,24 @@ else
     test_result 1 "Priority sorting may be incorrect" "First ticket was: $FIRST_TICKET"
 fi
 
-# Test 12: Auto-push configuration
+# Test 12: Auto-push configuration (for close command)
 echo -e "\n12. Testing auto_push configuration..."
 cd .. && setup_test
 
-# Test with auto_push: true (default)
+# Test that start command no longer shows push
 ./ticket.sh new "push-test" >/dev/null 2>&1
 git add tickets .ticket-config.yml && git commit -q -m "add"
 TICKET=$(safe_get_ticket_name "*push-test.md")
 
-# Should show push command in output when auto_push is true
+# Should NOT execute push command in start anymore
 OUTPUT=$(./ticket.sh start "$TICKET" 2>&1)
-if echo "$OUTPUT" | grep -q "git push"; then
-    test_result 0 "Shows push command with auto_push: true"
+# Check that it only mentions push in the note, not as executed command
+if echo "$OUTPUT" | grep -q "^# run command$" && echo "$OUTPUT" | grep -q "^git push"; then
+    test_result 1 "Start command should not execute push"
+elif echo "$OUTPUT" | grep -q "Use 'git push.*when ready"; then
+    test_result 0 "Start command correctly doesn't push (only shows note)"
 else
-    test_result 1 "Should show push attempt with auto_push: true"
+    test_result 1 "Unexpected output from start command"
 fi
 
 # Cleanup
