@@ -3,8 +3,8 @@ priority: 2
 tags: []
 description: "Improve init command to guide users about configuration and AI agent setup"
 created_at: "2025-06-30T01:48:21Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2025-06-30T01:49:02Z # Do not modify manually
+closed_at: 2025-06-30T01:52:25Z # Do not modify manually
 ---
 
 # Improve init command message
@@ -15,10 +15,10 @@ Update the init command to provide better guidance to users about:
 3. Workflow recommendations
 
 ## Tasks
-- [ ] Update init command to display informative message after initialization
-- [ ] Include configuration guidance
-- [ ] Add AI agent setup instructions
-- [ ] Test the new init message
+- [x] Update init command to display informative message after initialization
+- [x] Include configuration guidance
+- [x] Add AI agent setup instructions
+- [x] Test the new init message
 
 ## Proposed Message
 
