@@ -14,6 +14,8 @@ Improvements requested by user:
 2. Update this project's .ticket-config.yml file
 3. Change init command behavior for already initialized environments
 4. Update AI assistant instructions to tell developers to add to their coding agent's custom prompt
+5. Auto-detect current branch (main/master/develop) for default_branch in init
+6. Replace AI instructions with new English version focusing on ticket management workflow
 
 ## Tasks
 - [x] Add message to DEFAULT_CONTENT about getting permission before closing
@@ -21,6 +23,8 @@ Improvements requested by user:
 - [x] Update this project's .ticket-config.yml file
 - [x] Change init command to show simple help for already initialized environments
 - [x] Update AI instructions message to be clearer about adding to custom prompt
+- [x] Auto-detect current branch for default_branch setting
+- [x] Replace instructions with new English version
 - [x] Build and test all changes
 - [ ] Get user approval before closing
 

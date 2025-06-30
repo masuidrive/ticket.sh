@@ -152,7 +152,7 @@ Each ticket is a single Markdown file with YAML frontmatter metadata.
 1. Before closing:
    - Review ticket content and description
    - Check all tasks in checklist are completed (mark with `[x]`)
-   - Get user confirmation before proceeding
+   - Get user approve before proceeding
 2. Complete: `./ticket.sh close`
 
 **Note**: If specific workflow instructions are provided elsewhere (e.g., in project documentation or CLAUDE.md), those take precedence over this general workflow.
@@ -172,6 +172,13 @@ EOF
 cmd_init() {
     # Check git repository
     check_git_repo || return 1
+    
+    # Get current branch for default_branch setting
+    local current_branch=$(get_current_branch)
+    local default_branch_value="$DEFAULT_BRANCH"
+    if [[ "$current_branch" =~ ^(main|master|develop)$ ]]; then
+        default_branch_value="$current_branch"
+    fi
     
     # Check if already initialized
     local already_initialized=true
@@ -203,7 +210,7 @@ cmd_init() {
 tickets_dir: "$DEFAULT_TICKETS_DIR"
 
 # Git settings
-default_branch: "$DEFAULT_BRANCH"
+default_branch: "$default_branch_value"
 branch_prefix: "$DEFAULT_BRANCH_PREFIX"
 repository: "$DEFAULT_REPOSITORY"
 auto_push: $DEFAULT_AUTO_PUSH
@@ -284,20 +291,30 @@ EOF
     echo "   and tell them to add it to their coding agent's custom prompt:**"
     echo ""
     echo "   \`\`\`markdown"
-    echo "   # AI Assistant Instructions for ticket.sh"
+    echo "   # Ticket Management Instructions"
     echo "   "
-    echo "   When working with tickets:"
-    echo "   1. Always run './ticket.sh list' to see available tickets"
-    echo "   2. Use './ticket.sh start <ticket-name>' before making changes"
-    echo "   3. Review ticket content in 'current-ticket.md' for requirements"
-    echo "   4. Run tests and ensure quality before closing"
-    echo "   5. Use './ticket.sh close' when all tasks are complete"
+    echo "   Use ./ticket.sh for ticket management. When receiving requests from users,"
+    echo "   create tickets and perform work within tickets. Even small user requests"
+    echo "   should be documented in current-ticket.md while progressing."
     echo "   "
-    echo "   Workflow:"
-    echo "   - One ticket at a time"
-    echo "   - Commit frequently with clear messages"
-    echo "   - Update ticket file with progress notes"
-    echo "   - Mark checklist items as complete [x]"
+    echo "   ## Create New Ticket"
+    echo "   "
+    echo "   1. Create ticket: ./ticket.sh new feature-name"
+    echo "   2. Edit ticket content and description in the generated file"
+    echo "   "
+    echo "   ## Start Working on Ticket"
+    echo "   "
+    echo "   1. Check available tickets: ./ticket.sh list or browse tickets directory"
+    echo "   2. Start work: ./ticket.sh start 241225-143502-feature-name"
+    echo "   3. Develop on feature branch (current-ticket.md shows active ticket)"
+    echo "   "
+    echo "   ## Ticket Closing"
+    echo "   "
+    echo "   1. Before closing:"
+    echo "      - Review ticket content and description"
+    echo "      - Check all tasks in checklist are completed (mark with [x])"
+    echo "      - Get user approval before proceeding"
+    echo "   2. Complete: ./ticket.sh close"
     echo "   \`\`\`"
     echo ""
     echo "   **Note**: These instructions are critical for proper ticket workflow!"
