@@ -81,12 +81,16 @@ DEFAULT_CONTENT='# Ticket Overview
 
 Write the overview and tasks for this ticket here.
 
+
 ## Tasks
+
 - [ ] Task 1
 - [ ] Task 2
+...
+- [ ] Get developer approval before closing
+
 
 ## Notes
-When closing this ticket, please show the ticket content to the user and get explicit permission before closing.
 
 Additional notes or requirements.'
 
@@ -221,12 +225,16 @@ default_content: |
   
   Write the overview and tasks for this ticket here.
   
+  
   ## Tasks
+  
   - [ ] Task 1
   - [ ] Task 2
+  ...
+  - [ ] Get developer approval before closing
   
+
   ## Notes
-  When closing this ticket, please show the ticket content to the user and get explicit permission before closing.
   
   Additional notes or requirements.
 EOF
@@ -735,7 +743,8 @@ To ignore uncommitted changes and force close, use:
 Or handle the changes:
   1. Commit your changes: git add . && git commit -m "message"
   2. Stash changes: git stash
-  3. Discard changes: git checkout -- .
+
+IMPORTANT: Never discard changes without explicit user permission.
 EOF
             return 1
         fi

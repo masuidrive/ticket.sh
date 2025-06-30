@@ -805,6 +805,9 @@ Working directory has uncommitted changes. Please:
 1. Commit your changes: git add . && git commit -m "message"
 2. Or stash changes: git stash
 3. Then retry the ticket operation
+
+IMPORTANT: Never use 'git restore' or 'rm' to discard file changes without
+explicit user permission. User's work must be preserved.
 EOF
         return 1
     fi
@@ -1001,12 +1004,16 @@ DEFAULT_CONTENT='# Ticket Overview
 
 Write the overview and tasks for this ticket here.
 
+
 ## Tasks
+
 - [ ] Task 1
 - [ ] Task 2
+...
+- [ ] Get developer approval before closing
+
 
 ## Notes
-When closing this ticket, please show the ticket content to the user and get explicit permission before closing.
 
 Additional notes or requirements.'
 
@@ -1140,18 +1147,18 @@ default_content: |
   # Ticket Overview
   
   Write the overview and tasks for this ticket here.
-
-
+  
+  
   ## Tasks
-
+  
   - [ ] Task 1
   - [ ] Task 2
   ...
   - [ ] Get developer approval before closing
-
+  
 
   ## Notes
-
+  
   Additional notes or requirements.
 EOF
         echo "Created configuration file: $CONFIG_FILE"
@@ -1659,7 +1666,8 @@ To ignore uncommitted changes and force close, use:
 Or handle the changes:
   1. Commit your changes: git add . && git commit -m "message"
   2. Stash changes: git stash
-  3. Discard changes: git checkout -- .
+
+IMPORTANT: Never discard changes without explicit user permission.
 EOF
             return 1
         fi
