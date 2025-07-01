@@ -3,7 +3,7 @@ priority: 2
 tags: [enhancement]
 description: "Handle existing branch case in start command - checkout and restore instead of error"
 created_at: "2025-06-30T23:54:46Z"
-started_at: null  # Do not modify manually
+started_at: 2025-06-30T23:55:35Z # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 

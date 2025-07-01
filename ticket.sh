@@ -5,7 +5,7 @@
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250630.153507
+# Version: 20250701.002603
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -947,7 +947,7 @@ convert_utc_to_local() {
 
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250630.153507
+# Version: 20250701.002603
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -1538,7 +1538,34 @@ EOF
         return 1
     fi
     
-    # Check if ticket is already started
+    # Create branch name
+    local branch_name="${branch_prefix}${ticket_name}"
+    
+    # Check if branch already exists
+    if git show-ref --verify --quiet "refs/heads/$branch_name"; then
+        # Branch exists - checkout and restore
+        echo "Branch '$branch_name' already exists. Resuming work on existing ticket..."
+        
+        # Checkout existing branch
+        run_git_command "git checkout $branch_name" || return 1
+        
+        # Create symlink (restore functionality)
+        rm -f "$CURRENT_TICKET_LINK"
+        ln -s "$ticket_file" "$CURRENT_TICKET_LINK"
+        
+        echo "Resumed ticket: $ticket_name"
+        echo "Current ticket linked: $CURRENT_TICKET_LINK -> $ticket_file"
+        echo "Continuing work on existing feature branch."
+        
+        # Display success message if configured
+        if [[ -n "$start_success_message" ]]; then
+            echo ""
+            echo "$start_success_message"
+        fi
+        return 0
+    fi
+    
+    # Branch doesn't exist - check if ticket is already started
     local yaml_content=$(extract_yaml_frontmatter "$ticket_file")
     echo "$yaml_content" >| /tmp/ticket_yaml.yml
     yaml_parse /tmp/ticket_yaml.yml
@@ -1547,26 +1574,11 @@ EOF
     
     if ! is_null_or_empty "$started_at"; then
         cat >&2 << EOF
-Error: Ticket already started
-Ticket has already been started (started_at is set). Please:
-1. Continue working on the existing branch
-2. Use 'ticket.sh restore' to restore current-ticket.md link
-3. Or close the current ticket first if starting over
-EOF
-        return 1
-    fi
-    
-    # Create branch
-    local branch_name="${branch_prefix}${ticket_name}"
-    
-    # Check if branch already exists
-    if git show-ref --verify --quiet "refs/heads/$branch_name"; then
-        cat >&2 << EOF
-Error: Branch already exists
-Branch '$branch_name' already exists. Please:
-1. Switch to existing branch: git checkout $branch_name
-2. Or delete existing branch if no longer needed
-3. Use 'ticket.sh restore' to restore ticket link
+Error: Ticket already started but branch is missing
+Ticket has been started (started_at is set) but the branch doesn't exist. Please:
+1. Reset the ticket by manually editing started_at to null
+2. Or create the branch manually: git checkout -b $branch_name
+3. Then use 'ticket.sh restore' to restore the link
 EOF
         return 1
     fi
@@ -1575,7 +1587,7 @@ EOF
     local timestamp=$(get_utc_timestamp)
     update_yaml_frontmatter_field "$ticket_file" "started_at" "$timestamp"
     
-    # Create and checkout branch
+    # Create and checkout new branch
     run_git_command "git checkout -b $branch_name" || return 1
     
     # Create symlink
