@@ -8,6 +8,11 @@ default_branch: "main"
 branch_prefix: "feature/"
 repository: "origin"
 auto_push: true
+delete_remote_on_close: true
+
+# Success messages
+start_success_message: "Please review the ticket content in `current-ticket.md` and make any necessary adjustments before beginning work."
+close_success_message: ""
 
 # Ticket template
 default_content: |
