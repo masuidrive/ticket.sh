@@ -5,7 +5,7 @@
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250701.002603
+# Version: 20250701.003405
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -947,7 +947,7 @@ convert_utc_to_local() {
 
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250701.002603
+# Version: 20250701.003405
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -1042,7 +1042,7 @@ Each ticket is a single Markdown file with YAML frontmatter metadata.
 - `./ticket.sh init` - Initialize system (create config, directories, .gitignore)
 - `./ticket.sh new <slug>` - Create new ticket file (slug: lowercase, numbers, hyphens only)
 - `./ticket.sh list [--status STATUS] [--count N]` - List tickets (default: todo + doing, count: 20)
-- `./ticket.sh start <ticket-name>` - Start working on ticket (creates feature branch locally)
+- `./ticket.sh start <ticket-name>` - Start working on ticket (creates or switches to feature branch)
 - `./ticket.sh restore` - Restore current-ticket.md symlink from branch name
 - `./ticket.sh close [--no-push] [--force|-f] [--no-delete-remote]` - Complete current ticket (squash merge to default branch)
 - `./ticket.sh selfupdate` - Update ticket.sh to the latest version from GitHub
