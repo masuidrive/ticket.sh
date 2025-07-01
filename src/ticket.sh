@@ -588,7 +588,6 @@ cmd_start() {
     # Check prerequisites
     check_git_repo || return 1
     check_config || return 1
-    check_clean_working_dir || return 1
     
     # Load configuration
     yaml_parse "$CONFIG_FILE"
@@ -602,14 +601,44 @@ cmd_start() {
     # Check current branch
     local current_branch=$(get_current_branch)
     if [[ "$current_branch" != "$default_branch" ]]; then
-        cat >&2 << EOF
-Error: Wrong branch
-Must be on '$default_branch' branch to start new ticket. Please:
-1. Switch to $default_branch: git checkout $default_branch
-2. Or complete current ticket with 'ticket.sh close'
+        # We're on a feature branch - handle different scenarios
+        if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
+            # Feature branch with uncommitted changes - prompt for commit and exit
+            cat >&2 << EOF
+Error: Uncommitted changes on feature branch
+You are on feature branch '$current_branch' with uncommitted changes. Please:
+1. Commit your changes: git add . && git commit -m "message"
+2. Or stash changes: git stash
 3. Then retry starting the new ticket
 EOF
-        return 1
+            return 1
+        else
+            # Feature branch with no changes - offer to create new branch from default
+            echo "Warning: Currently on feature branch '$current_branch' with no uncommitted changes."
+            echo "Creating new feature branch from '$default_branch' branch instead."
+            
+            # Switch to default branch first
+            echo "Switching to '$default_branch' branch..."
+            run_git_command "git checkout $default_branch" || return 1
+            
+            # Check if default branch has differences with the feature branch we were on
+            local diff_count=$(git rev-list --count "$current_branch..$default_branch" 2>/dev/null || echo "0")
+            if [[ "$diff_count" -gt 0 ]]; then
+                cat << EOF
+
+Note: The default branch '$default_branch' has $diff_count new commit(s) compared to feature branch '$current_branch'.
+Consider merging or rebasing '$current_branch' to incorporate these changes:
+  git checkout $current_branch
+  git merge $default_branch
+  # or
+  git rebase $default_branch
+
+EOF
+            fi
+        fi
+    else
+        # We're on the default branch - check for clean working directory
+        check_clean_working_dir || return 1
     fi
     
     # Get ticket file
@@ -638,6 +667,26 @@ EOF
         
         # Checkout existing branch
         run_git_command "git checkout $branch_name" || return 1
+        
+        # Check if there are differences between this feature branch and the default branch
+        local ahead_count=$(git rev-list --count "$default_branch..$branch_name" 2>/dev/null || echo "0")
+        local behind_count=$(git rev-list --count "$branch_name..$default_branch" 2>/dev/null || echo "0")
+        
+        if [[ "$behind_count" -gt 0 ]]; then
+            cat << EOF
+
+Warning: Feature branch '$branch_name' is $behind_count commit(s) behind '$default_branch'.
+Consider updating your feature branch to incorporate recent changes:
+  git merge $default_branch
+  # or
+  git rebase $default_branch
+
+EOF
+        fi
+        
+        if [[ "$ahead_count" -gt 0 ]]; then
+            echo "Feature branch '$branch_name' is $ahead_count commit(s) ahead of '$default_branch'."
+        fi
         
         # Create symlink (restore functionality)
         rm -f "$CURRENT_TICKET_LINK"
