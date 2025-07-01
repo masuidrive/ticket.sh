@@ -1,6 +1,10 @@
 # 書き換えていいソースコード
-- src/、yaml-sh/、lib/のソースコードのみ書き換えてください
-- project rootの`ticket.sh`は、`build.sh`から生成されるので直接書き換えないようにしてください
+- `src/` 、 `yaml-sh/` 、 `lib/` のソースコードのみ書き換えてください
+- project rootの `ticket.sh` は、 `build.sh` から生成されるので直接書き換えないようにしてください
+
+# テスト
+- コードを書き換えた後は、ユーザに報告前に `test/run-all.sh` と  `test/run-all-on-docker.sh` を実行して、エラーがあれば修正してください。
+- 既存のコードにエラーがあった場合には、エラー修正のチケットを切って、このタスクが終わったらそちらに取り掛かってください。
 
 # Ticket Management Instructions
 

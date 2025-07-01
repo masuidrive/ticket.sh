@@ -94,8 +94,8 @@ git checkout -q develop
 OUTPUT=$(./ticket.sh start "nonexistent-ticket" 2>&1)
 test_error_message "Ticket not found error" "$OUTPUT" "Ticket not found"
 
-# Test 6: Already started ticket
-echo -e "\n6. Testing 'already started' error..."
+# Test 6: Resume existing branch (changed behavior)
+echo -e "\n6. Testing resume existing branch behavior..."
 # Clean up any existing test branches
 git checkout -q develop
 # Delete any existing branches that might conflict
@@ -111,10 +111,19 @@ git add . && git commit -q -m "start ticket"
 git checkout -q develop
 
 OUTPUT=$(./ticket.sh start "$TICKET" --no-push 2>&1)
-test_error_message "Already started error" "$OUTPUT" "Branch already exists"
+# Now we expect success with resume message
+if echo "$OUTPUT" | grep -q "already exists. Resuming work"; then
+    echo -e "  \033[0;32m✓\033[0m Resume existing branch behavior"
+else
+    echo -e "  \033[0;31m✗\033[0m Resume existing branch behavior"
+    echo "    Expected: already exists. Resuming work"
+    echo "    Actual output: $OUTPUT"
+fi
 
 # Test 7: Close from wrong branch
 echo -e "\n7. Testing 'wrong branch' error for close..."
+# Make sure we're on develop branch after Test 6
+git checkout -q develop
 OUTPUT=$(./ticket.sh close 2>&1)
 test_error_message "Wrong branch error" "$OUTPUT" "Not on a feature branch"
 
