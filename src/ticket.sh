@@ -221,26 +221,43 @@ tickets_dir: "$DEFAULT_TICKETS_DIR"
 default_branch: "$default_branch_value"
 branch_prefix: "$DEFAULT_BRANCH_PREFIX"
 repository: "$DEFAULT_REPOSITORY"
+
+# Automatically push changes to remote repository during close command
+# Set to false if you want to manually control when to push
 auto_push: $DEFAULT_AUTO_PUSH
+
+# Automatically delete remote feature branch after closing ticket
+# Set to false if you want to keep remote branches for history
+delete_remote_on_close: $DEFAULT_DELETE_REMOTE_ON_CLOSE
+
+# Success messages (leave empty to disable)
+# Message displayed after starting work on a ticket
+start_success_message: |
+  Please review the ticket content in \`current-ticket.md\` and make any necessary adjustments before beginning work.
+
+# Message displayed after closing a ticket
+close_success_message: |
+  
 
 # Ticket template
 default_content: |
   # Ticket Overview
   
-  Write the overview and tasks for this ticket here.
+  {{Write the overview and tasks for this ticket here.}}
   
   
   ## Tasks
   
-  - [ ] Task 1
-  - [ ] Task 2
+  - [ ] {{Task 1}}
+  - [ ] {{Task 2}}
   ...
+  - [ ] Run tests before closing and pass all tests (No exceptions)
   - [ ] Get developer approval before closing
   
 
   ## Notes
   
-  Additional notes or requirements.
+  {{Additional notes or requirements.}}
 EOF
         echo "Created configuration file: $CONFIG_FILE"
     else
