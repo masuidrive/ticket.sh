@@ -88,6 +88,7 @@ awk -v version="$VERSION" '
     skip && /^fi$/ { skip = 0; next }
     skip { next }
     /^# Version:/ { print "# Version: " version; next }
+    /^VERSION="1.0.0"/ { print "VERSION=\"" version "\"  # This will be replaced during build"; next }
     { print }
 ' "$SRC_DIR/ticket.sh" >> "$OUTPUT_FILE"
 

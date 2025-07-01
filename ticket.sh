@@ -5,7 +5,7 @@
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250701.011454
+# Version: 20250701.013448
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -947,7 +947,7 @@ convert_utc_to_local() {
 
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250701.011454
+# Version: 20250701.013448
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -998,6 +998,7 @@ umask 0022         # Ensure created files have proper permissions
 
 
 # Global variables
+VERSION="20250701.013448"  # This will be replaced during build
 CONFIG_FILE=".ticket-config.yml"
 CURRENT_TICKET_LINK="current-ticket.md"
 
@@ -1029,9 +1030,10 @@ Additional notes or requirements.'
 
 # Show usage information
 show_usage() {
+    echo "# Ticket Management System for Coding Agents"
+    echo "Version: $VERSION"
+    echo ""
     cat << 'EOF'
-# Ticket Management System for Coding Agents
-
 ## Overview
 
 This is a self-contained ticket management system using shell script + files + Git.
@@ -1046,6 +1048,7 @@ Each ticket is a single Markdown file with YAML frontmatter metadata.
 - `./ticket.sh restore` - Restore current-ticket.md symlink from branch name
 - `./ticket.sh close [--no-push] [--force|-f] [--no-delete-remote]` - Complete current ticket (squash merge to default branch)
 - `./ticket.sh selfupdate` - Update ticket.sh to the latest version from GitHub
+- `./ticket.sh version` - Display version information
 
 ## Ticket Naming
 
@@ -1924,6 +1927,14 @@ EOF
     fi
 }
 
+# Command: version
+# Display version information
+cmd_version() {
+    echo "ticket.sh - Git-based Ticket Management System"
+    echo "Version: $VERSION"
+    echo "Built from source files"
+}
+
 # Command: selfupdate
 # Update ticket.sh from the latest version on GitHub
 cmd_selfupdate() {
@@ -2015,6 +2026,9 @@ main() {
             ;;
         selfupdate)
             cmd_selfupdate
+            ;;
+        version|--version|-v)
+            cmd_version
             ;;
         help|--help|-h)
             show_usage
