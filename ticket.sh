@@ -5,7 +5,7 @@
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250701.015221
+# Version: 20250705.031414
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -947,7 +947,7 @@ convert_utc_to_local() {
 
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250701.015221
+# Version: 20250705.031414
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -998,7 +998,7 @@ umask 0022         # Ensure created files have proper permissions
 
 
 # Global variables
-VERSION="20250701.015221"  # This will be replaced during build
+VERSION="20250705.031414"  # This will be replaced during build
 CONFIG_FILE=".ticket-config.yml"
 CURRENT_TICKET_LINK="current-ticket.md"
 
@@ -1046,6 +1046,7 @@ Each ticket is a single Markdown file with YAML frontmatter metadata.
 - `./ticket.sh list [--status STATUS] [--count N]` - List tickets (default: todo + doing, count: 20)
 - `./ticket.sh start <ticket-name>` - Start working on ticket (creates or switches to feature branch)
 - `./ticket.sh restore` - Restore current-ticket.md symlink from branch name
+- `./ticket.sh check` - Check current ticket and branch status
 - `./ticket.sh close [--no-push] [--force|-f] [--no-delete-remote]` - Complete current ticket (squash merge to default branch)
 - `./ticket.sh selfupdate` - Update ticket.sh to the latest version from GitHub
 - `./ticket.sh version` - Display version information
@@ -1687,6 +1688,102 @@ EOF
     echo "Restored current ticket link: $CURRENT_TICKET_LINK -> $ticket_file"
 }
 
+# Check current ticket and branch status
+cmd_check() {
+    # Check if ticket.sh exists (this should always pass if we're running)
+    if [[ ! -f "${BASH_SOURCE[0]}" ]]; then
+        cat << 'EOF'
+ticket.sh not found. Please install it first:
+
+```
+curl -O https://raw.githubusercontent.com/masuidrive/ticket.sh/main/ticket.sh
+chmod +x ticket.sh
+./ticket.sh init
+```
+EOF
+        return 1
+    fi
+    
+    # Check if configuration exists
+    if [[ ! -f "$CONFIG_FILE" ]]; then
+        echo "No ticket configuration found. Please run \`ticket.sh init\` to set up the ticket system."
+        return 1
+    fi
+    
+    # Check if in git repository
+    if ! git rev-parse --git-dir >/dev/null 2>&1; then
+        cat >&2 << EOF
+Error: Not in a git repository
+This directory is not a git repository. Please:
+1. Navigate to your project root directory, or
+2. Initialize a new git repository with 'git init'
+EOF
+        return 1
+    fi
+    
+    # Load configuration
+    yaml_parse "$CONFIG_FILE"
+    local default_branch=$(yaml_get "default_branch" || echo "$DEFAULT_DEFAULT_BRANCH")
+    local branch_prefix=$(yaml_get "branch_prefix" || echo "$DEFAULT_BRANCH_PREFIX")
+    local tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
+    
+    # Get current branch
+    local current_branch=$(get_current_branch)
+    
+    # Check if current-ticket.md exists
+    if [[ ! -f "$CURRENT_TICKET_LINK" ]]; then
+        # No active ticket
+        if [[ "$current_branch" == "$default_branch" ]]; then
+            # On default branch - normal state
+            echo "✓ You are on the default branch with no active ticket."
+            echo ""
+            echo "To start working:"
+            echo "- View existing tickets: \`ticket.sh list\`"
+            echo "- Create a new ticket (if instructed by user): \`ticket.sh new <slug>\`"
+            echo "- Start a ticket: \`ticket.sh start <ticket-id>\`"
+        elif [[ "$current_branch" =~ ^${branch_prefix} ]]; then
+            # On feature branch without ticket
+            echo "⚠️  You are on a feature branch without an active ticket."
+            echo ""
+            echo "This might be a detached ticket. Try running \`ticket.sh restore\` to recover the ticket state."
+        else
+            # On other branch
+            echo "⚠️  You are working outside the ticket system."
+            echo ""
+            echo "Current branch: $current_branch"
+            echo "Consider:"
+            echo "- Creating a ticket for this work: \`ticket.sh new <slug>\`"
+            echo "- Or switching to the default branch: \`git checkout $default_branch\`"
+        fi
+    else
+        # Active ticket exists
+        local ticket_file=$(readlink "$CURRENT_TICKET_LINK" 2>/dev/null || echo "")
+        local ticket_name=$(basename "$ticket_file" .md 2>/dev/null || echo "unknown")
+        local expected_branch="${branch_prefix}${ticket_name}"
+        
+        if [[ "$current_branch" == "$expected_branch" ]]; then
+            # Branch matches ticket
+            echo "✓ Active ticket found and branch matches."
+            echo ""
+            echo "Ticket: $ticket_name"
+            echo "Branch: $current_branch"
+            echo ""
+            echo "Continue working on your ticket. When explicitly instructed by the user to close, run \`ticket.sh close\`."
+        else
+            # Branch mismatch
+            echo "⚠️  Ticket and branch mismatch detected."
+            echo ""
+            echo "Active ticket: $ticket_name"
+            echo "Expected branch: $expected_branch"
+            echo "Current branch: $current_branch"
+            echo ""
+            echo "This may be due to an incorrect ticket link. Please verify with the user, then:"
+            echo "1. Remove the incorrect link: \`rm current-ticket.md\`"
+            echo "2. Restore the correct ticket: \`ticket.sh restore\`"
+        fi
+    fi
+}
+
 # Close current ticket
 cmd_close() {
     local no_push=false
@@ -2019,6 +2116,9 @@ main() {
             ;;
         restore)
             cmd_restore
+            ;;
+        check)
+            cmd_check
             ;;
         close)
             shift

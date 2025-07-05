@@ -55,6 +55,7 @@ cp ticket.sh /usr/local/bin/
 - `start <ticket> [--no-push]` - Start working on ticket
 - `close [--no-push] [--force] [--no-delete-remote]` - Complete ticket
 - `restore` - Restore current-ticket.md symlink
+- `check` - Check current ticket and branch status
 
 ## Configuration
 

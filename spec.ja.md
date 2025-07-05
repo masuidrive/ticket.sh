@@ -90,6 +90,26 @@ closed_at: null   # Do not modify manually
 ```
 clone/pull後など、current-ticket.mdが失われた際にブランチ名から自動復元
 
+### 状態確認
+```bash
+./ticket.sh check
+```
+現在のチケットとブランチの状態を確認し、適切なガイダンスメッセージを表示
+
+**チェック内容:**
+- ticket.shの存在確認
+- .ticket-config.yamlの存在確認
+- current-ticket.mdの存在確認
+- 現在のGitブランチ確認
+- チケットとブランチの整合性確認
+
+**表示メッセージ例:**
+- 設定ファイルが無い場合: `ticket.sh init`の実行を提案
+- デフォルトブランチでチケット無し: チケット作成/開始方法を表示
+- featureブランチでチケット無し: `ticket.sh restore`を提案
+- チケットとブランチが一致: 作業継続を促す
+- チケットとブランチが不一致: リンク修正方法を案内
+
 ### 作業完了
 ```bash
 ./ticket.sh close [--no-push] [--force|-f]

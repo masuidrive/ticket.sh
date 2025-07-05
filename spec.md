@@ -90,6 +90,26 @@ Creates empty ticket file, then edit to add title, description, and details
 ```
 Auto-restores from branch name when current-ticket.md is lost after clone/pull
 
+### Check Status
+```bash
+./ticket.sh check
+```
+Checks current ticket and branch status, displaying appropriate guidance messages
+
+**Checks performed:**
+- ticket.sh existence check
+- .ticket-config.yaml existence check
+- current-ticket.md existence check
+- Current Git branch check
+- Ticket-branch consistency check
+
+**Example messages:**
+- No config file: Suggests running `ticket.sh init`
+- Default branch without ticket: Shows how to create/start tickets
+- Feature branch without ticket: Suggests `ticket.sh restore`
+- Ticket matches branch: Encourages continuing work
+- Ticket-branch mismatch: Guides on fixing the link
+
 ### Complete Work
 ```bash
 ./ticket.sh close [--no-push] [--force|-f]
