@@ -1129,9 +1129,6 @@ cmd_selfupdate() {
 # Wait for parent process to exit
 sleep 1
 
-# Backup current version
-cp "$script_path" "${script_path}.backup"
-
 # Replace with new version
 mv "$temp_file" "$script_path"
 chmod +x "$script_path"
@@ -1139,7 +1136,6 @@ chmod +x "$script_path"
 # Show completion message
 echo ""
 echo "✅ Update completed successfully!"
-echo "Backup saved to: ${script_path}.backup"
 echo "Run '$script_path help' to see available commands."
 
 # Clean up
