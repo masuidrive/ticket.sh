@@ -4,7 +4,7 @@ tags: []
 description: "Remove backup file creation in ticket.sh selfupdate command"
 created_at: "2025-07-07T15:15:18Z"
 started_at: 2025-07-07T15:15:42Z # Do not modify manually
-closed_at: 2025-07-07T15:35:23Z # Do not modify manually
+closed_at: 2025-07-07T15:47:00Z # Do not modify manually
 ---
 
 # Remove Backup in Selfupdate Command
