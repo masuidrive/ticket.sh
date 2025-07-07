@@ -191,26 +191,16 @@ cmd_init() {
         default_branch_value="$current_branch"
     fi
     
-    # Check if already initialized
-    local already_initialized=true
-    [[ ! -f "$CONFIG_FILE" ]] && already_initialized=false
-    [[ ! -d "${DEFAULT_TICKETS_DIR}" ]] && already_initialized=false
+    # Check if critical components are missing to determine if this is a new initialization
+    local is_new_init=false
+    [[ ! -f "$CONFIG_FILE" ]] && is_new_init=true
+    [[ ! -d "${DEFAULT_TICKETS_DIR}" ]] && is_new_init=true
     
-    if [[ "$already_initialized" == "true" ]]; then
-        echo "Ticket system is already initialized!"
-        echo ""
-        echo "For help and usage information, run:"
-        echo "  ./ticket.sh help"
-        echo ""
-        echo "Quick reference:"
-        echo "  - Create a ticket: './ticket.sh new <slug>'"
-        echo "  - List tickets: './ticket.sh list'"
-        echo "  - Start work: './ticket.sh start <ticket-name>'"
-        echo "  - Complete: './ticket.sh close'"
-        return 0
+    if [[ "$is_new_init" == "false" ]]; then
+        echo "Ticket system is already initialized. Checking for missing components..."
+    else
+        echo "Initializing ticket system..."
     fi
-    
-    echo "Initializing ticket system..."
     
     # Create config file if it doesn't exist
     if [[ ! -f "$CONFIG_FILE" ]]; then
@@ -293,6 +283,47 @@ EOF
         echo "Tickets directory already exists: $tickets_dir/"
     fi
     
+    # Create tickets/README.md file
+    local readme_file="${tickets_dir}/README.md"
+    if [[ ! -f "$readme_file" ]]; then
+        cat > "$readme_file" << 'EOF'
+# Tickets Directory
+
+This directory contains all the ticket files for the project.
+
+## Important Guidelines
+
+**⚠️ Always use ticket.sh commands to manage tickets:**
+
+- **Create new tickets:** `./ticket.sh new <slug>`
+- **Start working on a ticket:** `./ticket.sh start <ticket-name>`
+- **Complete a ticket:** `./ticket.sh close`
+
+**❌ DO NOT manually merge feature branches to the default branch!**
+The `ticket.sh close` command handles merging and cleanup automatically.
+
+## Directory Structure
+
+- Active tickets: `*.md` files in this directory
+- Completed tickets: `done/` subdirectory (created automatically)
+
+## Getting Help
+
+For detailed usage instructions, run:
+```bash
+./ticket.sh help
+```
+
+For a list of all available commands:
+```bash
+./ticket.sh --help
+```
+EOF
+        echo "Created README file: $readme_file"
+    else
+        echo "README file already exists: $readme_file"
+    fi
+    
     # Update .gitignore
     if [[ ! -f .gitignore ]]; then
         echo "$CURRENT_TICKET_LINK" > .gitignore
@@ -307,12 +338,26 @@ EOF
     fi
     
     echo ""
-    echo "Ticket system initialized successfully!"
-    echo ""
-    echo "The setup is not yet complete. Please ensure that you and your users follow the steps below. It is your mission."
-    echo ""
-    echo "## Next Steps:"
-    echo ""
+    if [[ "$is_new_init" == "true" ]]; then
+        echo "Ticket system initialized successfully!"
+        echo ""
+        echo "The setup is not yet complete. Please ensure that you and your users follow the steps below. It is your mission."
+        echo ""
+        echo "## Next Steps:"
+    else
+        echo "Component check completed!"
+        echo ""
+        echo "For help and usage information, run:"
+        echo "  ./ticket.sh help"
+        echo ""
+        echo "Quick reference:"
+        echo "  - Create a ticket: './ticket.sh new <slug>'"
+        echo "  - List tickets: './ticket.sh list'"
+        echo "  - Start work: './ticket.sh start <ticket-name>'"
+        echo "  - Complete: './ticket.sh close'"
+        return 0
+    fi
+    
     echo "1. **Configure your ticket system** (optional):"
     echo "   Edit '.ticket-config.yml' to customize:"
     echo "   - tickets_dir: Where tickets are stored (default: \"tickets\")"
