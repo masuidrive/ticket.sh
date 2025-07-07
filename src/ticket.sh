@@ -1130,7 +1130,7 @@ cmd_selfupdate() {
 sleep 1
 
 # Replace with new version
-mv "$temp_file" "$script_path"
+mv "$temp_file" "$script_path" 2>/dev/null || cp "$temp_file" "$script_path"
 chmod +x "$script_path"
 
 # Show completion message

@@ -5,7 +5,7 @@
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250707.151739
+# Version: 20250707.154656
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -947,7 +947,7 @@ convert_utc_to_local() {
 
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250707.151739
+# Version: 20250707.154656
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -998,7 +998,7 @@ umask 0022         # Ensure created files have proper permissions
 
 
 # Global variables
-VERSION="20250707.151739"  # This will be replaced during build
+VERSION="20250707.154656"  # This will be replaced during build
 CONFIG_FILE=".ticket-config.yml"
 CURRENT_TICKET_LINK="current-ticket.md"
 
@@ -2059,7 +2059,7 @@ cmd_selfupdate() {
 sleep 1
 
 # Replace with new version
-mv "$temp_file" "$script_path"
+mv "$temp_file" "$script_path" 2>/dev/null || cp "$temp_file" "$script_path"
 chmod +x "$script_path"
 
 # Show completion message
