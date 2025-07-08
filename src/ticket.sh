@@ -1164,15 +1164,10 @@ EOF
     # Push to remote if auto_push
     if [[ "$auto_push" == "true" ]] && [[ "$no_push" == "false" ]]; then
         run_git_command "git push $repository $default_branch" || {
-            cat >&2 << EOF
-Error: Push failed
-Failed to push to '$repository'. Please:
-1. Check network connection
-2. Verify repository permissions
-3. Try manual push: git push $repository $default_branch
-4. Check if remote repository exists
-EOF
-            return 1
+            echo "Warning: Failed to push to remote repository" >&2
+            echo "Local ticket closing completed. Please push manually later:" >&2
+            echo "  git push $repository $default_branch" >&2
+            echo "" >&2
         }
     fi
     

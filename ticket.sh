@@ -5,7 +5,7 @@
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250708.014300
+# Version: 20250708.015935
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -947,7 +947,7 @@ convert_utc_to_local() {
 
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250708.014300
+# Version: 20250708.015935
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -998,7 +998,7 @@ umask 0022         # Ensure created files have proper permissions
 
 
 # Global variables
-VERSION="20250708.014300"  # This will be replaced during build
+VERSION="20250708.015935"  # This will be replaced during build
 CONFIG_FILE=".ticket-config.yml"
 CURRENT_TICKET_LINK="current-ticket.md"
 
@@ -2094,15 +2094,10 @@ EOF
     # Push to remote if auto_push
     if [[ "$auto_push" == "true" ]] && [[ "$no_push" == "false" ]]; then
         run_git_command "git push $repository $default_branch" || {
-            cat >&2 << EOF
-Error: Push failed
-Failed to push to '$repository'. Please:
-1. Check network connection
-2. Verify repository permissions
-3. Try manual push: git push $repository $default_branch
-4. Check if remote repository exists
-EOF
-            return 1
+            echo "Warning: Failed to push to remote repository" >&2
+            echo "Local ticket closing completed. Please push manually later:" >&2
+            echo "  git push $repository $default_branch" >&2
+            echo "" >&2
         }
     fi
     

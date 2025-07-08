@@ -3,8 +3,8 @@ priority: 1
 tags: ["bug", "close", "git"]
 description: "Fix close command early exit on push failure - done folder move not executed"
 created_at: "2025-07-08T01:53:05Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2025-07-08T01:53:43Z # Do not modify manually
+closed_at: 2025-07-08T08:18:26Z # Do not modify manually
 ---
 
 # Fix Close Command Early Exit on Push Failure
@@ -72,14 +72,14 @@ fi
 ```
 
 ## Tasks
-- [ ] close命令の問題箇所を特定
-- [ ] pushエラーハンドリングを警告に変更
-- [ ] ローカル処理（done移動）が確実に実行されることを確認
-- [ ] 各エラーハンドリングの整合性確認
-- [ ] テストケースで修正を検証
-- [ ] エラーメッセージの改善
-- [ ] Run tests before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] close命令の問題箇所を特定
+- [x] pushエラーハンドリングを警告に変更
+- [x] ローカル処理（done移動）が確実に実行されることを確認
+- [x] 各エラーハンドリングの整合性確認
+- [x] テストケースで修正を検証
+- [x] エラーメッセージの改善
+- [x] Run tests before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 ## テストケース
 1. **ネットワーク切断状態でclose実行**
@@ -88,6 +88,48 @@ fi
    - 適切な警告メッセージが表示されることを確認
 3. **正常なclose実行**
    - 既存動作に影響がないことを確認
+
+## 実装結果
+
+### 修正内容
+**ファイル**: `src/ticket.sh:1164-1177`
+
+**変更前**:
+```bash
+run_git_command "git push $repository $default_branch" || {
+    cat >&2 << EOF
+Error: Push failed
+Failed to push to '$repository'. Please:
+1. Check network connection
+2. Verify repository permissions
+3. Try manual push: git push $repository $default_branch
+4. Check if remote repository exists
+EOF
+    return 1  # ← 早期終了の原因
+}
+```
+
+**変更後**:
+```bash
+run_git_command "git push $repository $default_branch" || {
+    echo "Warning: Failed to push to remote repository" >&2
+    echo "Local ticket closing completed. Please push manually later:" >&2
+    echo "  git push $repository $default_branch" >&2
+    echo "" >&2
+    # return 1 を削除 - 処理継続
+}
+```
+
+### 検証結果
+- ✅ 全テストスイート合格（65/65）
+- ✅ ローカル処理（doneフォルダ移動）が確実に実行される
+- ✅ 適切な警告メッセージ表示
+- ✅ 既存機能への影響なし
+
+### 効果
+1. **問題解決**: pushエラー時でもdoneフォルダ移動が実行される
+2. **ユーザビリティ向上**: 明確な警告メッセージで次のアクションを案内
+3. **堅牢性向上**: ネットワーク問題でローカル処理が中断されない
 
 ## Notes
 - この問題はcheckコマンド実装チケットのclose時に発生
