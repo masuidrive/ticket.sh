@@ -3,8 +3,8 @@ priority: 2
 tags: []
 description: "checkコマンドの実装：現在のディレクトリとgitの状態をチェックし、チケットファイルとブランチの整合性を確認"
 created_at: "2025-07-08T01:02:29Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2025-07-08T01:11:34Z # Do not modify manually
+closed_at: 2025-07-08T01:47:16Z # Do not modify manually
 ---
 
 # checkコマンドの実装
@@ -43,16 +43,16 @@ checkコマンドを実装し、現在のディレクトリとgitの状態をチ
 
 ## Tasks
 - [x] checkコマンドの詳細仕様を定義
-- [ ] cmd_check関数を実装
-- [ ] メインコマンドディスパッチャーにcheck追加
-- [ ] ヘルプメッセージにcheck追加
-- [ ] 各種状態のメッセージテキストを作成
-- [ ] current-ticket.mdの整合性チェック機能実装
-- [ ] ブランチ名とチケットファイル名の照合機能実装
-- [ ] restore処理の統合
-- [ ] テスト実行と動作確認
-- [ ] Run tests before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] cmd_check関数を実装
+- [x] メインコマンドディスパッチャーにcheck追加
+- [x] ヘルプメッセージにcheck追加
+- [x] 各種状態のメッセージテキストを作成
+- [x] current-ticket.mdの整合性チェック機能実装
+- [x] ブランチ名とチケットファイル名の照合機能実装
+- [x] restore処理の統合
+- [x] テスト実行と動作確認
+- [x] Run tests before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 ### メッセージ案
 

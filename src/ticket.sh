@@ -116,6 +116,7 @@ Each ticket is a single Markdown file with YAML frontmatter metadata.
 - `./ticket.sh list [--status STATUS] [--count N]` - List tickets (default: todo + doing, count: 20)
 - `./ticket.sh start <ticket-name>` - Start working on ticket (creates or switches to feature branch)
 - `./ticket.sh restore` - Restore current-ticket.md symlink from branch name
+- `./ticket.sh check` - Check current directory and ticket/branch synchronization status
 - `./ticket.sh close [--no-push] [--force|-f] [--no-delete-remote]` - Complete current ticket (squash merge to default branch)
 - `./ticket.sh selfupdate` - Update ticket.sh to the latest version from GitHub
 - `./ticket.sh version` - Display version information
@@ -851,6 +852,152 @@ EOF
     echo "Restored current ticket link: $CURRENT_TICKET_LINK -> $ticket_file"
 }
 
+# Check current directory and ticket/branch synchronization status
+cmd_check() {
+    # Check prerequisites
+    check_git_repo || return 1
+    check_config || return 1
+    
+    # Load configuration
+    yaml_parse "$CONFIG_FILE"
+    local default_branch=$(yaml_get "default_branch" || echo "$DEFAULT_BRANCH")
+    local tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
+    local branch_prefix=$(yaml_get "branch_prefix" || echo "$DEFAULT_BRANCH_PREFIX")
+    
+    # Get current branch
+    local current_branch=$(get_current_branch)
+    
+    # Check if current-ticket.md exists
+    if [[ -L "$CURRENT_TICKET_LINK" && -f "$CURRENT_TICKET_LINK" ]]; then
+        # Case 1 & 2: current-ticket.md exists
+        local ticket_file=$(readlink "$CURRENT_TICKET_LINK")
+        local ticket_name=$(basename "$ticket_file" .md)
+        local expected_branch="${branch_prefix}${ticket_name}"
+        
+        if [[ "$current_branch" == "$expected_branch" ]]; then
+            # Case 1: current-ticket.md exists and matches branch
+            echo "✓ Current ticket is active and synchronized"
+            echo "Working on: $ticket_name"
+            echo "Branch: $current_branch"
+            echo "Continue working on this ticket."
+        else
+            # Case 2: current-ticket.md exists but doesn't match branch
+            echo "✗ Ticket file and branch mismatch detected"
+            echo "Current ticket file: $ticket_file"
+            echo "Current branch: $current_branch"
+            echo "Please run 'ticket.sh restore' to fix synchronization or switch to the correct branch."
+            return 1
+        fi
+    else
+        # Cases 3-6: current-ticket.md doesn't exist
+        if [[ "$current_branch" == "$default_branch" ]]; then
+            # Case 3: On default branch, no current ticket
+            echo "✓ No active ticket (on default branch)"
+            echo "You can view available tickets with: ticket.sh list"
+            echo "Create a new ticket with: ticket.sh new <name>"
+            echo "Start working on a ticket with: ticket.sh start <ticket-name>"
+        elif [[ "$current_branch" =~ ^${branch_prefix} ]]; then
+            # Cases 4-5: On feature branch
+            local ticket_name="${current_branch#"$branch_prefix"}"
+            local ticket_file="${tickets_dir}/${ticket_name}.md"
+            
+            # Check if ticket file exists in regular location or done folder
+            if [[ -f "$ticket_file" ]]; then
+                # Extract YAML frontmatter and check started_at
+                local yaml_content=$(extract_yaml_frontmatter "$ticket_file" 2>/dev/null)
+                local temp_yaml_file=$(mktemp)
+                echo "$yaml_content" > "$temp_yaml_file"
+                
+                # Parse the YAML and check started_at
+                yaml_parse "$temp_yaml_file"
+                local started_at=$(yaml_get "started_at")
+                rm -f "$temp_yaml_file"
+                
+                if [[ "$started_at" == "null" || -z "$started_at" ]]; then
+                    # started_at is null, ticket not started
+                    echo "✗ No ticket found for current feature branch"
+                    echo "Current branch: $current_branch"
+                    echo "Expected ticket file: $ticket_file"
+                    echo ""
+                    echo "Possible solutions:"
+                    echo "1. Create new ticket: ticket.sh new <name>"
+                    echo "2. Check if ticket file exists in another branch (git branch -a)"
+                    echo "3. Switch to default branch: git checkout $default_branch"
+                    return 1
+                else
+                    # Case 4: Ticket exists and started_at is not null, restore it
+                    rm -f "$CURRENT_TICKET_LINK"
+                    if ln -s "$ticket_file" "$CURRENT_TICKET_LINK"; then
+                        echo "✓ Found matching ticket for current branch"
+                        echo "Restored ticket link: $ticket_name"
+                        echo "Continue working on this ticket."
+                    else
+                        echo "✗ Failed to restore ticket link"
+                        echo "Permission denied creating symlink."
+                        return 1
+                    fi
+                fi
+            else
+                # Check in done folder
+                ticket_file="${tickets_dir}/done/${ticket_name}.md"
+                if [[ -f "$ticket_file" ]]; then
+                    # Extract YAML frontmatter and check started_at
+                    local yaml_content=$(extract_yaml_frontmatter "$ticket_file" 2>/dev/null)
+                    local temp_yaml_file=$(mktemp)
+                    echo "$yaml_content" > "$temp_yaml_file"
+                    
+                    # Parse the YAML and check started_at
+                    yaml_parse "$temp_yaml_file"
+                    local started_at=$(yaml_get "started_at")
+                    rm -f "$temp_yaml_file"
+                    
+                    if [[ "$started_at" == "null" || -z "$started_at" ]]; then
+                        # started_at is null, ticket not started
+                        echo "✗ No ticket found for current feature branch"
+                        echo "Current branch: $current_branch"
+                        echo "Expected ticket file: $ticket_file"
+                        echo ""
+                        echo "Possible solutions:"
+                        echo "1. Create new ticket: ticket.sh new <name>"
+                        echo "2. Check if ticket file exists in another branch (git branch -a)"
+                        echo "3. Switch to default branch: git checkout $default_branch"
+                        return 1
+                    else
+                        # Ticket exists in done folder and started_at is not null, restore it
+                        rm -f "$CURRENT_TICKET_LINK"
+                        if ln -s "$ticket_file" "$CURRENT_TICKET_LINK"; then
+                            echo "✓ Found matching ticket for current branch"
+                            echo "Restored ticket link: $ticket_name"
+                            echo "Continue working on this ticket."
+                        else
+                            echo "✗ Failed to restore ticket link"
+                            echo "Permission denied creating symlink."
+                            return 1
+                        fi
+                    fi
+                else
+                    # Case 5: No ticket file found for feature branch
+                    echo "✗ No ticket found for current feature branch"
+                    echo "Current branch: $current_branch"
+                    echo "Expected ticket file: ${tickets_dir}/${ticket_name}.md"
+                    echo ""
+                    echo "Possible solutions:"
+                    echo "1. Create new ticket: ticket.sh new <name>"
+                    echo "2. Check if ticket file exists in another branch (git branch -a)"
+                    echo "3. Switch to default branch: git checkout $default_branch"
+                    return 1
+                fi
+            fi
+        else
+            # Case 6: On unknown branch
+            echo "⚠ You are on an unknown branch"
+            echo "Current branch: $current_branch"
+            echo "Recommended: Switch to default branch with 'git checkout $default_branch'"
+            echo "Then use 'ticket.sh list' to see available tickets."
+        fi
+    fi
+}
+
 # Close current ticket
 cmd_close() {
     local no_push=false
@@ -1180,6 +1327,9 @@ main() {
             ;;
         restore)
             cmd_restore
+            ;;
+        check)
+            cmd_check
             ;;
         close)
             shift
