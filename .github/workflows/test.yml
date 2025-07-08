@@ -65,7 +65,7 @@ jobs:
     - name: Test yaml-sh
       run: |
         cd yaml-sh
-        ./test.sh
+        bash ./test.sh
         
   shellcheck:
     runs-on: ubuntu-latest
