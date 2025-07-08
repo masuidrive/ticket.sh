@@ -67,7 +67,7 @@ run_test() {
 
 # Build ticket.sh first
 echo -e "${BLUE}Building ticket.sh...${NC}"
-if (cd "$ROOT_DIR" && ./build.sh > /dev/null 2>&1); then
+if (cd "$ROOT_DIR" && bash ./build.sh > /dev/null 2>&1); then
     echo -e "  ${GREEN}Build successful${NC}"
 else
     echo -e "  ${RED}Build failed${NC}"
@@ -87,7 +87,7 @@ for test_file in "$SCRIPT_DIR"/test-*.sh; do
     fi
     
     if [[ -f "$test_file" ]]; then
-        run_test "$(basename "${test_file%.sh}")" "$test_file"
+        run_test "$(basename "${test_file%.sh}")" "bash $test_file"
     fi
 done
 
@@ -96,7 +96,7 @@ echo -e "${YELLOW}=== yaml-sh Tests ===${NC}"
 echo
 
 if [[ -f "$ROOT_DIR/yaml-sh/test.sh" ]]; then
-    run_test "yaml-sh parser" "cd $ROOT_DIR/yaml-sh && ./test.sh"
+    run_test "yaml-sh parser" "cd $ROOT_DIR/yaml-sh && bash ./test.sh"
 fi
 
 # Summary

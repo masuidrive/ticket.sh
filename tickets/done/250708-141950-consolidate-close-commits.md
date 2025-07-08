@@ -3,8 +3,8 @@ priority: 2
 tags: ["enhancement", "git", "close"]
 description: "Consolidate ticket close commits - merge 'Move completed ticket to done folder' with main ticket commit"
 created_at: "2025-07-08T14:19:50Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2025-07-08T14:25:52Z # Do not modify manually
+closed_at: 2025-07-08T14:29:37Z # Do not modify manually
 ---
 
 # Consolidate Close Commits

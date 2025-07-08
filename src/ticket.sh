@@ -1158,20 +1158,7 @@ EOF
     # Squash merge
     run_git_command "git merge --squash $current_branch" || return 1
     
-    # Commit with ticket content
-    echo -e "$commit_msg" | run_git_command "git commit -F -" || return 1
-    
-    # Push to remote if auto_push
-    if [[ "$auto_push" == "true" ]] && [[ "$no_push" == "false" ]]; then
-        run_git_command "git push $repository $default_branch" || {
-            echo "Warning: Failed to push to remote repository" >&2
-            echo "Local ticket closing completed. Please push manually later:" >&2
-            echo "  git push $repository $default_branch" >&2
-            echo "" >&2
-        }
-    fi
-    
-    # Move ticket to done folder
+    # Move ticket to done folder before committing
     local tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
     local done_dir="${tickets_dir}/done"
     
@@ -1188,18 +1175,19 @@ EOF
         run_git_command "git mv \"$ticket_file\" \"$new_ticket_path\"" || {
             echo "Warning: Failed to move ticket to done folder" >&2
         }
-        
-        # Commit the move
-        run_git_command "git commit -m \"Move completed ticket to done folder\"" || {
-            echo "Warning: Failed to commit ticket move" >&2
+    fi
+    
+    # Commit with ticket content and done folder move together
+    echo -e "$commit_msg" | run_git_command "git commit -F -" || return 1
+    
+    # Push to remote if auto_push
+    if [[ "$auto_push" == "true" ]] && [[ "$no_push" == "false" ]]; then
+        run_git_command "git push $repository $default_branch" || {
+            echo "Warning: Failed to push to remote repository" >&2
+            echo "Local ticket closing completed. Please push manually later:" >&2
+            echo "  git push $repository $default_branch" >&2
+            echo "" >&2
         }
-        
-        # Push the move if auto_push
-        if [[ "$auto_push" == "true" ]] && [[ "$no_push" == "false" ]]; then
-            run_git_command "git push $repository $default_branch" || {
-                echo "Warning: Failed to push ticket move to remote" >&2
-            }
-        fi
     fi
     
     # Delete remote branch if configured
