@@ -1253,6 +1253,11 @@ EOF
         return 1
     }
     
+    # Get ticket name and full content BEFORE switching branches
+    # This ensures we capture the updated content from the feature branch
+    local ticket_name=$(basename "$ticket_file" .md)
+    local ticket_content=$(cat "$ticket_file")
+    
     # Push feature branch if auto_push
     if [[ "$auto_push" == "true" ]] && [[ "$no_push" == "false" ]]; then
         run_git_command "git push $repository $current_branch" || {
@@ -1267,10 +1272,6 @@ EOF
         echo "Please manually switch to '$default_branch' and run close again" >&2
         return 1
     }
-    
-    # Get ticket name and full content
-    local ticket_name=$(basename "$ticket_file" .md)
-    local ticket_content=$(cat "$ticket_file")
     
     # Create commit message
     local commit_msg="[${ticket_name}] ${description}"
