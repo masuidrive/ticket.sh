@@ -1,6 +1,15 @@
 # ticket.sh - Git-Based Ticket Management System
 
-A lightweight ticket management system that uses Git and markdown files. Perfect for solo developers and AI pair programming.
+A lightweight, robust ticket management system that uses Git branches and markdown files. Perfect for solo developers, small teams, and AI pair programming.
+
+## Key Features
+- 🎯 **Simple workflow**: Create, start, work, close
+- 📝 **Markdown tickets**: Rich formatting with YAML frontmatter
+- 🌿 **Git integration**: Automatic branch management per ticket
+- 📁 **Smart organization**: Auto-organized done folder, timezone-aware timestamps
+- 🔧 **Zero dependencies**: Pure Bash + Git, works everywhere
+- 🚀 **AI-friendly**: Designed for seamless AI assistant collaboration
+- 🛡️ **Robust**: UTF-8 support, error recovery, conflict resolution
 
 **Language versions**: [English](README.md) | [日本語](README.ja.md)
 
@@ -47,14 +56,54 @@ cp ticket.sh /usr/local/bin/
 3. **Start work**: `./ticket.sh start <ticket-name>`
 4. **Close ticket**: `./ticket.sh close`
 
+## Usage Examples
+
+### Basic Workflow
+```bash
+# Check current state
+./ticket.sh check
+
+# List tickets by status  
+./ticket.sh list --status todo
+./ticket.sh list --status done --count 5
+
+# Force close without prompts
+./ticket.sh close --force
+
+# Update to latest version
+./ticket.sh selfupdate
+```
+
+### Working with Done Tickets
+```bash
+# View recent completions (sorted newest first)
+./ticket.sh list --status done
+
+# Restore a completed ticket for reference
+./ticket.sh restore 241229-123456-old-feature
+```
+
 ## Commands
 
-- `init` - Initialize ticket system
+### Core Commands
+- `init` - Initialize ticket system (idempotent, safe to re-run)
 - `new <slug>` - Create new ticket
-- `list [--status todo|doing|done]` - List tickets
+- `list [--status todo|doing|done] [--count N]` - List tickets
 - `start <ticket> [--no-push]` - Start working on ticket
 - `close [--no-push] [--force] [--no-delete-remote]` - Complete ticket
 - `restore` - Restore current-ticket.md symlink
+
+### Utility Commands
+- `check` - Diagnose current state and provide guidance
+- `version` / `--version` - Show version information
+- `selfupdate` - Update to latest release from GitHub
+
+### List Command Features
+- **Status filtering**: `--status todo|doing|done` to filter by ticket status
+- **Count limiting**: `--count N` to limit number of results displayed
+- **Done tickets**: Sorted by completion date (newest first)
+- **Timezone display**: Completion times shown in local timezone
+- **Done folder**: Completed tickets automatically organized in `tickets/done/`
 
 ## Configuration
 
@@ -80,6 +129,29 @@ start_success_message: |
 close_success_message: |
   # Empty by default
 ```
+
+## Advanced Features
+
+### Smart Branch Handling
+- **Existing branches**: Automatically checkout and restore instead of failing
+- **Clean branches**: Create new branches from default branch when no changes exist
+- **Conflict detection**: Provides guidance for handling merge conflicts during close
+
+### Automatic Organization
+- **Done folder**: Completed tickets moved to `tickets/done/` automatically
+- **Remote cleanup**: Optional automatic deletion of remote feature branches
+- **Git history**: Prevents accidental commits of `current-ticket.md`
+
+### Error Recovery
+- **Check command**: Diagnose issues and get guidance on next steps
+- **Restore command**: Rebuild symlinks and recover from interrupted operations  
+- **Conflict resolution**: Resume operations after resolving merge conflicts
+
+### Robustness Features
+- **UTF-8 support**: Full Unicode support for all content and filenames
+- **Permission resilience**: Graceful handling of file system permission issues
+- **Network tolerance**: Operations continue locally even if remote push fails
+- **Cross-platform**: Works on macOS, Linux, and other Unix-like systems
 
 ## Requirements
 
