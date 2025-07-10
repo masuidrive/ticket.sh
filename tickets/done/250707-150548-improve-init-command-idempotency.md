@@ -3,8 +3,8 @@ priority: 2
 tags: []
 description: "Improve init command to be idempotent - check and create only missing components"
 created_at: "2025-07-07T15:05:48Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2025-07-10T08:51:11Z # Do not modify manually
+closed_at: 2025-07-10T08:51:43Z # Do not modify manually
 ---
 
 # Improve Init Command Idempotency
