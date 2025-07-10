@@ -3,8 +3,8 @@ priority: 2
 tags: []
 description: "Make command name in messages dynamic based on actual invocation method"
 created_at: "2025-07-10T01:59:11Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2025-07-10T03:39:15Z # Do not modify manually
+closed_at: 2025-07-10T08:45:15Z # Do not modify manually
 ---
 
 # Ticket Overview
@@ -46,14 +46,14 @@ Detect the actual invocation method and use it in all messages:
 
 ## Tasks
 
-- [ ] Analyze current hardcoded command references in the script
-- [ ] Implement command detection logic using $0 and process information
-- [ ] Create utility function to get display command name (handle bash prefix detection)
-- [ ] Update all help messages to use dynamic command name
-- [ ] Update all error messages to use dynamic command name
-- [ ] Test with different invocation methods (./ticket.sh, bash ./ticket.sh, etc.)
-- [ ] Run tests before closing and pass all tests (No exceptions)
-- [ ] Get developer approval before closing
+- [x] Analyze current hardcoded command references in the script
+- [x] Implement command detection logic using $0 and process information
+- [x] Create utility function to get display command name (handle bash prefix detection)
+- [x] Update all help messages to use dynamic command name
+- [x] Update all error messages to use dynamic command name
+- [x] Test with different invocation methods (./ticket.sh, bash ./ticket.sh, etc.)
+- [x] Run tests before closing and pass all tests (No exceptions)
+- [x] Get developer approval before closing
 
 
 ## Notes

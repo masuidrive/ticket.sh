@@ -962,10 +962,10 @@ convert_utc_to_local() {
 # https://github.com/masuidrive/ticket.sh
 #
 # Quick Start:
-#   ./ticket.sh init          # Initialize in your project
-#   ./ticket.sh new my-task   # Create a new ticket
-#   ./ticket.sh start <name>  # Start working on a ticket
-#   ./ticket.sh close         # Complete and merge ticket
+#   $SCRIPT_COMMAND init          # Initialize in your project
+#   $SCRIPT_COMMAND new my-task   # Create a new ticket
+#   $SCRIPT_COMMAND start <name>  # Start working on a ticket
+#   $SCRIPT_COMMAND close         # Complete and merge ticket
 
 set -euo pipefail
 
@@ -995,6 +995,47 @@ unset POSIXLY_CORRECT  # We rely on bash-specific features
 umask 0022         # Ensure created files have proper permissions
 
 # Get the directory where this script is located
+
+# Function to detect how the script was invoked
+get_script_command() {
+    local script_path="$0"
+    
+    # Get current process command line
+    local current_args=""
+    if [[ -r /proc/self/cmdline ]]; then
+        # Linux: use /proc/self/cmdline
+        current_args=$(tr '\0' ' ' < /proc/self/cmdline 2>/dev/null || echo "")
+    elif command -v ps >/dev/null 2>&1; then
+        # macOS/BSD: use ps command
+        current_args=$(ps -p $$ -o args= 2>/dev/null || echo "")
+    fi
+    
+    # Check if invoked via shell (bash, sh, zsh, etc.)
+    local shell_pattern='^(bash|sh|dash|zsh|fish|ksh|/.*/(bash|sh|dash|zsh|fish|ksh))[[:space:]]+'
+    
+    if [[ "$current_args" =~ $shell_pattern ]]; then
+        # Extract shell command
+        local shell_cmd=$(echo "$current_args" | sed -E 's/^([^[:space:]]+).*/\1/')
+        
+        # Check if script path is in the command line
+        local script_basename=$(basename "$script_path")
+        if [[ "$current_args" == *"$script_path"* ]] || [[ "$current_args" == *"$script_basename"* ]]; then
+            echo "$shell_cmd $script_path"
+        else
+            echo "bash $script_path"
+        fi
+    else
+        # Direct execution: check if script is executable and use as-is
+        if [[ -x "$script_path" ]]; then
+            echo "$script_path"
+        else
+            echo "bash $script_path"
+        fi
+    fi
+}
+
+# Detect and store the command used to invoke this script
+SCRIPT_COMMAND=$(get_script_command)
 
 
 # Global variables
@@ -1058,7 +1099,7 @@ show_usage() {
     echo "# Ticket Management System for Coding Agents"
     echo "Version: $VERSION"
     echo ""
-    cat << 'EOF'
+    cat << EOF
 ## Overview
 
 This is a self-contained ticket management system using shell script + files + Git.
@@ -1066,39 +1107,39 @@ Each ticket is a single Markdown file with YAML frontmatter metadata.
 
 ## Usage
 
-- `./ticket.sh init` - Initialize system (create config, directories, .gitignore)
-- `./ticket.sh new <slug>` - Create new ticket file (slug: lowercase, numbers, hyphens only)
-- `./ticket.sh list [--status STATUS] [--count N]` - List tickets (default: todo + doing, count: 20)
-- `./ticket.sh start <ticket-name>` - Start working on ticket (creates or switches to feature branch)
-- `./ticket.sh restore` - Restore current-ticket.md symlink from branch name
-- `./ticket.sh check` - Check current directory and ticket/branch synchronization status
-- `./ticket.sh close [--no-push] [--force|-f] [--no-delete-remote]` - Complete current ticket (squash merge to default branch)
-- `./ticket.sh selfupdate` - Update ticket.sh to the latest version from GitHub
-- `./ticket.sh version` - Display version information
-- `./ticket.sh prompt` - Display prompt instructions for AI coding assistants
+- \`$SCRIPT_COMMAND init\` - Initialize system (create config, directories, .gitignore)
+- \`$SCRIPT_COMMAND new <slug>\` - Create new ticket file (slug: lowercase, numbers, hyphens only)
+- \`$SCRIPT_COMMAND list [--status STATUS] [--count N]\` - List tickets (default: todo + doing, count: 20)
+- \`$SCRIPT_COMMAND start <ticket-name>\` - Start working on ticket (creates or switches to feature branch)
+- \`$SCRIPT_COMMAND restore\` - Restore current-ticket.md symlink from branch name
+- \`$SCRIPT_COMMAND check\` - Check current directory and ticket/branch synchronization status
+- \`$SCRIPT_COMMAND close [--no-push] [--force|-f] [--no-delete-remote]\` - Complete current ticket (squash merge to default branch)
+- \`$SCRIPT_COMMAND selfupdate\` - Update ticket.sh to the latest version from GitHub
+- \`$SCRIPT_COMMAND version\` - Display version information
+- \`$SCRIPT_COMMAND prompt\` - Display prompt instructions for AI coding assistants
 
 ## Ticket Naming
 
-- Format: `YYMMDD-hhmmss-<slug>`
-- Example: `241225-143502-implement-user-auth`
+- Format: \`YYMMDD-hhmmss-<slug>\`
+- Example: \`241225-143502-implement-user-auth\`
 - Generated automatically when creating tickets
 
 ## Ticket Status
 
-- `todo`: not started (started_at: null)
-- `doing`: in progress (started_at set, closed_at: null)
-- `done`: completed (closed_at set)
+- \`todo\`: not started (started_at: null)
+- \`doing\`: in progress (started_at set, closed_at: null)
+- \`done\`: completed (closed_at set)
 
 ## Configuration
 
-- Config file: `.ticket-config.yml` (in project root)
-- Initialize with: `./ticket.sh init`
+- Config file: \`.ticket-config.yml\` (in project root)
+- Initialize with: \`$SCRIPT_COMMAND init\`
 - Edit to customize directories, branches, and templates
 
 ## Push Control
 
-- Set `auto_push: false` in config to disable automatic pushing for close command
-- Use `--no-push` flag with close command to skip pushing
+- Set \`auto_push: false\` in config to disable automatic pushing for close command
+- Use \`--no-push\` flag with close command to skip pushing
 - Feature branches are always created locally (no auto-push on start)
 - Git commands and outputs are displayed for transparency
 
@@ -1106,33 +1147,33 @@ Each ticket is a single Markdown file with YAML frontmatter metadata.
 
 ### Create New Ticket
 
-1. Create ticket: `./ticket.sh new feature-name`
+1. Create ticket: \`$SCRIPT_COMMAND new feature-name\`
 2. Edit ticket content and description in the generated file
 
 ### Start Work
 
-1. Check available tickets: `./ticket.sh list` or browse tickets directory
-2. Start work: `./ticket.sh start 241225-143502-feature-name`
-3. Develop on feature branch (`current-ticket.md` shows active ticket)
+1. Check available tickets: \`$SCRIPT_COMMAND list\` or browse tickets directory
+2. Start work: \`$SCRIPT_COMMAND start 241225-143502-feature-name\`
+3. Develop on feature branch (\`current-ticket.md\` shows active ticket)
 
 ### Closing
 
 1. Before closing:
    - Review ticket content and description
-   - Check all tasks in checklist are completed (mark with `[x]`)
+   - Check all tasks in checklist are completed (mark with \`[x]\`)
    - Get user approve before proceeding
-2. Complete: `./ticket.sh close`
+2. Complete: \`$SCRIPT_COMMAND close\`
 
 **Note**: If specific workflow instructions are provided elsewhere (e.g., in project documentation or CLAUDE.md), those take precedence over this general workflow.
 
 ## Troubleshooting
 
-- Run from project root (where `.git` and `.ticket-config.yml` exist)
-- Use `restore` if `current-ticket.md` is missing after clone/pull
-- Check `list` to see available tickets and their status
+- Run from project root (where \`.git\` and \`.ticket-config.yml\` exist)
+- Use \`restore\` if \`current-ticket.md\` is missing after clone/pull
+- Check \`list\` to see available tickets and their status
 - Ensure Git working directory is clean before start/close
 
-**Note**: `current-ticket.md` is git-ignored and needs `restore` after clone/pull.
+**Note**: \`current-ticket.md\` is git-ignored and needs \`restore\` after clone/pull.
 EOF
 }
 
@@ -1243,7 +1284,7 @@ EOF
     # Create tickets/README.md file
     local readme_file="${tickets_dir}/README.md"
     if [[ ! -f "$readme_file" ]]; then
-        cat > "$readme_file" << 'EOF'
+        cat > "$readme_file" << EOF
 # Tickets Directory
 
 This directory contains all the ticket files for the project.
@@ -1252,28 +1293,28 @@ This directory contains all the ticket files for the project.
 
 **⚠️ Always use ticket.sh commands to manage tickets:**
 
-- **Create new tickets:** `./ticket.sh new <slug>`
-- **Start working on a ticket:** `./ticket.sh start <ticket-name>`
-- **Complete a ticket:** `./ticket.sh close`
+- **Create new tickets:** \`$SCRIPT_COMMAND new <slug>\`
+- **Start working on a ticket:** \`$SCRIPT_COMMAND start <ticket-name>\`
+- **Complete a ticket:** \`$SCRIPT_COMMAND close\`
 
 **❌ DO NOT manually merge feature branches to the default branch!**
-The `ticket.sh close` command handles merging and cleanup automatically.
+The \`$SCRIPT_COMMAND close\` command handles merging and cleanup automatically.
 
 ## Directory Structure
 
-- Active tickets: `*.md` files in this directory
-- Completed tickets: `done/` subdirectory (created automatically)
+- Active tickets: \`*.md\` files in this directory
+- Completed tickets: \`done/\` subdirectory (created automatically)
 
 ## Getting Help
 
 For detailed usage instructions, run:
 ```bash
-./ticket.sh help
+$SCRIPT_COMMAND help
 ```
 
 For a list of all available commands:
 ```bash
-./ticket.sh --help
+$SCRIPT_COMMAND --help
 ```
 EOF
         echo "Created README file: $readme_file"
@@ -1305,13 +1346,13 @@ EOF
         echo "Component check completed!"
         echo ""
         echo "For help and usage information, run:"
-        echo "  ./ticket.sh help"
+        echo "  $SCRIPT_COMMAND help"
         echo ""
         echo "Quick reference:"
-        echo "  - Create a ticket: './ticket.sh new <slug>'"
-        echo "  - List tickets: './ticket.sh list'"
-        echo "  - Start work: './ticket.sh start <ticket-name>'"
-        echo "  - Complete: './ticket.sh close'"
+        echo "  - Create a ticket: '$SCRIPT_COMMAND new <slug>'"
+        echo "  - List tickets: '$SCRIPT_COMMAND list'"
+        echo "  - Start work: '$SCRIPT_COMMAND start <ticket-name>'"
+        echo "  - Complete: '$SCRIPT_COMMAND close'"
         return 0
     fi
     
@@ -1331,15 +1372,49 @@ EOF
     echo "   To save to CLAUDE.md (or your custom prompt file):"
     echo "   \`$SCRIPT_COMMAND prompt >> CLAUDE.md\`"
     echo ""
+    echo "Use \`$SCRIPT_COMMAND\` for ticket management."
+    echo ""
+    echo "## Working with current-ticket.md"
+    echo ""
+    echo "### If current-ticket.md exists in project root"
+    echo "- This file is your work instruction - follow its contents"
+    echo "- When receiving additional instructions from users, document them in this file before proceeding"
+    echo "- Continue working on the active ticket"
+    echo ""
+    echo "### If current-ticket.md does not exist in project root"
+    echo "- When receiving user requests, first ask whether to create a new ticket"
+    echo "- Do not start work without confirming ticket creation"
+    echo "- Even small requests should be tracked through the ticket system"
+    echo ""
+    echo "## Create New Ticket"
+    echo ""
+    echo "1. Create ticket: \`$SCRIPT_COMMAND new feature-name\`"
+    echo "2. Edit ticket content and description in the generated file"
+    echo ""
+    echo "## Start Working on Ticket"
+    echo ""
+    echo "1. Check available tickets: \`$SCRIPT_COMMAND list\` or browse tickets directory"
+    echo "2. Start work: \`$SCRIPT_COMMAND start 241225-143502-feature-name\`"
+    echo "3. Develop on feature branch (\`current-ticket.md\` shows active ticket)"
+    echo ""
+    echo "## Closing Tickets"
+    echo ""
+    echo "1. Before closing:"
+    echo "   - Review \`current-ticket.md\` content and description"
+    echo "   - Check all tasks in checklist are completed (mark with \`[x]\`)"
+    echo "   - Get user approval before proceeding"
+    echo "2. Complete: \`$SCRIPT_COMMAND close\`"
+    echo "\`\`\`"
+    echo ""
     echo "   **Note**: These instructions are critical for proper ticket workflow!"
     echo ""
     echo "3. **Quick start**:"
-    echo "   - Create a ticket: \`./ticket.sh new <slug>\`"
-    echo "   - List tickets: \`./ticket.sh list\`"
-    echo "   - Start work: \`./ticket.sh start <ticket-name>\`"
-    echo "   - Complete: \`./ticket.sh close\`"
+    echo "   - Create a ticket: \`$SCRIPT_COMMAND new <slug>\`"
+    echo "   - List tickets: \`$SCRIPT_COMMAND list\`"
+    echo "   - Start work: \`$SCRIPT_COMMAND start <ticket-name>\`"
+    echo "   - Complete: \`$SCRIPT_COMMAND close\`"
     echo ""
-    echo "For detailed help: \`./ticket.sh help\`"
+    echo "For detailed help: \`$SCRIPT_COMMAND help\`"
 }
 
 # Create new ticket
@@ -1460,7 +1535,7 @@ EOF
         cat >&2 << EOF
 Error: Tickets directory not found
 Directory '$tickets_dir' does not exist. Please:
-1. Run 'ticket.sh init' to create required directories, or
+1. Run '$SCRIPT_COMMAND init' to create required directories, or
 2. Check if you're in the correct project directory, or
 3. Verify tickets_dir setting in .ticket-config.yml
 EOF
@@ -1633,8 +1708,8 @@ EOF
 Error: Ticket not found
 Ticket '$ticket_file' does not exist. Please:
 1. Check the ticket name spelling
-2. Run 'ticket.sh list' to see available tickets
-3. Use 'ticket.sh new <slug>' to create a new ticket
+2. Run '$SCRIPT_COMMAND list' to see available tickets
+3. Use '$SCRIPT_COMMAND new <slug>' to create a new ticket
 EOF
         return 1
     fi
@@ -1699,7 +1774,7 @@ Error: Ticket already started but branch is missing
 Ticket has been started (started_at is set) but the branch doesn't exist. Please:
 1. Reset the ticket by manually editing started_at to null
 2. Or create the branch manually: git checkout -b $branch_name
-3. Then use 'ticket.sh restore' to restore the link
+3. Then use '$SCRIPT_COMMAND restore' to restore the link
 EOF
         return 1
     fi
@@ -1746,7 +1821,7 @@ cmd_restore() {
 Error: Not on a feature branch
 Current branch '$current_branch' is not a feature branch. Please:
 1. Switch to a feature branch (${branch_prefix}*)
-2. Or start a new ticket: ticket.sh start <ticket-name>
+2. Or start a new ticket: $SCRIPT_COMMAND start <ticket-name>
 3. Feature branches should start with '$branch_prefix'
 EOF
         return 1
@@ -1821,7 +1896,7 @@ cmd_check() {
             echo "✗ Ticket file and branch mismatch detected"
             echo "Current ticket file: $ticket_file"
             echo "Current branch: $current_branch"
-            echo "Please run 'ticket.sh restore' to fix synchronization or switch to the correct branch."
+            echo "Please run '$SCRIPT_COMMAND restore' to fix synchronization or switch to the correct branch."
             return 1
         fi
     else
@@ -1829,9 +1904,9 @@ cmd_check() {
         if [[ "$current_branch" == "$default_branch" ]]; then
             # Case 3: On default branch, no current ticket
             echo "✓ No active ticket (on default branch)"
-            echo "You can view available tickets with: ticket.sh list"
-            echo "Create a new ticket with: ticket.sh new <name>"
-            echo "Start working on a ticket with: ticket.sh start <ticket-name>"
+            echo "You can view available tickets with: $SCRIPT_COMMAND list"
+            echo "Create a new ticket with: $SCRIPT_COMMAND new <name>"
+            echo "Start working on a ticket with: $SCRIPT_COMMAND start <ticket-name>"
         elif [[ "$current_branch" =~ ^${branch_prefix} ]]; then
             # Cases 4-5: On feature branch
             local ticket_name="${current_branch#"$branch_prefix"}"
@@ -1856,7 +1931,7 @@ cmd_check() {
                     echo "Expected ticket file: $ticket_file"
                     echo ""
                     echo "Possible solutions:"
-                    echo "1. Create new ticket: ticket.sh new <name>"
+                    echo "1. Create new ticket: $SCRIPT_COMMAND new <name>"
                     echo "2. Check if ticket file exists in another branch (git branch -a)"
                     echo "3. Switch to default branch: git checkout $default_branch"
                     return 1
@@ -1894,7 +1969,7 @@ cmd_check() {
                         echo "Expected ticket file: $ticket_file"
                         echo ""
                         echo "Possible solutions:"
-                        echo "1. Create new ticket: ticket.sh new <name>"
+                        echo "1. Create new ticket: $SCRIPT_COMMAND new <name>"
                         echo "2. Check if ticket file exists in another branch (git branch -a)"
                         echo "3. Switch to default branch: git checkout $default_branch"
                         return 1
@@ -1918,7 +1993,7 @@ cmd_check() {
                     echo "Expected ticket file: ${tickets_dir}/${ticket_name}.md"
                     echo ""
                     echo "Possible solutions:"
-                    echo "1. Create new ticket: ticket.sh new <name>"
+                    echo "1. Create new ticket: $SCRIPT_COMMAND new <name>"
                     echo "2. Check if ticket file exists in another branch (git branch -a)"
                     echo "3. Switch to default branch: git checkout $default_branch"
                     return 1
@@ -1929,7 +2004,7 @@ cmd_check() {
             echo "⚠ You are on an unknown branch"
             echo "Current branch: $current_branch"
             echo "Recommended: Switch to default branch with 'git checkout $default_branch'"
-            echo "Then use 'ticket.sh list' to see available tickets."
+            echo "Then use '$SCRIPT_COMMAND list' to see available tickets."
         fi
     fi
 }
@@ -1957,7 +2032,7 @@ cmd_close() {
                 ;;
             *)
                 echo "Error: Unknown option: $1" >&2
-                echo "Usage: ticket.sh close [--no-push] [--force|-f] [--no-delete-remote]" >&2
+                echo "Usage: $SCRIPT_COMMAND close [--no-push] [--force|-f] [--no-delete-remote]" >&2
                 return 1
                 ;;
         esac
@@ -1973,7 +2048,7 @@ cmd_close() {
             cat >&2 << EOF
 
 To ignore uncommitted changes and force close, use:
-  ticket.sh close --force (or -f)
+  $SCRIPT_COMMAND close --force (or -f)
 
 Or handle the changes:
   1. Commit your changes: git add . && git commit -m "message"
@@ -1990,8 +2065,8 @@ EOF
         cat >&2 << EOF
 Error: No current ticket
 No current ticket found ($CURRENT_TICKET_LINK missing). Please:
-1. Start a ticket: ticket.sh start <ticket-name>
-2. Or restore link: ticket.sh restore (if on feature branch)
+1. Start a ticket: $SCRIPT_COMMAND start <ticket-name>
+2. Or restore link: $SCRIPT_COMMAND restore (if on feature branch)
 3. Or switch to a feature branch first
 EOF
         return 1
@@ -2003,8 +2078,8 @@ EOF
         cat >&2 << EOF
 Error: Invalid current ticket
 Current ticket file not found or corrupted. Please:
-1. Use 'ticket.sh restore' to fix the link
-2. Or start a new ticket: ticket.sh start <ticket-name>
+1. Use '$SCRIPT_COMMAND restore' to fix the link
+2. Or start a new ticket: $SCRIPT_COMMAND start <ticket-name>
 3. Check if ticket file was moved or deleted
 EOF
         return 1
@@ -2045,7 +2120,7 @@ EOF
         cat >&2 << EOF
 Error: Ticket not started
 Ticket has no start time (started_at is null). Please:
-1. Start the ticket first: ticket.sh start <ticket-name>
+1. Start the ticket first: $SCRIPT_COMMAND start <ticket-name>
 2. Or check if you're on the correct ticket
 EOF
         return 1
@@ -2055,7 +2130,7 @@ EOF
         cat >&2 << EOF
 Error: Ticket already completed
 Ticket is already closed (closed_at is set). Please:
-1. Check ticket status: ticket.sh list
+1. Check ticket status: $SCRIPT_COMMAND list
 2. Start a new ticket if needed
 3. Or reopen by manually editing the ticket file
 EOF
@@ -2324,7 +2399,7 @@ main() {
         new)
             if [[ -z "${2:-}" ]]; then
                 echo "Error: slug required" >&2
-                echo "Usage: ticket.sh new <slug>" >&2
+                echo "Usage: $SCRIPT_COMMAND new <slug>" >&2
                 exit 1
             fi
             cmd_new "$2"
@@ -2336,7 +2411,7 @@ main() {
         start)
             if [[ -z "${2:-}" ]]; then
                 echo "Error: ticket name required" >&2
-                echo "Usage: ticket.sh start <ticket-name>" >&2
+                echo "Usage: $SCRIPT_COMMAND start <ticket-name>" >&2
                 exit 1
             fi
             cmd_start "$2"
@@ -2368,7 +2443,7 @@ main() {
             ;;
         *)
             echo "Error: Unknown command: $1" >&2
-            echo "Run 'ticket.sh help' for usage information" >&2
+            echo "Run '$SCRIPT_COMMAND help' for usage information" >&2
             exit 1
             ;;
     esac
