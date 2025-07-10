@@ -1132,19 +1132,44 @@ EOF
         return 1
     fi
     
+    # Store original ticket state for rollback
+    local original_ticket_content=$(cat "$ticket_file")
+    local original_branch=$(get_current_branch)
+    
     # Update closed_at
     local timestamp=$(get_utc_timestamp)
-    update_yaml_frontmatter_field "$ticket_file" "closed_at" "$timestamp"
+    update_yaml_frontmatter_field "$ticket_file" "closed_at" "$timestamp" || {
+        echo "Error: Failed to update ticket closed_at field" >&2
+        return 1
+    }
     
     # Remove current-ticket.md from git history if it exists
     # This prevents accidental commits of current-ticket.md when force-added
     if git ls-files | grep -q "^current-ticket.md$"; then
-        run_git_command "git rm --cached current-ticket.md" || return 1
+        run_git_command "git rm --cached current-ticket.md" || {
+            echo "Error: Failed to remove current-ticket.md from git history" >&2
+            # Rollback ticket file changes
+            echo "$original_ticket_content" > "$ticket_file"
+            return 1
+        }
     fi
     
     # Commit the change
-    run_git_command "git add $ticket_file" || return 1
-    run_git_command "git commit -m \"Close ticket\"" || return 1
+    run_git_command "git add $ticket_file" || {
+        echo "Error: Failed to stage ticket file" >&2
+        # Rollback ticket file changes
+        echo "$original_ticket_content" > "$ticket_file"
+        return 1
+    }
+    
+    run_git_command "git commit -m \"Close ticket\"" || {
+        echo "Error: Failed to commit ticket closure" >&2
+        # Rollback ticket file changes
+        echo "$original_ticket_content" > "$ticket_file"
+        # Unstage if needed
+        git restore --staged "$ticket_file" 2>/dev/null || true
+        return 1
+    }
     
     # Push feature branch if auto_push
     if [[ "$auto_push" == "true" ]] && [[ "$no_push" == "false" ]]; then
@@ -1154,7 +1179,12 @@ EOF
     fi
     
     # Switch to default branch
-    run_git_command "git checkout $default_branch" || return 1
+    run_git_command "git checkout $default_branch" || {
+        echo "Error: Failed to switch to default branch '$default_branch'" >&2
+        echo "Your changes have been committed on feature branch '$current_branch'" >&2
+        echo "Please manually switch to '$default_branch' and run close again" >&2
+        return 1
+    }
     
     # Get ticket name and full content
     local ticket_name=$(basename "$ticket_file" .md)
@@ -1168,7 +1198,13 @@ EOF
     commit_msg="${commit_msg}\n\n${ticket_content}"
     
     # Squash merge
-    run_git_command "git merge --squash $current_branch" || return 1
+    run_git_command "git merge --squash $current_branch" || {
+        echo "Error: Failed to squash merge feature branch" >&2
+        echo "You are now on '$default_branch' branch" >&2
+        echo "Feature branch '$current_branch' still exists with your changes" >&2
+        echo "Please resolve merge conflicts manually or run 'git merge --abort'" >&2
+        return 1
+    }
     
     # Move ticket to done folder before committing
     local tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
@@ -1190,7 +1226,13 @@ EOF
     fi
     
     # Commit with ticket content and done folder move together
-    echo -e "$commit_msg" | run_git_command "git commit -F -" || return 1
+    echo -e "$commit_msg" | run_git_command "git commit -F -" || {
+        echo "Error: Failed to commit final merge" >&2
+        echo "Squash merge is staged but not committed" >&2
+        echo "You can commit manually with: git commit" >&2
+        echo "Or abort with: git reset --hard HEAD" >&2
+        return 1
+    }
     
     # Push to remote if auto_push
     if [[ "$auto_push" == "true" ]] && [[ "$no_push" == "false" ]]; then
@@ -1216,8 +1258,25 @@ EOF
         fi
     fi
     
-    # Remove current ticket link
-    rm -f "$CURRENT_TICKET_LINK"
+    # At this point, all critical operations have succeeded
+    # Now proceed with cleanup operations that are less critical
+    local cleanup_success=true
+    
+    # Delete local feature branch
+    run_git_command "git branch -d $current_branch" || {
+        echo "Warning: Failed to delete local branch '$current_branch'" >&2
+        echo "You may need to delete it manually: git branch -D $current_branch" >&2
+        cleanup_success=false
+    }
+    
+    # Only remove current ticket link if all critical operations succeeded
+    # This ensures users can still recover if cleanup fails
+    if [[ "$cleanup_success" == "true" ]]; then
+        rm -f "$CURRENT_TICKET_LINK"
+    else
+        echo "Warning: Keeping current-ticket.md link due to cleanup issues" >&2
+        echo "You may need to manually remove: rm current-ticket.md" >&2
+    fi
     
     echo "Ticket completed: $ticket_name"
     echo "Merged to $default_branch branch"

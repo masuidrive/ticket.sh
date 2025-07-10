@@ -36,7 +36,7 @@ ticket-sh/
 The build process combines all source files into a single executable:
 
 ```bash
-./build.sh
+bash ./build.sh
 ```
 
 This creates `ticket.sh` in the project root by:
@@ -61,12 +61,12 @@ The build script adds an important warning header:
 
 2. **Build the script**:
    ```bash
-   ./build.sh
+   bash ./build.sh
    ```
 
 3. **Run tests**:
    ```bash
-   test/run-all.sh
+   bash ./test/run-all.sh
    ```
 
 ## Code Structure

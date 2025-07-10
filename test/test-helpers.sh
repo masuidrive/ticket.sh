@@ -49,7 +49,7 @@ setup_test_repo() {
     cd "$test_dir"
     
     # Always rebuild to ensure latest version
-    (cd "${SCRIPT_DIR}/.." && ./build.sh >/dev/null 2>&1)
+    (cd "${SCRIPT_DIR}/.." && bash ./build.sh >/dev/null 2>&1)
     cp "${SCRIPT_DIR}/../ticket.sh" .
     chmod +x ticket.sh
     

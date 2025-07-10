@@ -45,7 +45,7 @@ chmod +x ticket.sh
 ```bash
 git clone https://github.com/masuidrive/ticket.sh.git
 cd ticket.sh
-./build.sh
+bash ./build.sh
 cp ticket.sh /usr/local/bin/
 ```
 

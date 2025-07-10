@@ -210,7 +210,7 @@ This repository includes `ticket-sh`, a Git-based ticket management system that 
 
 ```bash
 cd ticket-sh
-./build.sh  # Creates a single deployable script
+bash ./build.sh  # Creates a single deployable script
 ./ticket.sh init
 ./ticket.sh new implement-feature
 ./ticket.sh start 241229-123456-implement-feature
