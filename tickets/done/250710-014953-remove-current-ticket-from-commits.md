@@ -3,8 +3,8 @@ priority: 2
 tags: []
 description: "Remove current-ticket.md from git history during close command to prevent accidental commits"
 created_at: "2025-07-10T01:49:53Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2025-07-10T01:51:02Z # Do not modify manually
+closed_at: 2025-07-10T01:56:12Z # Do not modify manually
 ---
 
 # Ticket Overview
@@ -24,14 +24,19 @@ Add `git rm --cached current-ticket.md` before the "Close ticket" commit to:
 
 ## Tasks
 
-- [ ] Locate the close command implementation in src/ticket.sh
-- [ ] Add check for current-ticket.md in git index before "Close ticket" commit
-- [ ] Implement git rm --cached current-ticket.md if present
-- [ ] Test the functionality with force-added current-ticket.md
-- [ ] Run tests before closing and pass all tests (No exceptions)
+- [x] Locate the close command implementation in src/ticket.sh
+- [x] Add check for current-ticket.md in git index before "Close ticket" commit
+- [x] Implement git rm --cached current-ticket.md if present
+- [x] Test the functionality with force-added current-ticket.md
+- [x] Run tests before closing and pass all tests (No exceptions)
 - [ ] Get developer approval before closing
 
 
 ## Notes
 
 Implementation should be added around line 1150-1160 in cmd_close function, before the "Close ticket" commit is created.
+
+**テスト追加完了：**
+- Test 6: `current-ticket.md`がgit履歴に強制追加された場合の除去テスト
+- Test 7: 通常のclose動作テスト（`current-ticket.md`がgit履歴にない場合）
+- 両テストともに成功

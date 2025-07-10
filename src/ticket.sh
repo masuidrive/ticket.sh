@@ -1142,6 +1142,12 @@ EOF
     local timestamp=$(get_utc_timestamp)
     update_yaml_frontmatter_field "$ticket_file" "closed_at" "$timestamp"
     
+    # Remove current-ticket.md from git history if it exists
+    # This prevents accidental commits of current-ticket.md when force-added
+    if git ls-files | grep -q "^current-ticket.md$"; then
+        run_git_command "git rm --cached current-ticket.md" || return 1
+    fi
+    
     # Commit the change
     run_git_command "git add $ticket_file" || return 1
     run_git_command "git commit -m \"Close ticket\"" || return 1

@@ -127,6 +127,69 @@ else
     test_result 1 "Should reject invalid options"
 fi
 
+echo -e "\n6. Testing current-ticket.md removal from git history..."
+# Setup again with a fresh test directory
+cd ..
+rm -rf "$TEST_DIR"
+setup_test_repo "$TEST_DIR"
+
+./ticket.sh new test-current-ticket >/dev/null 2>&1
+git add tickets .ticket-config.yml && git commit -q -m "add ticket"
+TICKET=$(safe_get_ticket_name "*.md")
+if [[ -n "$TICKET" ]]; then
+    ./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1
+    # Commit the started_at change
+    git add tickets && git commit -q -m "start ticket"
+fi
+
+# Force add current-ticket.md and commit it
+git add -f current-ticket.md >/dev/null 2>&1
+git commit -q -m "Force add current-ticket.md" >/dev/null 2>&1
+
+# Verify current-ticket.md is in git history
+if git ls-files | grep -q "^current-ticket.md$"; then
+    # Now close the ticket
+    if ./ticket.sh close --no-push >/dev/null 2>&1; then
+        # Check if current-ticket.md is removed from git history
+        if git ls-files | grep -q "^current-ticket.md$"; then
+            test_result 1 "current-ticket.md should be removed from git history"
+        else
+            # Check if current-ticket.md still exists as a file
+            if [[ -f current-ticket.md ]]; then
+                test_result 1 "current-ticket.md file should not exist after close"
+            else
+                test_result 0 "current-ticket.md correctly removed from git history during close"
+            fi
+        fi
+    else
+        test_result 1 "Close should succeed after removing current-ticket.md"
+    fi
+else
+    test_result 1 "Setup failed: current-ticket.md not found in git history"
+fi
+
+echo -e "\n7. Testing normal close without current-ticket.md in git..."
+# Setup again with a fresh test directory
+cd ..
+rm -rf "$TEST_DIR"
+setup_test_repo "$TEST_DIR"
+
+./ticket.sh new test-normal >/dev/null 2>&1
+git add tickets .ticket-config.yml && git commit -q -m "add ticket"
+TICKET=$(safe_get_ticket_name "*.md")
+if [[ -n "$TICKET" ]]; then
+    ./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1
+    # Commit the started_at change
+    git add tickets && git commit -q -m "start ticket"
+fi
+
+# Close without force-adding current-ticket.md
+if ./ticket.sh close --no-push >/dev/null 2>&1; then
+    test_result 0 "Normal close works when current-ticket.md not in git history"
+else
+    test_result 1 "Normal close should work when current-ticket.md not in git history"
+fi
+
 # Cleanup
 cd ..
 rm -rf "$TEST_DIR"

@@ -5,7 +5,7 @@
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250710.010227
+# Version: 20250710.015222
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -947,7 +947,7 @@ convert_utc_to_local() {
 
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250710.010227
+# Version: 20250710.015222
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -998,7 +998,7 @@ umask 0022         # Ensure created files have proper permissions
 
 
 # Global variables
-VERSION="20250710.010227"  # This will be replaced during build
+VERSION="20250710.015222"  # This will be replaced during build
 CONFIG_FILE=".ticket-config.yml"
 CURRENT_TICKET_LINK="current-ticket.md"
 
@@ -2071,6 +2071,12 @@ EOF
     # Update closed_at
     local timestamp=$(get_utc_timestamp)
     update_yaml_frontmatter_field "$ticket_file" "closed_at" "$timestamp"
+    
+    # Remove current-ticket.md from git history if it exists
+    # This prevents accidental commits of current-ticket.md when force-added
+    if git ls-files | grep -q "^current-ticket.md$"; then
+        run_git_command "git rm --cached current-ticket.md" || return 1
+    fi
     
     # Commit the change
     run_git_command "git add $ticket_file" || return 1
