@@ -27,6 +27,10 @@ default_content: |
   - [ ] Task 2
   ...
   - [ ] Run tests before closing and pass all tests (No exceptions)
+  - [ ] Update documentation if necessary
+    - [ ] Update README.*.md
+    - [ ] Update spec.*.md
+    - [ ] Update DEV.md
   - [ ] Get developer approval before closing
   
 

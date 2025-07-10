@@ -5,7 +5,7 @@
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250710.060639
+# Version: 20250710.071233
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -947,7 +947,7 @@ convert_utc_to_local() {
 
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250710.060639
+# Version: 20250710.071233
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -998,7 +998,7 @@ umask 0022         # Ensure created files have proper permissions
 
 
 # Global variables
-VERSION="20250710.060639"  # This will be replaced during build
+VERSION="20250710.071233"  # This will be replaced during build
 CONFIG_FILE=".ticket-config.yml"
 CURRENT_TICKET_LINK="current-ticket.md"
 
@@ -1028,6 +1028,31 @@ Write the overview and tasks for this ticket here.
 
 Additional notes or requirements.'
 
+# Get dynamic script command name based on how script was invoked
+get_script_command() {
+    local script_path="$0"
+    local current_args=""
+    
+    # Try to get command line from /proc (Linux) or ps (macOS/other)
+    if [[ -r /proc/self/cmdline ]]; then
+        current_args=$(tr '\0' ' ' < /proc/self/cmdline 2>/dev/null || echo "")
+    elif command -v ps >/dev/null 2>&1; then
+        current_args=$(ps -p $$ -o args= 2>/dev/null || echo "")
+    fi
+    
+    # Extract actual invocation method from command line
+    if [[ "$current_args" =~ bash[[:space:]]+([^[:space:]]+) ]]; then
+        echo "bash ${BASH_REMATCH[1]}"
+    elif [[ "$current_args" =~ sh[[:space:]]+([^[:space:]]+) ]]; then
+        echo "sh ${BASH_REMATCH[1]}"
+    else
+        echo "$script_path"
+    fi
+}
+
+# Set dynamic script command at startup
+SCRIPT_COMMAND=$(get_script_command)
+
 # Show usage information
 show_usage() {
     echo "# Ticket Management System for Coding Agents"
@@ -1050,6 +1075,7 @@ Each ticket is a single Markdown file with YAML frontmatter metadata.
 - `./ticket.sh close [--no-push] [--force|-f] [--no-delete-remote]` - Complete current ticket (squash merge to default branch)
 - `./ticket.sh selfupdate` - Update ticket.sh to the latest version from GitHub
 - `./ticket.sh version` - Display version information
+- `./ticket.sh prompt` - Display prompt instructions for AI coding assistants
 
 ## Ticket Naming
 
@@ -1297,45 +1323,13 @@ EOF
     echo "   - auto_push: Push on close (default: true)"
     echo "   - default_content: Template for new tickets"
     echo ""
-    echo "2. **Present the following instructions to the developer without modification,"
-    echo "   and tell them to add it to their coding agent's custom prompt:**"
+    echo "2. **Get AI assistant instructions for your coding agent:**"
     echo ""
-    echo "\`\`\`markdown"
-    echo "# Ticket Management Instructions"
+    echo "   Run the following command to get instructions for your AI coding assistant:"
+    echo "   \`$SCRIPT_COMMAND prompt\`"
     echo ""
-    echo "Use \`./ticket.sh\` for ticket management."
-    echo ""
-    echo "## Working with current-ticket.md"
-    echo ""
-    echo "### If current-ticket.md exists in project root"
-    echo "- This file is your work instruction - follow its contents"
-    echo "- When receiving additional instructions from users, document them in this file before proceeding"
-    echo "- Continue working on the active ticket"
-    echo ""
-    echo "### If current-ticket.md does not exist in project root"
-    echo "- When receiving user requests, first ask whether to create a new ticket"
-    echo "- Do not start work without confirming ticket creation"
-    echo "- Even small requests should be tracked through the ticket system"
-    echo ""
-    echo "## Create New Ticket"
-    echo ""
-    echo "1. Create ticket: \`./ticket.sh new feature-name\`"
-    echo "2. Edit ticket content and description in the generated file"
-    echo ""
-    echo "## Start Working on Ticket"
-    echo ""
-    echo "1. Check available tickets: \`./ticket.sh\` list or browse tickets directory"
-    echo "2. Start work: \`./ticket.sh start 241225-143502-feature-name\`"
-    echo "3. Develop on feature branch (\`current-ticket.md\` shows active ticket)"
-    echo ""
-    echo "## Closing Tickets"
-    echo ""
-    echo "1. Before closing:"
-    echo "   - Review \`current-ticket.md\` content and description"
-    echo "   - Check all tasks in checklist are completed (mark with \`[x]\`)"
-    echo "   - Get user approval before proceeding"
-    echo "2. Complete: \`./ticket.sh close\`"
-    echo "\`\`\`"
+    echo "   To save to CLAUDE.md (or your custom prompt file):"
+    echo "   \`$SCRIPT_COMMAND prompt >> CLAUDE.md\`"
     echo ""
     echo "   **Note**: These instructions are critical for proper ticket workflow!"
     echo ""
@@ -2177,6 +2171,47 @@ cmd_version() {
     echo "Built from source files"
 }
 
+# Command: prompt
+# Display the prompt instructions for AI coding assistants
+cmd_prompt() {
+    cat << 'EOF'
+# Ticket Management Instructions
+
+Use `./ticket.sh` for ticket management.
+
+## Working with current-ticket.md
+
+### If current-ticket.md exists in project root
+- This file is your work instruction - follow its contents
+- When receiving additional instructions from users, document them in this file before proceeding
+- Continue working on the active ticket
+
+### If current-ticket.md does not exist in project root
+- When receiving user requests, first ask whether to create a new ticket
+- Do not start work without confirming ticket creation
+- Even small requests should be tracked through the ticket system
+
+## Create New Ticket
+
+1. Create ticket: `./ticket.sh new feature-name`
+2. Edit ticket content and description in the generated file
+
+## Start Working on Ticket
+
+1. Check available tickets: `./ticket.sh` list or browse tickets directory
+2. Start work: `./ticket.sh start 241225-143502-feature-name`
+3. Develop on feature branch (`current-ticket.md` shows active ticket)
+
+## Closing Tickets
+
+1. Before closing:
+   - Review `current-ticket.md` content and description
+   - Check all tasks in checklist are completed (mark with `[x]`)
+   - Get user approval before proceeding
+2. Complete: `./ticket.sh close`
+EOF
+}
+
 # Command: selfupdate
 # Update ticket.sh from the latest version on GitHub
 cmd_selfupdate() {
@@ -2270,6 +2305,9 @@ main() {
             ;;
         version|--version|-v)
             cmd_version
+            ;;
+        prompt)
+            cmd_prompt
             ;;
         help|--help|-h)
             show_usage
