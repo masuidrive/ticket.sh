@@ -5,7 +5,7 @@
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250710.091415
+# Version: 20250710.140844
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -813,6 +813,8 @@ Working directory has uncommitted changes. Please:
 2. Or stash changes: git stash
 3. Then retry the ticket operation
 
+Remember to update current-ticket.md with your progress before committing.
+
 IMPORTANT: Never use 'git restore' or 'rm' to discard file changes without
 explicit user permission. User's work must be preserved.
 EOF
@@ -947,7 +949,7 @@ convert_utc_to_local() {
 
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250710.091415
+# Version: 20250710.140844
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -1039,7 +1041,7 @@ SCRIPT_COMMAND=$(get_script_command)
 
 
 # Global variables
-VERSION="20250710.091415"  # This will be replaced during build
+VERSION="20250710.140844"  # This will be replaced during build
 CONFIG_FILE=".ticket-config.yml"
 CURRENT_TICKET_LINK="current-ticket.md"
 
@@ -1098,6 +1100,7 @@ SCRIPT_COMMAND=$(get_script_command)
 show_usage() {
     echo "# Ticket Management System for Coding Agents"
     echo "Version: $VERSION"
+    echo "https://github.com/masuidrive/ticket.sh"
     echo ""
     cat << EOF
 ## Overview
@@ -2054,6 +2057,8 @@ Or handle the changes:
   1. Commit your changes: git add . && git commit -m "message"
   2. Stash changes: git stash
 
+Remember to update current-ticket.md with your progress before committing.
+
 IMPORTANT: Never discard changes without explicit user permission.
 EOF
             return 1
@@ -2294,7 +2299,7 @@ EOF
 cmd_version() {
     echo "ticket.sh - Git-based Ticket Management System"
     echo "Version: $VERSION"
-    echo "Built from source files"
+    echo "https://github.com/masuidrive/ticket.sh"
 }
 
 # Command: prompt

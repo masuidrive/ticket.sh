@@ -168,6 +168,7 @@ SCRIPT_COMMAND=$(get_script_command)
 show_usage() {
     echo "# Ticket Management System for Coding Agents"
     echo "Version: $VERSION"
+    echo "https://github.com/masuidrive/ticket.sh"
     echo ""
     cat << EOF
 ## Overview
@@ -1124,6 +1125,8 @@ Or handle the changes:
   1. Commit your changes: git add . && git commit -m "message"
   2. Stash changes: git stash
 
+Remember to update current-ticket.md with your progress before committing.
+
 IMPORTANT: Never discard changes without explicit user permission.
 EOF
             return 1
@@ -1364,7 +1367,7 @@ EOF
 cmd_version() {
     echo "ticket.sh - Git-based Ticket Management System"
     echo "Version: $VERSION"
-    echo "Built from source files"
+    echo "https://github.com/masuidrive/ticket.sh"
 }
 
 # Command: prompt

@@ -8,7 +8,19 @@
 
 # Ticket Management Instructions
 
-Use `./ticket.sh` for ticket management. When receiving requests from users, create tickets and perform work within tickets. Even small user requests should be documented in `current-ticket.md` while progressing.
+Use `./ticket.sh` for ticket management.
+
+## Working with current-ticket.md
+
+### If current-ticket.md exists in project root
+- This file is your work instruction - follow its contents
+- When receiving additional instructions from users, document them in this file before proceeding
+- Continue working on the active ticket
+
+### If current-ticket.md does not exist in project root
+- When receiving user requests, first ask whether to create a new ticket
+- Do not start work without confirming ticket creation
+- Even small requests should be tracked through the ticket system
 
 ## Create New Ticket
 
@@ -17,14 +29,15 @@ Use `./ticket.sh` for ticket management. When receiving requests from users, cre
 
 ## Start Working on Ticket
 
-1. Check available tickets: `./ticket.sh list` or browse tickets directory
+1. Check available tickets: `./ticket.sh` list or browse tickets directory
 2. Start work: `./ticket.sh start 241225-143502-feature-name`
-3. Develop on feature branch (current-ticket.md shows active ticket)
+3. Develop on feature branch (`current-ticket.md` shows active ticket)
 
-## Ticket Closing
+## Closing Tickets
 
 1. Before closing:
-   - Review ticket content and description
+   - Review `current-ticket.md` content and description
    - Check all tasks in checklist are completed (mark with `[x]`)
+   - Run `bash ./build.sh`
    - Get user approval before proceeding
 2. Complete: `./ticket.sh close`

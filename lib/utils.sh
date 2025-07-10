@@ -63,6 +63,8 @@ Working directory has uncommitted changes. Please:
 2. Or stash changes: git stash
 3. Then retry the ticket operation
 
+Remember to update current-ticket.md with your progress before committing.
+
 IMPORTANT: Never use 'git restore' or 'rm' to discard file changes without
 explicit user permission. User's work must be preserved.
 EOF
