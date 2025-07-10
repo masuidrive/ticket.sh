@@ -107,7 +107,7 @@ cp ticket.sh /usr/local/bin/
 
 ## 設定
 
-`.ticket-config.yml`を編集：
+`.ticket-config.yaml`を編集：
 
 ```yaml
 tickets_dir: "tickets"

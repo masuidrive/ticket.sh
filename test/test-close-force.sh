@@ -32,7 +32,7 @@ test_result() {
 
 echo "1. Testing close with uncommitted changes (should fail)..."
 ./ticket.sh new test-force >/dev/null 2>&1
-git add tickets .ticket-config.yml && git commit -q -m "add ticket"
+git add tickets .ticket-config.yaml && git commit -q -m "add ticket"
 TICKET=$(safe_get_ticket_name "*.md")
 if [[ -n "$TICKET" ]]; then
     ./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1
@@ -77,7 +77,7 @@ rm -rf "$TEST_DIR"
 setup_test_repo "$TEST_DIR"
 
 ./ticket.sh new test-short >/dev/null 2>&1
-git add tickets .ticket-config.yml && git commit -q -m "add ticket"
+git add tickets .ticket-config.yaml && git commit -q -m "add ticket"
 TICKET=$(safe_get_ticket_name "*.md")
 if [[ -n "$TICKET" ]]; then
     ./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1
@@ -102,7 +102,7 @@ rm -rf "$TEST_DIR"
 setup_test_repo "$TEST_DIR"
 
 ./ticket.sh new test-combined >/dev/null 2>&1
-git add tickets .ticket-config.yml && git commit -q -m "add ticket"
+git add tickets .ticket-config.yaml && git commit -q -m "add ticket"
 TICKET=$(safe_get_ticket_name "*.md")
 if [[ -n "$TICKET" ]]; then
     ./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1
@@ -134,7 +134,7 @@ rm -rf "$TEST_DIR"
 setup_test_repo "$TEST_DIR"
 
 ./ticket.sh new test-current-ticket >/dev/null 2>&1
-git add tickets .ticket-config.yml && git commit -q -m "add ticket"
+git add tickets .ticket-config.yaml && git commit -q -m "add ticket"
 TICKET=$(safe_get_ticket_name "*.md")
 if [[ -n "$TICKET" ]]; then
     ./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1
@@ -175,7 +175,7 @@ rm -rf "$TEST_DIR"
 setup_test_repo "$TEST_DIR"
 
 ./ticket.sh new test-normal >/dev/null 2>&1
-git add tickets .ticket-config.yml && git commit -q -m "add ticket"
+git add tickets .ticket-config.yaml && git commit -q -m "add ticket"
 TICKET=$(safe_get_ticket_name "*.md")
 if [[ -n "$TICKET" ]]; then
     ./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1

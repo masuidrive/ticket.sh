@@ -77,7 +77,7 @@ fi
 
 # Test 3: Initialize
 ./ticket.sh init >/dev/null 2>&1
-if [[ -f .ticket-config.yml ]] && [[ -d tickets ]] && [[ -f .gitignore ]]; then
+if [[ -f .ticket-config.yaml ]] && [[ -d tickets ]] && [[ -f .gitignore ]]; then
     test_case "Initialize creates required files" "PASS"
 else
     test_case "Initialize creates required files" "FAIL"

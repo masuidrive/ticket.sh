@@ -29,9 +29,9 @@ git checkout -b develop -q
 "$TICKET_SH" init
 # Disable auto_push for test
 if [[ "$OSTYPE" == "darwin"* ]]; then
-    sed -i '' 's/auto_push: true/auto_push: false/' .ticket-config.yml
+    sed -i '' 's/auto_push: true/auto_push: false/' .ticket-config.yaml
 else
-    sed -i 's/auto_push: true/auto_push: false/' .ticket-config.yml
+    sed -i 's/auto_push: true/auto_push: false/' .ticket-config.yaml
 fi
 # Commit the initialization
 git add -A

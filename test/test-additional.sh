@@ -75,7 +75,7 @@ fi
 
 # Test 2: Start already started ticket
 echo -e "\n2. Testing start on already started ticket..."
-git add tickets .ticket-config.yml && git commit -q -m "add tickets"
+git add tickets .ticket-config.yaml && git commit -q -m "add tickets"
 TICKET_NAME=$(basename "$FIRST_TICKET" .md)
 ./ticket.sh start "$TICKET_NAME" --no-push >/dev/null 2>&1
 git add tickets current-ticket.md && git commit -q -m "update"
@@ -144,10 +144,10 @@ echo -e "\n7. Testing custom branch prefix..."
 cd .. && setup_test
 # Modify config
 # Use portable sed
-sed_i 's/branch_prefix: "feature\/"/branch_prefix: "ticket\/"/' .ticket-config.yml
+sed_i 's/branch_prefix: "feature\/"/branch_prefix: "ticket\/"/' .ticket-config.yaml
 
 ./ticket.sh new custom-branch >/dev/null 2>&1
-git add tickets .ticket-config.yml && git commit -q -m "add"
+git add tickets .ticket-config.yaml && git commit -q -m "add"
 TICKET=$(safe_get_ticket_name "*custom-branch.md")
 ./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1
 
@@ -174,7 +174,7 @@ cd .. && setup_test
 
 # Create and start first ticket
 ./ticket.sh new "feature-a" >/dev/null 2>&1
-git add tickets .ticket-config.yml && git commit -q -m "add a"
+git add tickets .ticket-config.yaml && git commit -q -m "add a"
 TICKET_A=$(safe_get_ticket_name "*feature-a.md")
 ./ticket.sh start "$TICKET_A" --no-push >/dev/null 2>&1
 git add tickets current-ticket.md && git commit -q -m "start a"
@@ -184,7 +184,7 @@ git add work-a.txt && git commit -q -m "work a"
 # Go back and start second ticket
 git checkout -q develop
 ./ticket.sh new "feature-b" >/dev/null 2>&1
-git add tickets .ticket-config.yml && git commit -q -m "add b"
+git add tickets .ticket-config.yaml && git commit -q -m "add b"
 TICKET_B=$(safe_get_ticket_name "*feature-b.md")
 ./ticket.sh start "$TICKET_B" --no-push >/dev/null 2>&1
 git add tickets current-ticket.md && git commit -q -m "start b"
@@ -237,7 +237,7 @@ for i in 3 1 2; do
 done
 
 # Start one to test status+priority sorting
-git add tickets .ticket-config.yml && git commit -q -m "add all"
+git add tickets .ticket-config.yaml && git commit -q -m "add all"
 TICKET_2=$(safe_get_ticket_name "*priority-2.md")
 ./ticket.sh start "$TICKET_2" --no-push >/dev/null 2>&1
 
@@ -264,7 +264,7 @@ cd .. && setup_test
 
 # Test that start command no longer shows push
 ./ticket.sh new "push-test" >/dev/null 2>&1
-git add tickets .ticket-config.yml && git commit -q -m "add"
+git add tickets .ticket-config.yaml && git commit -q -m "add"
 TICKET=$(safe_get_ticket_name "*push-test.md")
 
 # Should NOT execute push command in start anymore

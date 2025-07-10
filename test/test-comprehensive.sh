@@ -92,7 +92,7 @@ run_tests() {
     
     ./ticket.sh init >/dev/null 2>&1
     
-    [[ -f .ticket-config.yml ]] && pass "Creates config file" || fail "Config file not created"
+    [[ -f .ticket-config.yaml ]] && pass "Creates config file" || fail "Config file not created"
     [[ -d tickets ]] && pass "Creates tickets directory" || fail "Tickets directory not created"
     [[ -f .gitignore ]] && pass "Creates .gitignore" || fail ".gitignore not created"
     

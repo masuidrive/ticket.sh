@@ -18,12 +18,14 @@ EOF
 
 # Check if config file exists
 check_config() {
-    if [[ ! -f .ticket-config.yml ]]; then
+    CONFIG_FILE=$(get_config_file)
+    if [[ ! -f "$CONFIG_FILE" ]]; then
         cat >&2 << EOF
 Error: Ticket system not initialized
-Configuration file '.ticket-config.yml' not found. Please:
+Configuration file not found. Please:
 1. Run 'ticket.sh init' to initialize the ticket system, or
 2. Navigate to the project root directory where the config exists
+3. Expected files: .ticket-config.yaml or .ticket-config.yml
 EOF
         return 1
     fi
@@ -194,4 +196,16 @@ convert_utc_to_local() {
     
     # Fallback to original
     echo "$utc_time"
+}
+
+# Get configuration file path with priority: .yaml > .yml
+get_config_file() {
+    if [[ -f ".ticket-config.yaml" ]]; then
+        echo ".ticket-config.yaml"
+    elif [[ -f ".ticket-config.yml" ]]; then
+        echo ".ticket-config.yml"
+    else
+        # Return default for new installations
+        echo ".ticket-config.yaml"
+    fi
 }

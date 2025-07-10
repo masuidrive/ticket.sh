@@ -34,7 +34,7 @@ echo "3. Testing list..."
 
 # Test 4: Start
 echo "4. Testing start..."
-git add tickets .ticket-config.yml .gitignore && git commit -q -m "add ticket and config"
+git add tickets .ticket-config.yaml .gitignore && git commit -q -m "add ticket and config"
 TICKET_NAME=$(basename "$TICKET" .md)
 ./ticket.sh start "$TICKET_NAME" --no-push >/dev/null
 echo "   ✓ Started on branch: $(git branch --show-current)"

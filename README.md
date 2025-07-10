@@ -107,7 +107,7 @@ cp ticket.sh /usr/local/bin/
 
 ## Configuration
 
-Edit `.ticket-config.yml`:
+Edit `.ticket-config.yaml`:
 
 ```yaml
 tickets_dir: "tickets"

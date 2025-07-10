@@ -102,7 +102,7 @@ if [[ -n "$TICKET" ]]; then
 EOF
 
     # Start the ticket to verify content handling
-    git add tickets .ticket-config.yml && git commit -q -m "add utf8 ticket"
+    git add tickets .ticket-config.yaml && git commit -q -m "add utf8 ticket"
     TICKET_NAME=$(basename "$TICKET" .md)
     
     if ./ticket.sh start "$TICKET_NAME" --no-push >/dev/null 2>&1; then

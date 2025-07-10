@@ -171,7 +171,7 @@ rm -rf "$NON_GIT_DIR"
 # Test 10: Test check command with missing config
 run_test "Testing check with missing config"
 cd "$TEST_DIR"
-rm -f .ticket-config.yml
+rm -f .ticket-config.yaml
 output=$("$TICKET_SH" check 2>&1 || true)
 if [[ "$output" =~ "not initialized" ]] || [[ "$output" =~ "config" ]]; then
     pass "Correctly detects missing config"

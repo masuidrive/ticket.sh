@@ -110,7 +110,7 @@ fi
 
 # Global variables
 VERSION="1.0.0"  # This will be replaced during build
-CONFIG_FILE=".ticket-config.yml"
+CONFIG_FILE=""  # Will be set dynamically by get_config_file()
 CURRENT_TICKET_LINK="current-ticket.md"
 
 # Default configuration values
@@ -203,7 +203,7 @@ Each ticket is a single Markdown file with YAML frontmatter metadata.
 
 ## Configuration
 
-- Config file: \`.ticket-config.yml\` (in project root)
+- Config file: \`.ticket-config.yaml\` or \`.ticket-config.yml\` (in project root)
 - Initialize with: \`$SCRIPT_COMMAND init\`
 - Edit to customize directories, branches, and templates
 
@@ -239,7 +239,7 @@ Each ticket is a single Markdown file with YAML frontmatter metadata.
 
 ## Troubleshooting
 
-- Run from project root (where \`.git\` and \`.ticket-config.yml\` exist)
+- Run from project root (where \`.git\` and config file exist)
 - Use \`restore\` if \`current-ticket.md\` is missing after clone/pull
 - Check \`list\` to see available tickets and their status
 - Ensure Git working directory is clean before start/close
@@ -259,6 +259,9 @@ cmd_init() {
     if [[ "$current_branch" =~ ^(main|master|develop)$ ]]; then
         default_branch_value="$current_branch"
     fi
+    
+    # Determine config file (prefer .yaml for new installations)
+    CONFIG_FILE=$(get_config_file)
     
     # Check if critical components are missing to determine if this is a new initialization
     local is_new_init=false
@@ -429,7 +432,7 @@ EOF
     fi
     
     echo "1. **Configure your ticket system** (optional):"
-    echo "   Edit '.ticket-config.yml' to customize:"
+    echo "   Edit your config file to customize:"
     echo "   - tickets_dir: Where tickets are stored (default: \"tickets\")"
     echo "   - default_branch: Main development branch (default: \"develop\")"
     echo "   - branch_prefix: Feature branch naming (default: \"feature/\")"
@@ -609,7 +612,7 @@ Error: Tickets directory not found
 Directory '$tickets_dir' does not exist. Please:
 1. Run '$SCRIPT_COMMAND init' to create required directories, or
 2. Check if you're in the correct project directory, or
-3. Verify tickets_dir setting in .ticket-config.yml
+3. Verify tickets_dir setting in your config file
 EOF
         return 1
     fi

@@ -37,7 +37,7 @@ test_result() {
 echo "1. Testing file specification flexibility..."
 setup_test
 ./ticket.sh new test-file >/dev/null 2>&1
-git add tickets .ticket-config.yml && git commit -q -m "add ticket"
+git add tickets .ticket-config.yaml && git commit -q -m "add ticket"
 TICKET_NAME=$(safe_get_ticket_name "*test-file.md")
 
 # Test all three ways to specify ticket
@@ -81,7 +81,7 @@ fi
 echo -e "\n3. Testing operations on closed ticket..."
 cd .. && setup_test
 ./ticket.sh new closed-test >/dev/null 2>&1
-git add tickets .ticket-config.yml && git commit -q -m "add"
+git add tickets .ticket-config.yaml && git commit -q -m "add"
 TICKET_NAME=$(safe_get_ticket_name "*closed-test.md")
 # Manually set closed_at
 TICKET_FILE="tickets/${TICKET_NAME}.md"
@@ -160,10 +160,10 @@ fi
 echo -e "\n9. Testing custom branch prefix with multiple slashes..."
 cd .. && setup_test
 # Modify config for complex branch prefix
-sed_i 's|branch_prefix: "feature/"|branch_prefix: "feature/team/"|' .ticket-config.yml
+sed_i 's|branch_prefix: "feature/"|branch_prefix: "feature/team/"|' .ticket-config.yaml
 
 ./ticket.sh new slash-test >/dev/null 2>&1
-git add tickets .ticket-config.yml && git commit -q -m "add"
+git add tickets .ticket-config.yaml && git commit -q -m "add"
 TICKET=$(safe_get_ticket_name "*slash-test.md")
 
 if ./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1; then
@@ -183,7 +183,7 @@ cd .. && setup_test  # Start fresh
 # Create tickets with different statuses
 ./ticket.sh new multi-1 >/dev/null 2>&1
 ./ticket.sh new multi-2 >/dev/null 2>&1
-git add tickets .ticket-config.yml && git commit -q -m "add tickets"
+git add tickets .ticket-config.yaml && git commit -q -m "add tickets"
 TICKET=$(safe_get_ticket_name "*multi-1.md")
 ./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1
 git add tickets current-ticket.md && git commit -q -m "start"

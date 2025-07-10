@@ -6,6 +6,9 @@
 - After modifying code, run `test/run-all.sh` and `test/run-all-on-docker.sh` before reporting to user. Fix any errors.
 - If existing code has errors, create an error-fixing ticket and work on it after completing current task.
 
+# Working directory
+- When creating temporary files or directories that shouldn’t be committed to Git, please place them under the `$PROJECT_ROOT/tmp` directory.
+
 # Ticket Management Instructions
 
 Use `./ticket.sh` for ticket management.

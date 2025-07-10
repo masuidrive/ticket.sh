@@ -5,7 +5,7 @@
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250710.140844
+# Version: 20250710.152103
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -768,12 +768,14 @@ EOF
 
 # Check if config file exists
 check_config() {
-    if [[ ! -f .ticket-config.yml ]]; then
+    CONFIG_FILE=$(get_config_file)
+    if [[ ! -f "$CONFIG_FILE" ]]; then
         cat >&2 << EOF
 Error: Ticket system not initialized
-Configuration file '.ticket-config.yml' not found. Please:
+Configuration file not found. Please:
 1. Run 'ticket.sh init' to initialize the ticket system, or
 2. Navigate to the project root directory where the config exists
+3. Expected files: .ticket-config.yaml or .ticket-config.yml
 EOF
         return 1
     fi
@@ -945,11 +947,23 @@ convert_utc_to_local() {
     # Fallback to original
     echo "$utc_time"
 }
+
+# Get configuration file path with priority: .yaml > .yml
+get_config_file() {
+    if [[ -f ".ticket-config.yaml" ]]; then
+        echo ".ticket-config.yaml"
+    elif [[ -f ".ticket-config.yml" ]]; then
+        echo ".ticket-config.yml"
+    else
+        # Return default for new installations
+        echo ".ticket-config.yaml"
+    fi
+}
 # === Main Script ===
 
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250710.140844
+# Version: 20250710.152103
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -1041,8 +1055,8 @@ SCRIPT_COMMAND=$(get_script_command)
 
 
 # Global variables
-VERSION="20250710.140844"  # This will be replaced during build
-CONFIG_FILE=".ticket-config.yml"
+VERSION="20250710.152103"  # This will be replaced during build
+CONFIG_FILE=""  # Will be set dynamically by get_config_file()
 CURRENT_TICKET_LINK="current-ticket.md"
 
 # Default configuration values
@@ -1135,7 +1149,7 @@ Each ticket is a single Markdown file with YAML frontmatter metadata.
 
 ## Configuration
 
-- Config file: \`.ticket-config.yml\` (in project root)
+- Config file: \`.ticket-config.yaml\` or \`.ticket-config.yml\` (in project root)
 - Initialize with: \`$SCRIPT_COMMAND init\`
 - Edit to customize directories, branches, and templates
 
@@ -1171,7 +1185,7 @@ Each ticket is a single Markdown file with YAML frontmatter metadata.
 
 ## Troubleshooting
 
-- Run from project root (where \`.git\` and \`.ticket-config.yml\` exist)
+- Run from project root (where \`.git\` and config file exist)
 - Use \`restore\` if \`current-ticket.md\` is missing after clone/pull
 - Check \`list\` to see available tickets and their status
 - Ensure Git working directory is clean before start/close
@@ -1192,6 +1206,9 @@ cmd_init() {
         default_branch_value="$current_branch"
     fi
     
+    # Determine config file (prefer .yaml for new installations)
+    CONFIG_FILE=$(get_config_file)
+    
     # Check if critical components are missing to determine if this is a new initialization
     local is_new_init=false
     [[ ! -f "$CONFIG_FILE" ]] && is_new_init=true
@@ -1207,6 +1224,7 @@ cmd_init() {
     if [[ ! -f "$CONFIG_FILE" ]]; then
         cat > "$CONFIG_FILE" << EOF
 # Ticket system configuration
+# https://github.com/masuidrive/ticket.sh
 
 # Directory settings
 tickets_dir: "$DEFAULT_TICKETS_DIR"
@@ -1248,7 +1266,7 @@ default_content: |
   - [ ] Run tests before closing and pass all tests (No exceptions)
   - [ ] Get developer approval before closing
   
-
+  
   ## Notes
   
   {{Additional notes or requirements.}}
@@ -1360,7 +1378,7 @@ EOF
     fi
     
     echo "1. **Configure your ticket system** (optional):"
-    echo "   Edit '.ticket-config.yml' to customize:"
+    echo "   Edit your config file to customize:"
     echo "   - tickets_dir: Where tickets are stored (default: \"tickets\")"
     echo "   - default_branch: Main development branch (default: \"develop\")"
     echo "   - branch_prefix: Feature branch naming (default: \"feature/\")"
@@ -1540,7 +1558,7 @@ Error: Tickets directory not found
 Directory '$tickets_dir' does not exist. Please:
 1. Run '$SCRIPT_COMMAND init' to create required directories, or
 2. Check if you're in the correct project directory, or
-3. Verify tickets_dir setting in .ticket-config.yml
+3. Verify tickets_dir setting in your config file
 EOF
         return 1
     fi

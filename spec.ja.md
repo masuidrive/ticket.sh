@@ -148,7 +148,7 @@ project-root/
 │       └── 240627-142030-bar.md
 ├── current-ticket.md           # 作業中チケットへのsymlink (.gitignore対象)
 ├── ticket.sh                   # メインスクリプト
-├── .ticket-config.yml          # 設定ファイル
+├── .ticket-config.yaml         # 設定ファイル
 └── .gitignore                  # current-ticket.md を含む
 ```
 
@@ -156,7 +156,7 @@ project-root/
 
 ## ⚙️ 設定ファイル
 
-### `.ticket-config.yml`
+### `.ticket-config.yaml`
 ```yaml
 # ディレクトリ設定
 tickets_dir: "tickets"
@@ -260,10 +260,10 @@ closed_at: null
   1. Navigate to your project root directory, or
   2. Initialize a new git repository with 'git init'
   ```
-- `.ticket-config.yml` の存在: 
+- 設定ファイルの存在: 
   ```
   Error: Ticket system not initialized
-  Configuration file '.ticket-config.yml' not found. Please:
+  Configuration file not found. Please:
   1. Run 'ticket.sh init' to initialize the ticket system, or
   2. Navigate to the project root directory where the config exists
   ```
@@ -273,7 +273,7 @@ closed_at: null
 ### `init`
 システムの初期化を実行：
 
-1. `.ticket-config.yml` をデフォルト値で作成（存在しない場合）
+1. `.ticket-config.yaml` をデフォルト値で作成（存在しない場合）
 2. `{tickets_dir}/` ディレクトリを作成
 3. `.gitignore` ファイルを作成（存在しない場合）し、`current-ticket.md` を追加（重複チェック）
 
@@ -397,7 +397,7 @@ Additional notes or requirements.
   Directory '{tickets_dir}' does not exist. Please:
   1. Run 'ticket.sh init' to create required directories, or
   2. Check if you're in the correct project directory, or
-  3. Verify tickets_dir setting in .ticket-config.yml
+  3. 設定ファイルでtickets_dir設定を確認
   ```
 - 無効なステータス指定: 
   ```
@@ -791,7 +791,7 @@ TICKET STATUS:
 - done: completed (closed_at set)
 
 CONFIGURATION:
-- Config file: .ticket-config.yml (in project root)
+- Config file: .ticket-config.yaml または .ticket-config.yml (プロジェクトルート内)
 - Initialize with: ./ticket.sh init
 - Edit to customize directories, branches, and templates
 
@@ -808,7 +808,7 @@ WORKFLOW:
 5. Complete: ./ticket.sh close
 
 TROUBLESHOOTING:
-- Run from project root (where .git and .ticket-config.yml exist)
+- プロジェクトルートから実行 (.git と設定ファイルが存在する場所)
 - Use 'restore' if current-ticket.md is missing after clone/pull
 - Check 'list' to see available tickets and their status
 - Ensure Git working directory is clean before start/close

@@ -1,0 +1,12 @@
+# Existing YML project
+tickets_dir: "tickets"
+default_branch: "main"
+branch_prefix: "feature/"
+repository: "origin"
+auto_push: true
+delete_remote_on_close: true
+start_success_message: "Please review the ticket content"
+close_success_message: ""
+default_content: |
+  # Overview
+  Test content

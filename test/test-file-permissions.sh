@@ -196,7 +196,7 @@ cd .. && setup_test
 ./ticket.sh init >/dev/null 2>&1
 
 # Make config file read-only
-chmod 444 .ticket-config.yml
+chmod 444 .ticket-config.yaml
 OUTPUT=$(./ticket.sh list 2>&1)
 RESULT=$?
 # list should still work with read-only config
@@ -205,7 +205,7 @@ if [[ $RESULT -eq 0 ]]; then
 else
     test_result 1 "Should be able to read config" "$OUTPUT"
 fi
-chmod 644 .ticket-config.yml  # Restore permissions
+chmod 644 .ticket-config.yaml  # Restore permissions
 
 # Test 7: Disk space simulation (using quota if available)
 echo -e "\n7. Testing disk full simulation..."

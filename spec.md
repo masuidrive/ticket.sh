@@ -148,7 +148,7 @@ project-root/
 │       └── 240627-142030-bar.md
 ├── current-ticket.md           # Symlink to working ticket (.gitignore'd)
 ├── ticket.sh                   # Main script
-├── .ticket-config.yml          # Configuration file
+├── .ticket-config.yaml         # Configuration file
 └── .gitignore                  # Contains current-ticket.md
 ```
 
@@ -156,7 +156,7 @@ project-root/
 
 ## ⚙️ Configuration File
 
-### `.ticket-config.yml`
+### `.ticket-config.yaml`
 ```yaml
 # Directory settings
 tickets_dir: "tickets"
@@ -260,10 +260,10 @@ All commands perform these prerequisite checks:
   1. Navigate to your project root directory, or
   2. Initialize a new git repository with 'git init'
   ```
-- `.ticket-config.yml` exists: 
+- Configuration file exists: 
   ```
   Error: Ticket system not initialized
-  Configuration file '.ticket-config.yml' not found. Please:
+  Configuration file not found. Please:
   1. Run 'ticket.sh init' to initialize the ticket system, or
   2. Navigate to the project root directory where the config exists
   ```
@@ -273,7 +273,7 @@ All commands perform these prerequisite checks:
 ### `init`
 Performs system initialization:
 
-1. Creates `.ticket-config.yml` with default values (if not exists)
+1. Creates `.ticket-config.yaml` with default values (if not exists)
 2. Creates `{tickets_dir}/` directory
 3. Creates `.gitignore` file (if not exists) and adds `current-ticket.md` (with duplicate check)
 
@@ -397,7 +397,7 @@ Displays ticket list:
   Directory '{tickets_dir}' does not exist. Please:
   1. Run 'ticket.sh init' to create required directories, or
   2. Check if you're in the correct project directory, or
-  3. Verify tickets_dir setting in .ticket-config.yml
+  3. Verify tickets_dir setting in your config file
   ```
 - Invalid status specification: 
   ```
@@ -792,7 +792,7 @@ TICKET STATUS:
 - done: completed (closed_at set)
 
 CONFIGURATION:
-- Config file: .ticket-config.yml (in project root)
+- Config file: .ticket-config.yaml or .ticket-config.yml (in project root)
 - Initialize with: ./ticket.sh init
 - Edit to customize directories, branches, and templates
 
@@ -809,7 +809,7 @@ WORKFLOW:
 5. Complete: ./ticket.sh close
 
 TROUBLESHOOTING:
-- Run from project root (where .git and .ticket-config.yml exist)
+- Run from project root (where .git and config file exist)
 - Use 'restore' if current-ticket.md is missing after clone/pull
 - Check 'list' to see available tickets and their status
 - Ensure Git working directory is clean before start/close

@@ -100,7 +100,7 @@ The main script uses a case statement to route commands:
 ### Key Functions
 
 #### `init_repo()`
-- Creates `.ticket-config.yml`
+- Creates `.ticket-config.yaml`
 - Creates `tickets/` directory
 - Updates `.gitignore`
 
@@ -297,7 +297,7 @@ Documentation updates should be part of the same PR as code changes.
 
 2. **"Ticket system not initialized"**
    - Run `ticket.sh init`
-   - Check for `.ticket-config.yml`
+   - Check for `.ticket-config.yaml` or `.ticket-config.yml`
 
 3. **"Permission denied"**
    - Check file permissions

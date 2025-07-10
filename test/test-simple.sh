@@ -44,7 +44,7 @@ echo "  PASS: Git repo initialized"
 echo
 echo "3. Testing init command..."
 ./ticket.sh init >/dev/null 2>&1
-if [[ ! -f .ticket-config.yml ]]; then
+if [[ ! -f .ticket-config.yaml ]]; then
     echo "  FAIL: Config file not created"
     exit 1
 fi
