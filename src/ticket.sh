@@ -275,6 +275,7 @@ cmd_init() {
     if [[ ! -f "$CONFIG_FILE" ]]; then
         cat > "$CONFIG_FILE" << EOF
 # Ticket system configuration
+# https://github.com/masuidrive/ticket.sh
 
 # Directory settings
 tickets_dir: "$DEFAULT_TICKETS_DIR"
@@ -316,7 +317,7 @@ default_content: |
   - [ ] Run tests before closing and pass all tests (No exceptions)
   - [ ] Get developer approval before closing
   
-
+  
   ## Notes
   
   {{Additional notes or requirements.}}
