@@ -1259,24 +1259,16 @@ EOF
     fi
     
     # At this point, all critical operations have succeeded
-    # Now proceed with cleanup operations that are less critical
-    local cleanup_success=true
+    # Now proceed with cleanup operations
     
-    # Delete local feature branch
-    run_git_command "git branch -d $current_branch" || {
+    # Delete local feature branch - use -D since squash merge doesn't show as "merged"
+    run_git_command "git branch -D $current_branch" || {
         echo "Warning: Failed to delete local branch '$current_branch'" >&2
         echo "You may need to delete it manually: git branch -D $current_branch" >&2
-        cleanup_success=false
     }
     
-    # Only remove current ticket link if all critical operations succeeded
-    # This ensures users can still recover if cleanup fails
-    if [[ "$cleanup_success" == "true" ]]; then
-        rm -f "$CURRENT_TICKET_LINK"
-    else
-        echo "Warning: Keeping current-ticket.md link due to cleanup issues" >&2
-        echo "You may need to manually remove: rm current-ticket.md" >&2
-    fi
+    # Remove current ticket link - core workflow is complete, safe to remove
+    rm -f "$CURRENT_TICKET_LINK"
     
     echo "Ticket completed: $ticket_name"
     echo "Merged to $default_branch branch"
