@@ -22,12 +22,7 @@ ticket-sh/
 │   ├── yaml-frontmatter.sh # YAML frontmatter handler
 │   └── utils.sh           # Utility functions
 ├── test/
-│   ├── test-helpers.sh    # Shared test utilities
-│   ├── test-compat.sh     # Platform compatibility
-│   ├── test-basic.sh      # Basic functionality tests
-│   ├── test-final.sh      # Comprehensive tests
-│   ├── test-additional.sh # Edge case tests
-│   ├── test-missing-coverage.sh # Spec compliance tests
+│   ├── test-*.sh          # Feature-specific test files
 │   ├── run-all.sh         # Local test runner
 │   └── run-all-on-docker.sh # Docker test runner
 ├── build.sh               # Build script
@@ -82,10 +77,13 @@ The build script adds an important warning header:
 The main script uses a case statement to route commands:
 - `init`: Initialize ticket system
 - `new`: Create new ticket
-- `list`: List tickets with filters
+- `list`: List tickets with filters and options
 - `start`: Start work on ticket
 - `close`: Complete ticket
 - `restore`: Restore current-ticket.md symlink
+- `check`: Diagnose current state and provide guidance
+- `version`: Display version information
+- `selfupdate`: Update to latest release from GitHub
 
 #### YAML Processing (lib/yaml-sh.sh, lib/yaml-frontmatter.sh)
 - Parses YAML frontmatter from markdown files
@@ -93,10 +91,11 @@ The main script uses a case statement to route commands:
 - Preserves formatting and comments
 
 #### Utilities (lib/utils.sh)
-- Date/time handling
-- Git operations
-- File manipulation
+- Date/time handling and timezone conversion
+- Git operations with output display
+- File manipulation and validation
 - Cross-platform compatibility
+- Dynamic command name detection
 
 ### Key Functions
 
@@ -117,8 +116,10 @@ The main script uses a case statement to route commands:
 
 #### `close_ticket()`
 - Updates `closed_at` timestamp
-- Squash merges to develop
+- Removes current-ticket.md from git history
+- Squash merges to default branch
 - Moves ticket to `done/` folder
+- Optional remote branch cleanup
 
 ## Testing
 
@@ -126,10 +127,12 @@ The main script uses a case statement to route commands:
 
 See `test/README.md` for detailed test documentation. Key points:
 
-- **Unit tests**: Test individual commands
+- **Unit tests**: Test individual commands and features
 - **Integration tests**: Test complete workflows
-- **Edge case tests**: Test error conditions
-- **Compatibility tests**: Test on different platforms
+- **Edge case tests**: Test error conditions and boundary cases
+- **Compatibility tests**: Test on different platforms and environments
+- **UTF-8 tests**: Test Unicode support and international characters
+- **Timezone tests**: Test date/time conversion functionality
 
 ### Running Tests
 
@@ -168,10 +171,12 @@ sed_i 's/old/new/' file.txt
 
 ### Compatibility Considerations
 
-1. **Date command**: Use `test-compat.sh` for portable date handling
+1. **Date command**: Supports both GNU date (Linux) and BSD date (macOS) for timezone conversion
 2. **Sed command**: Use `sed_i` function for in-place editing
 3. **Bash version**: Target Bash 3.2+ for macOS compatibility
 4. **File paths**: Always use double quotes around variables
+5. **Process detection**: Uses `/proc/self/cmdline` on Linux, `ps` command on macOS for dynamic command names
+6. **UTF-8 support**: Automatic locale setting (LANG=C.UTF-8) for consistent Unicode handling
 
 ### Cross-Platform Testing
 
@@ -197,9 +202,11 @@ set -x  # Enable command tracing
 ### Common Issues
 
 1. **Permission errors**: Check file ownership in Docker
-2. **Date parsing**: Verify date format compatibility
+2. **Date parsing**: Verify date format compatibility and timezone handling
 3. **Git errors**: Ensure clean working directory
 4. **Symlink issues**: Check filesystem support
+5. **UTF-8 issues**: Verify locale settings and character encoding
+6. **Command detection**: Test dynamic command name detection on different shells
 
 ## Contributing
 
@@ -210,6 +217,18 @@ set -x  # Enable command tracing
 - Use `[[ ]]` for conditionals
 - Add error checking for commands
 - Comment complex logic
+
+### Documentation Requirements
+
+**IMPORTANT**: When making code changes, always update relevant documentation:
+
+1. **User-facing changes**: Update README.md and README.ja.md
+2. **New features**: Add to both English and Japanese documentation
+3. **API changes**: Update this DEV.md file
+4. **Command changes**: Update help text and usage examples
+5. **Configuration changes**: Update config documentation
+
+Documentation updates should be part of the same PR as code changes.
 
 ### Pull Request Process
 
@@ -249,13 +268,24 @@ set -x  # Enable command tracing
 - Use built-in bash features when possible
 - Profile with `time` command for bottlenecks
 
-## Future Improvements
+## Architecture Features
 
-Planned enhancements tracked in tickets:
-- Better error messages
-- Performance optimizations
-- Additional command options
-- Extended platform support
+### Key Design Decisions
+
+1. **Self-contained**: Single executable script with inlined dependencies
+2. **Git-native**: Leverages Git for branch management and version control
+3. **Markdown-based**: Human-readable ticket format with YAML frontmatter
+4. **Timezone-aware**: Converts UTC timestamps to local timezone for display
+5. **Error recovery**: Comprehensive diagnostic and recovery commands
+6. **Cross-platform**: Works consistently across different Unix-like systems
+
+### Recent Enhancements
+
+- **Smart branch handling**: Automatically handles existing branches and clean states
+- **Dynamic command detection**: Shows actual invocation method in help messages
+- **UTF-8 support**: Full Unicode support for international users
+- **Done folder organization**: Automatic organization of completed tickets
+- **Git history protection**: Prevents accidental commits of working files
 
 ## Troubleshooting
 
