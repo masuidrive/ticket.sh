@@ -5,7 +5,7 @@
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250708.142907
+# Version: 20250710.010227
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -947,7 +947,7 @@ convert_utc_to_local() {
 
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250708.142907
+# Version: 20250710.010227
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -998,7 +998,7 @@ umask 0022         # Ensure created files have proper permissions
 
 
 # Global variables
-VERSION="20250708.142907"  # This will be replaced during build
+VERSION="20250710.010227"  # This will be replaced during build
 CONFIG_FILE=".ticket-config.yml"
 CURRENT_TICKET_LINK="current-ticket.md"
 
@@ -1475,6 +1475,11 @@ EOF
     
     echo "📋 Ticket List"
     echo "---------------------------"
+    if [[ "$filter_status" == "done" ]]; then
+        echo "(sorted by closed date, newest first)"
+    elif [[ -z "$filter_status" ]]; then
+        echo "(sorted by status: doing, todo, done, then by priority asc)"
+    fi
     
     local displayed=0
     local temp_file=$(mktemp)
@@ -1521,8 +1526,15 @@ EOF
     
     # Sort and display
     # Sort by: status (doing first, then todo, then done), then by priority
+    # For done tickets, sort by closed_at in descending order (most recent first)
     local sorted_file=$(mktemp)
-    sort -t'|' -k1,1 -k2,2n "$temp_file" | sed 's/^doing|/0|/; s/^todo|/1|/; s/^done|/2|/' | sort -t'|' -k1,1n -k2,2n | sed 's/^0|/doing|/; s/^1|/todo|/; s/^2|/done|/' > "$sorted_file"
+    if [[ "$filter_status" == "done" ]]; then
+        # For done tickets only: sort by closed_at in descending order
+        sort -t'|' -k7,7r "$temp_file" > "$sorted_file"
+    else
+        # For all tickets or other statuses: use original sorting logic
+        sort -t'|' -k1,1 -k2,2n "$temp_file" | sed 's/^doing|/0|/; s/^todo|/1|/; s/^done|/2|/' | sort -t'|' -k1,1n -k2,2n | sed 's/^0|/doing|/; s/^1|/todo|/; s/^2|/done|/' > "$sorted_file"
+    fi
     
     while IFS='|' read -r status priority ticket_path description created_at started_at closed_at; do
         [[ $displayed -ge $count ]] && break
