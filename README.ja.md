@@ -135,27 +135,105 @@ cp ticket.sh /usr/local/bin/
 
 ## 設定
 
-`.ticket-config.yaml`を編集：
+`.ticket-config.yaml`を編集（これは作者が実際に使っている設定です）：
 
 ```yaml
+# Ticket system configuration
+
+# Directory settings
 tickets_dir: "tickets"
-default_branch: "develop"
+
+# Git settings
+default_branch: "main"
 branch_prefix: "feature/"
+repository: "origin"
+
+# Automatically push changes to remote repository during close command
+# Set to false if you want to manually control when to push
 auto_push: true
 
-# リモートブランチ自動削除設定
-# 有効にすると、チケットクローズ時に自動的にリモートのfeatureブランチを削除します。
-# これによりGitHubの「Compare & pull request」バナーが表示されなくなります。
-# 履歴として残したい場合はfalseに設定してください。
-delete_remote_on_close: true  # デフォルト: true
+# Automatically delete remote feature branch after closing ticket
+# Set to false if you want to keep remote branches for history
+delete_remote_on_close: true
 
-# 成功メッセージ
+# Success messages (leave empty to disable)
+# Message displayed after starting work on a ticket
 start_success_message: |
-  Please review the ticket content in `current-ticket.md` and make any
-  necessary adjustments before beginning work.
+  Please review the ticket content in `current-ticket.md` and make any necessary adjustments before you begin work.
+  Run ticket.sh list to view all todo tickets. For any related tasks that have already been prioritized, list them under the `## Notes` section.
 
+# Message displayed after closing a ticket
 close_success_message: |
-  # デフォルトは空
+  I've closed the ticket—please perform a backlog refinement.
+  Run ticket.sh list to view all todo tickets; if you find any with overlapping content, review the corresponding `tickets/*.md` files.
+  If you spot tasks that are already complete, update their tickets as needed.
+
+# Ticket template
+default_content: |
+  # Ticket Overview
+
+  {{Write the overview and tasks for this ticket here.}}
+
+  ## Prerequisite
+
+  {{List any prerequisites or dependencies for this ticket.}}
+
+
+  ## Tasks
+
+  **Note: After completing each task, you must run ./bin/test.sh and ensure all tests pass. No exceptions are allowed.**
+
+  {{Organize tasks into phases based on logical groupings or concerns. Create one or more phases as appropriate.}}
+
+  ### Phase 1: {{Phase name describing the concern/focus}}
+
+  - [ ] {{Task 1}}
+  - [ ] {{Task 2}}
+  ...
+
+  ### Phase 2: {{Phase name describing the concern/focus}}
+
+  - [ ] {{Task 1}}
+  - [ ] {{Task 2}}
+  ...
+
+  ### Phase N: {{Additional phases as needed}}
+
+  ### Final Phase: Quality Assurance
+  - [ ] Run unit tests (./bin/test.sh) and pass all tests (No exceptions)
+  - [ ] Run integration tests (./bin/test-integration.sh) and pass all tests (No exceptions)
+  - [ ] Run code review (./bin/code-review.sh)
+  - [ ] Review and address all reviewer feedback
+  - [ ] Update documentation and this ticket
+
+  ## Acceptance Criteria
+
+  {{Define the acceptance criteria for this ticket.}}
+
+
+  ## Test Cases
+
+  {{List test cases to verify the ticket's functionality.}}
+
+
+  ## Parent ticket
+
+  {{If this ticket is a sub-ticket, link to the parent ticket here.}}
+
+
+  ## Child tickets
+
+  {{If this ticket has child tickets, list them here.}}
+
+  ## Review
+
+  Please list here in full any remarks received from reviewers.
+  Any corrections should also be added to the Tasks section at the top.
+
+
+  ## Notes
+
+  {{Additional notes or requirements.}}
 ```
 
 ## 高度な機能
