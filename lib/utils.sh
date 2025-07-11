@@ -52,7 +52,26 @@ EOF
 
 # Get current git branch
 get_current_branch() {
-    git rev-parse --abbrev-ref HEAD 2>/dev/null
+    # Try to get current branch name
+    local branch_name=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+    
+    # If HEAD doesn't exist (no commits yet), try to get default branch
+    if [[ -z "$branch_name" ]] || [[ "$branch_name" == "HEAD" ]]; then
+        # Try to get the default branch from git config
+        branch_name=$(git config --get init.defaultBranch 2>/dev/null)
+        
+        # If still empty, try to detect from git symbolic-ref
+        if [[ -z "$branch_name" ]]; then
+            branch_name=$(git symbolic-ref --short HEAD 2>/dev/null)
+        fi
+        
+        # If still empty, default to "main"
+        if [[ -z "$branch_name" ]]; then
+            branch_name="main"
+        fi
+    fi
+    
+    echo "$branch_name"
 }
 
 # Check if git working directory is clean

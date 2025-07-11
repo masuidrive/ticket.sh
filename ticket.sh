@@ -5,7 +5,7 @@
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250711.014015
+# Version: 20250711.023307
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -802,7 +802,26 @@ EOF
 
 # Get current git branch
 get_current_branch() {
-    git rev-parse --abbrev-ref HEAD 2>/dev/null
+    # Try to get current branch name
+    local branch_name=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+    
+    # If HEAD doesn't exist (no commits yet), try to get default branch
+    if [[ -z "$branch_name" ]] || [[ "$branch_name" == "HEAD" ]]; then
+        # Try to get the default branch from git config
+        branch_name=$(git config --get init.defaultBranch 2>/dev/null)
+        
+        # If still empty, try to detect from git symbolic-ref
+        if [[ -z "$branch_name" ]]; then
+            branch_name=$(git symbolic-ref --short HEAD 2>/dev/null)
+        fi
+        
+        # If still empty, default to "main"
+        if [[ -z "$branch_name" ]]; then
+            branch_name="main"
+        fi
+    fi
+    
+    echo "$branch_name"
 }
 
 # Check if git working directory is clean
@@ -963,7 +982,7 @@ get_config_file() {
 
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250711.014015
+# Version: 20250711.023307
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -1055,7 +1074,7 @@ SCRIPT_COMMAND=$(get_script_command)
 
 
 # Global variables
-VERSION="20250711.014015"  # This will be replaced during build
+VERSION="20250711.023307"  # This will be replaced during build
 CONFIG_FILE=""  # Will be set dynamically by get_config_file()
 CURRENT_TICKET_LINK="current-ticket.md"
 
