@@ -15,11 +15,39 @@ Gitブランチとマークダウンファイルを使った軽量で堅牢な�
 
 ## クイックスタート
 
+### ダウンロード
 ```bash
-# ビルド済みスクリプトをダウンロード
 curl -O https://raw.githubusercontent.com/masuidrive/ticket.sh/main/ticket.sh
 chmod +x ticket.sh
+```
 
+### コーディングエージェント向け
+
+Claude CodeやGemini CLIのようなコーディングエージェントでは、下記のような会話で操作。
+
+```
+`./ticket.sh init`を実行してチケット管理をインストール
+CLAUDE.mdにカスタムプロンプトを追記
+```
+
+```
+認証システムの実装チケットを切って
+```
+
+```
+そのチケットを開始して
+```
+
+```
+チケット閉じて
+```
+
+```
+残ってるチケットは何？
+```
+
+### CLI使用法
+```bash
 # プロジェクトで初期化
 ./ticket.sh init
 

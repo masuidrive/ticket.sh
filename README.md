@@ -15,11 +15,39 @@ A lightweight, robust ticket management system that uses Git branches and markdo
 
 ## Quick Start
 
+### Download
 ```bash
-# Download pre-built script
 curl -O https://raw.githubusercontent.com/masuidrive/ticket.sh/main/ticket.sh
 chmod +x ticket.sh
+```
 
+### For Coding Agents
+
+With coding agents like Claude Code or Gemini CLI, you can operate with conversations like these:
+
+```
+Run `./ticket.sh init` to install ticket management
+Add custom prompts to CLAUDE.md
+```
+
+```
+Create a ticket for implementing authentication system
+```
+
+```
+Start working on that ticket
+```
+
+```
+Close the ticket
+```
+
+```
+What tickets are remaining?
+```
+
+### CLI Usage
+```bash
 # Initialize in your project
 ./ticket.sh init
 

@@ -3,8 +3,8 @@ priority: 2
 tags: [documentation, readme, ai]
 description: "Add dedicated section for coding agents in README explaining ticket.sh integration"
 created_at: "2025-07-11T06:44:53Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2025-07-11T06:46:27Z # Do not modify manually
+closed_at: 2025-07-11T06:57:07Z # Do not modify manually
 ---
 
 # Add Coding Agent Documentation to README
@@ -15,15 +15,15 @@ Create a dedicated section in README files explaining how coding agents (like Cl
 
 ## Tasks
 
-- [ ] Add "For Coding Agents" section to README.md
-- [ ] Add "For Coding Agents" section to README.ja.md  
-- [ ] Include ticket workflow examples for AI assistants
-- [ ] Document best practices for ticket creation and management
-- [ ] Add examples of how to integrate with existing development workflows
-- [ ] Run tests before closing and pass all tests (No exceptions)
-- [ ] Run `bash build.sh` to build the project
-- [ ] Update documentation if necessary
-  - [ ] Update README.*.md
+- [x] Add "For Coding Agents" section to README.md
+- [x] Add "For Coding Agents" section to README.ja.md  
+- [x] Include ticket workflow examples for AI assistants
+- [x] Document best practices for ticket creation and management
+- [x] Add examples of how to integrate with existing development workflows
+- [x] Run tests before closing and pass all tests (No exceptions)
+- [x] Run `bash build.sh` to build the project
+- [x] Update documentation if necessary
+  - [x] Update README.*.md
   - [ ] Update spec.*.md
   - [ ] Update DEV.md
 - [ ] Get developer approval before closing
