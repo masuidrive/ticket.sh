@@ -1344,12 +1344,6 @@ EOF
     # At this point, all critical operations have succeeded
     # Now proceed with cleanup operations
     
-    # Delete local feature branch - use -D since squash merge doesn't show as "merged"
-    run_git_command "git branch -D $current_branch" || {
-        echo "Warning: Failed to delete local branch '$current_branch'" >&2
-        echo "You may need to delete it manually: git branch -D $current_branch" >&2
-    }
-    
     # Remove current ticket link - core workflow is complete, safe to remove
     rm -f "$CURRENT_TICKET_LINK"
     

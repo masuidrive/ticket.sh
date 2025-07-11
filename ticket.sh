@@ -5,7 +5,7 @@
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250710.155320
+# Version: 20250711.014015
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -963,7 +963,7 @@ get_config_file() {
 
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250710.155320
+# Version: 20250711.014015
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -1055,7 +1055,7 @@ SCRIPT_COMMAND=$(get_script_command)
 
 
 # Global variables
-VERSION="20250710.155320"  # This will be replaced during build
+VERSION="20250711.014015"  # This will be replaced during build
 CONFIG_FILE=""  # Will be set dynamically by get_config_file()
 CURRENT_TICKET_LINK="current-ticket.md"
 
@@ -2289,12 +2289,6 @@ EOF
     
     # At this point, all critical operations have succeeded
     # Now proceed with cleanup operations
-    
-    # Delete local feature branch - use -D since squash merge doesn't show as "merged"
-    run_git_command "git branch -D $current_branch" || {
-        echo "Warning: Failed to delete local branch '$current_branch'" >&2
-        echo "You may need to delete it manually: git branch -D $current_branch" >&2
-    }
     
     # Remove current ticket link - core workflow is complete, safe to remove
     rm -f "$CURRENT_TICKET_LINK"
