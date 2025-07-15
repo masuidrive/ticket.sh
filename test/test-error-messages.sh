@@ -16,13 +16,14 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 # Test directory
-TEST_DIR="test-error-messages-$(date +%s)"
+TEST_DIR="tmp/test-error-messages-$(date +%s)"
 
 echo -e "${YELLOW}=== Error Message Tests ===${NC}"
 echo
 
 # Setup
 setup_test() {
+    mkdir -p tmp
     setup_test_repo "$TEST_DIR"
     # Copy ticket.sh to test directory
     cp "${SCRIPT_DIR}/../ticket.sh" .
@@ -53,7 +54,7 @@ cd "$TEST_DIR"
 # Copy ticket.sh to test directory
 cp "${SCRIPT_DIR}/../ticket.sh" .
 chmod +x ticket.sh
-OUTPUT=$(./ticket.sh init 2>&1)
+OUTPUT=$(./ticket.sh init </dev/null 2>&1)
 test_error_message "Git repository error" "$OUTPUT" "Not in a git repository"
 
 # Initialize git for remaining tests
@@ -64,8 +65,8 @@ git config user.email "test@example.com"
 echo "test" > .gitkeep
 git add .gitkeep
 git commit -q -m "Initial commit"
-# Create develop branch
-git checkout -q -b develop
+# Create main branch
+git checkout -q -b main
 
 # Test 2: Ticket system not initialized
 echo -e "\n2. Testing 'not initialized' error..."
@@ -73,7 +74,7 @@ OUTPUT=$(./ticket.sh list 2>&1)
 test_error_message "Not initialized error" "$OUTPUT" "Ticket system not initialized"
 
 # Initialize ticket system
-./ticket.sh init >/dev/null 2>&1
+./ticket.sh init </dev/null >/dev/null 2>&1
 
 # Test 3: Invalid slug format
 echo -e "\n3. Testing 'invalid slug' error..."
@@ -89,15 +90,15 @@ test_error_message "Empty slug error" "$OUTPUT" "slug required"
 echo -e "\n5. Testing 'ticket not found' error..."
 # First make sure we're in a clean state with no uncommitted changes
 git add . && git commit -q -m "clean state" || true
-# Make sure we're on develop branch
-git checkout -q develop
+# Make sure we're on main branch
+git checkout -q main
 OUTPUT=$(./ticket.sh start "nonexistent-ticket" 2>&1)
 test_error_message "Ticket not found error" "$OUTPUT" "Ticket not found"
 
 # Test 6: Resume existing branch (changed behavior)
 echo -e "\n6. Testing resume existing branch behavior..."
 # Clean up any existing test branches
-git checkout -q develop
+git checkout -q main
 # Delete any existing branches that might conflict
 for branch in $(git branch | grep "feature/.*already-started-test"); do
     git branch -D "$branch" 2>/dev/null || true
@@ -108,7 +109,7 @@ git add . && git commit -q -m "add ticket"
 TICKET=$(safe_get_ticket_name "*already-started-test.md")
 ./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1
 git add . && git commit -q -m "start ticket"
-git checkout -q develop
+git checkout -q main
 
 OUTPUT=$(./ticket.sh start "$TICKET" --no-push 2>&1)
 # Now we expect success with resume message
@@ -122,15 +123,15 @@ fi
 
 # Test 7: Close from wrong branch
 echo -e "\n7. Testing 'wrong branch' error for close..."
-# Make sure we're on develop branch after Test 6
-git checkout -q develop
+# Make sure we're on main branch after Test 6
+git checkout -q main
 OUTPUT=$(./ticket.sh close 2>&1)
 test_error_message "Wrong branch error" "$OUTPUT" "Not on a feature branch"
 
 # Test 8: No current ticket
 echo -e "\n8. Testing 'no current ticket' error..."
 # Switch to a clean feature branch
-git checkout -q develop
+git checkout -q main
 git branch -D feature/test-no-current 2>/dev/null || true
 git checkout -q -b feature/test-no-current
 # Make sure no current-ticket.md exists
@@ -147,7 +148,7 @@ test_error_message "Uncommitted changes error" "$OUTPUT" "uncommitted changes"
 
 # Test 10: Invalid count value
 echo -e "\n10. Testing 'invalid count' error..."
-git checkout -q develop 2>/dev/null || true
+git checkout -q main 2>/dev/null || true
 rm -f dirty.txt
 OUTPUT=$(./ticket.sh list --count -5 2>&1)
 test_error_message "Invalid count error" "$OUTPUT" "Invalid count value"
@@ -163,7 +164,7 @@ test_error_message "Invalid status error" "$OUTPUT" "Invalid status"
 # Test 12: Already closed ticket
 echo -e "\n12. Testing 'already closed' error..."
 # Create a fresh ticket for closing test
-git checkout -q develop 2>/dev/null || true
+git checkout -q main 2>/dev/null || true
 ./ticket.sh new "close-test" >/dev/null 2>&1
 git add . && git commit -q -m "add close test ticket" || true
 CLOSE_TICKET=$(safe_get_ticket_name "*close-test.md")
@@ -174,7 +175,7 @@ git add . && git commit -q -m "add test content" || true
 ./ticket.sh close --no-push >/dev/null 2>&1
 
 # Now try to start the closed ticket
-git checkout -q develop 2>/dev/null || true
+git checkout -q main 2>/dev/null || true
 # The ticket.sh start command expects the ticket name without path
 CLOSE_TICKET_NAME=$(basename "$CLOSE_TICKET" .md)
 OUTPUT=$(./ticket.sh start "$CLOSE_TICKET_NAME" --no-push 2>&1)

@@ -287,6 +287,10 @@ yaml_parse() {
     local multiline_value=""
     local reading_multiline=0
     
+    # Use temporary file to avoid process substitution (bash 3.2 compatibility)
+    local temp_yaml_output="/tmp/yaml_parse_$$.tmp"
+    _yaml_parse_awk "$file" > "$temp_yaml_output" 2>/dev/null || true
+    
     while IFS='' read -r line; do
         if [[ $reading_multiline -eq 1 ]]; then
             # Check if this is the start of a new entry
@@ -359,7 +363,10 @@ yaml_parse() {
                 _YAML_VALUES+=("$key")  # key contains the list item
                 ;;
         esac
-    done < <(_yaml_parse_awk "$file") || true
+    done < "$temp_yaml_output"
+    
+    # Clean up temporary file
+    rm -f "$temp_yaml_output"
     
     # Handle last multiline value if any
     if [[ $reading_multiline -eq 1 ]]; then

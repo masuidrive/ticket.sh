@@ -42,8 +42,15 @@ if [[ ! -f "$TICKET_SH" ]]; then
 fi
 
 # Create temporary test directory
-TEST_DIR=$(mktemp -d)
+mkdir -p tmp
+TEST_DIR="tmp/test-check-$(date +%s)"
+mkdir -p "$TEST_DIR"
 cd "$TEST_DIR"
+
+# Copy ticket.sh to test directory
+cp "$TICKET_SH" .
+chmod +x ticket.sh
+TICKET_SH="./ticket.sh"
 
 # Initialize git and ticket system
 git init > /dev/null 2>&1
@@ -58,7 +65,7 @@ fi
 
 git commit --allow-empty -m "Initial commit" > /dev/null 2>&1
 
-"$TICKET_SH" init > /dev/null 2>&1
+"$TICKET_SH" init </dev/null > /dev/null 2>&1
 
 echo -e "${YELLOW}=== Check Command Tests ===${NC}"
 

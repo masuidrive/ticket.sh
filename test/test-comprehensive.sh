@@ -10,7 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$(dirname "$0")/test-helpers.sh"
 
 # Test configuration
-TEST_DIR="test-comprehensive-$(date +%s)"
+TEST_DIR="tmp/test-comprehensive-$(date +%s)"
 ORIGINAL_DIR=$(pwd)
 
 # Colors
@@ -42,6 +42,7 @@ section() {
 
 # Setup
 setup() {
+    mkdir -p tmp
     mkdir -p "$TEST_DIR"
     cd "$TEST_DIR"
     
@@ -65,7 +66,7 @@ run_tests() {
     section "1. Prerequisites and Error Handling"
     
     # No git repo
-    if ./ticket.sh init 2>&1 | grep -q "Not in a git repository"; then
+    if ./ticket.sh init </dev/null 2>&1 | grep -q "Not in a git repository"; then
         pass "Detects missing git repository"
     else
         fail "Should detect missing git repository"
@@ -78,7 +79,7 @@ run_tests() {
     echo "# Test" > README.md
     git add README.md
     git commit -q -m "Initial commit"
-    git checkout -q -b develop
+    git checkout -q -b main
     
     # No config
     if ./ticket.sh list 2>&1 | grep -q "not initialized"; then
@@ -90,7 +91,7 @@ run_tests() {
     # Test 2: Initialization
     section "2. Initialization"
     
-    ./ticket.sh init >/dev/null 2>&1
+    ./ticket.sh init </dev/null >/dev/null 2>&1
     
     [[ -f .ticket-config.yaml ]] && pass "Creates config file" || fail "Config file not created"
     [[ -d tickets ]] && pass "Creates tickets directory" || fail "Tickets directory not created"
@@ -163,10 +164,10 @@ run_tests() {
     ./ticket.sh close --no-push >/dev/null 2>&1
     
     BRANCH=$(git rev-parse --abbrev-ref HEAD)
-    if [[ "$BRANCH" == "develop" ]]; then
-        pass "Returns to develop branch"
+    if [[ "$BRANCH" == "main" ]]; then
+        pass "Returns to main branch"
     else
-        fail "Not on develop branch: $BRANCH"
+        fail "Not on main branch: $BRANCH"
     fi
 }
 

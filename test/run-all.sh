@@ -5,6 +5,27 @@
 # 
 # Note: This script must be run with bash, not sh
 # Use: bash test/run-all.sh
+#
+# IMPORTANT: macOS bash 3.2.57 compatibility issues
+# =================================================
+# macOS ships with an old bash version (3.2.57) that has issues with stdin handling.
+# This can cause scripts to hang when bash enters interactive mode unexpectedly.
+# 
+# Known issues and solutions:
+# 1. Process substitution with stdin (< <()) can cause hanging
+#    Solution: Use temporary files instead of process substitution
+# 
+# 2. Commands that might spawn interactive shells (like ticket.sh init) need stdin redirection
+#    Solution: Always redirect stdin from /dev/null for such commands
+#    Example: ./ticket.sh init </dev/null >/dev/null 2>&1
+# 
+# 3. Git commands may also trigger interactive prompts
+#    Solution: Configure git to avoid interactive mode or redirect stdin
+# 
+# If tests hang on macOS, check for:
+# - Missing stdin redirection on init commands
+# - Process substitution patterns in the code
+# - Any command that might expect terminal input
 
 # Check if running with bash (POSIX compatible check)
 if [ -z "${BASH_VERSION:-}" ]; then
@@ -39,6 +60,7 @@ run_test() {
     local test_command="$2"
     
     echo -e "${BLUE}Running $test_name...${NC}"
+    echo "  [$(date '+%H:%M:%S')] Starting test: $test_name"
     
     # Run test and capture output
     output=$(eval "$test_command" 2>&1) || true
@@ -46,30 +68,30 @@ run_test() {
     # Show the output
     echo "$output"
     
-    # Extract passed/failed counts from output
-    # First try to get from summary line
-    if echo "$output" | grep -q "Passed:"; then
-        # Look for the colored number after "Passed:"
-        passed=$(echo "$output" | grep "Passed:" | sed -E 's/.*Passed:.*\[0;32m([0-9]+)\[0m.*/\1/' | tail -1)
-        failed=$(echo "$output" | grep "Failed:" | sed -E 's/.*Failed:.*\[0;31m([0-9]+)\[0m.*/\1/' | tail -1)
-        # If extraction failed, default to counting symbols
-        if [[ -z "$passed" ]] || [[ ! "$passed" =~ ^[0-9]+$ ]]; then
-            passed=$(echo "$output" | grep -c "✓" || true)
+    # Extract passed/failed counts from output - simplified approach
+    # Count check/cross marks directly
+    passed=$(echo "$output" | grep -c "✓" || true)
+    failed=$(echo "$output" | grep -c "✗" || true)
+    
+    # Also try to get from summary line if available - use the LAST summary line to avoid duplicates
+    if echo "$output" | grep -q "Summary - Passed:"; then
+        summary_passed=$(echo "$output" | grep "Summary - Passed:" | tail -1 | sed -n 's/.*Passed: *\([0-9]*\).*/\1/p')
+        summary_failed=$(echo "$output" | grep "Summary - Passed:" | tail -1 | sed -n 's/.*Failed: *\([0-9]*\).*/\1/p')
+        
+        # Use summary numbers if they're valid and greater than symbol count
+        if [[ -n "$summary_passed" ]] && [[ "$summary_passed" =~ ^[0-9]+$ ]] && [[ "$summary_passed" -gt "$passed" ]]; then
+            passed="$summary_passed"
         fi
-        if [[ -z "$failed" ]] || [[ ! "$failed" =~ ^[0-9]+$ ]]; then
-            failed=$(echo "$output" | grep -c "✗" || true)
+        if [[ -n "$summary_failed" ]] && [[ "$summary_failed" =~ ^[0-9]+$ ]] && [[ "$summary_failed" -gt "$failed" ]]; then
+            failed="$summary_failed"
         fi
-    else
-        # For tests that don't have summary, count check/cross marks
-        passed=$(echo "$output" | grep -c "✓" || true)
-        failed=$(echo "$output" | grep -c "✗" || true)
     fi
     
     TOTAL_TESTS=$((TOTAL_TESTS + passed + failed))
     TOTAL_PASSED=$((TOTAL_PASSED + passed))
     TOTAL_FAILED=$((TOTAL_FAILED + failed))
     
-    echo
+    echo "  [$(date '+%H:%M:%S')] Completed test: $test_name"
     echo -e "  Summary - Passed: ${GREEN}$passed${NC}, Failed: ${RED}$failed${NC}"
     echo
 }

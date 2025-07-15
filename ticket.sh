@@ -12,7 +12,7 @@ fi
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250715.154241
+# Version: 20250715.231845
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -326,6 +326,10 @@ yaml_parse() {
     local multiline_value=""
     local reading_multiline=0
     
+    # Use temporary file to avoid process substitution (bash 3.2 compatibility)
+    local temp_yaml_output="/tmp/yaml_parse_$$.tmp"
+    _yaml_parse_awk "$file" > "$temp_yaml_output" 2>/dev/null || true
+    
     while IFS='' read -r line; do
         if [[ $reading_multiline -eq 1 ]]; then
             # Check if this is the start of a new entry
@@ -398,7 +402,10 @@ yaml_parse() {
                 _YAML_VALUES+=("$key")  # key contains the list item
                 ;;
         esac
-    done < <(_yaml_parse_awk "$file") || true
+    done < "$temp_yaml_output"
+    
+    # Clean up temporary file
+    rm -f "$temp_yaml_output"
     
     # Handle last multiline value if any
     if [[ $reading_multiline -eq 1 ]]; then
@@ -996,7 +1003,7 @@ if [ -z "${BASH_VERSION:-}" ]; then
 fi
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250715.154241
+# Version: 20250715.231845
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -1088,7 +1095,7 @@ SCRIPT_COMMAND=$(get_script_command)
 
 
 # Global variables
-VERSION="20250715.154241"  # This will be replaced during build
+VERSION="20250715.231845"  # This will be replaced during build
 CONFIG_FILE=""  # Will be set dynamically by get_config_file()
 CURRENT_TICKET_LINK="current-ticket.md"
 

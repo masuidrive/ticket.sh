@@ -23,7 +23,7 @@ git config user.name "Test User"
 touch README.md
 git add README.md
 git commit -m "Initial commit" -q
-git checkout -b develop -q
+git checkout -b main -q
 
 # Initialize ticket system
 "$TICKET_SH" init

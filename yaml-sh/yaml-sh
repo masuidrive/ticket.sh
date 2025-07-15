@@ -347,7 +347,87 @@ yaml_parse() {
                 _YAML_VALUES+=("$key")  # key contains the list item
                 ;;
         esac
-    done < <(_yaml_parse_awk "$file")
+    # Use temporary file to avoid process substitution (bash 3.2 compatibility)
+    local temp_yaml_output="/tmp/yaml_parse_$$.tmp"
+    _yaml_parse_awk "$file" > "$temp_yaml_output" 2>/dev/null || true
+    
+    # Read from temporary file
+    while IFS='' read -r line; do
+        if [[ $reading_multiline -eq 1 ]]; then
+            # Check if this is the start of a new entry
+            if [[ "$line" =~ ^(KEY|VALUE|LIST|ILIST) ]]; then
+                # Save the completed multiline value
+                _YAML_KEYS+=("$current_path")
+                _YAML_VALUES+=("$multiline_value")
+                reading_multiline=0
+                multiline_value=""
+            else
+                # Continue reading multiline value
+                if [[ -n "$multiline_value" ]]; then
+                    multiline_value+=$'\n'"$line"
+                else
+                    multiline_value="$line"
+                fi
+                continue
+            fi
+        fi
+        
+        # Parse the line
+        local type=$(echo "$line" | awk '{print $1}')
+        local indent=$(echo "$line" | awk '{print $2}')
+        local key=$(echo "$line" | awk '{print $3}')
+        local value=$(echo "$line" | cut -d' ' -f4-)
+        
+        case "$type" in
+            KEY)
+                # Only reset in_list if we're changing to a different key
+                if [[ "$current_path" != "$key" ]]; then
+                    in_list=0
+                fi
+                current_path="$key"
+                if [[ -n "$value" ]]; then
+                    _YAML_KEYS+=("$current_path")
+                    _YAML_VALUES+=("$value")
+                fi
+                ;;
+                
+            VALUE)
+                # Check if value continues on next lines
+                if [[ -n "$value" ]]; then
+                    multiline_value="$value"
+                    reading_multiline=1
+                else
+                    _YAML_KEYS+=("$current_path")
+                    _YAML_VALUES+=("")
+                fi
+                ;;
+                
+            LIST)
+                if [[ $in_list -eq 0 ]]; then
+                    list_index=0
+                    in_list=1
+                else
+                    ((list_index++))
+                fi
+                _YAML_KEYS+=("${current_path}.${list_index}")
+                _YAML_VALUES+=("$key")  # key contains the list item
+                ;;
+                
+            ILIST)
+                if [[ $in_list -eq 0 ]]; then
+                    list_index=0
+                    in_list=1
+                else
+                    ((list_index++))
+                fi
+                _YAML_KEYS+=("${current_path}.${list_index}")
+                _YAML_VALUES+=("$key")  # key contains the list item
+                ;;
+        esac
+    done < "$temp_yaml_output"
+    
+    # Clean up temporary file
+    rm -f "$temp_yaml_output"
     
     # Handle last multiline value if any
     if [[ $reading_multiline -eq 1 ]]; then

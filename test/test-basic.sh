@@ -20,8 +20,9 @@ echo
 source "${SCRIPT_DIR}/test-helpers.sh"
 
 # Setup
-TEST_DIR="test-basic"
+TEST_DIR="tmp/test-basic-$(date +%s)"
 echo "Setting up test environment..."
+mkdir -p tmp
 rm -rf "$TEST_DIR"
 setup_test_repo "$TEST_DIR"
 echo "Test environment ready."
@@ -29,7 +30,7 @@ echo "Test environment ready."
 # Test 1: Init
 echo "1. Testing init..."
 echo "   Initializing ticket system..."
-./ticket.sh init >/dev/null
+./ticket.sh init </dev/null >/dev/null
 echo "   ✓ Init completed"
 
 # Test 2: New ticket
@@ -72,7 +73,9 @@ echo "   Working directory status: $(git status --porcelain | wc -l) changes"
 if ./ticket.sh close --no-push; then
     echo "   ✓ Close succeeded"
     echo "   ✓ Final branch: $(git branch --show-current)"
-    grep -q "closed_at: 20" "$TICKET" && echo "   ✓ Ticket marked as closed"
+    # Check ticket in done folder after close
+    DONE_TICKET="tickets/done/$(basename "$TICKET")"
+    [[ -f "$DONE_TICKET" ]] && grep -q "closed_at: 20" "$DONE_TICKET" && echo "   ✓ Ticket marked as closed"
 else
     echo "   ✗ Close failed"
     exit 1

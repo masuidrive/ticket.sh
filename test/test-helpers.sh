@@ -97,7 +97,8 @@ EOF
     
     echo "      Initializing ticket system..."
     # Initialize ticket system
-    ./ticket.sh init >/dev/null
+    # Redirect stdin from /dev/null to prevent interactive mode
+    ./ticket.sh init </dev/null >/dev/null 2>&1
     
     echo "      Finalizing setup..."
     # Commit .gitignore changes from init
@@ -105,6 +106,13 @@ EOF
         git add .gitignore
         git commit -q -m "Update .gitignore from ticket init"
     fi
+    
+    # Remove any existing current-ticket.md to ensure clean test environment
+    if [[ -L "current-ticket.md" ]]; then
+        rm current-ticket.md
+        echo "      Removed existing current-ticket.md symlink"
+    fi
+    
     echo "      Repository setup complete."
 }
 

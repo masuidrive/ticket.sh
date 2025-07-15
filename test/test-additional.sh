@@ -24,7 +24,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 # Test directory
-TEST_DIR="test-additional-$(date +%s)"
+TEST_DIR="tmp/test-additional-$(date +%s)"
 
 echo -e "${YELLOW}=== Additional ticket.sh Tests ===${NC}"
 echo
@@ -32,6 +32,7 @@ echo
 # Setup
 setup_test() {
     echo "    Setting up test repository..."
+    mkdir -p tmp
     setup_test_repo "$TEST_DIR"
     echo "    Test repository setup complete."
 }
@@ -91,7 +92,7 @@ git add tickets .ticket-config.yaml && git commit -q -m "add tickets"
 TICKET_NAME=$(basename "$FIRST_TICKET" .md)
 ./ticket.sh start "$TICKET_NAME" --no-push >/dev/null 2>&1
 git add tickets current-ticket.md && git commit -q -m "update"
-git checkout -q develop
+git checkout -q main
 if ./ticket.sh start "$TICKET_NAME" --no-push >/dev/null 2>&1; then
     test_result 1 "Should not allow starting already started ticket"
 else
@@ -172,7 +173,7 @@ fi
 
 # Test 8: Dirty working directory
 echo -e "\n8. Testing operations with dirty working directory..."
-git checkout -q develop
+git checkout -q main
 echo "dirty" > dirty.txt
 if ./ticket.sh start some-ticket --no-push >/dev/null 2>&1; then
     test_result 1 "Should prevent start with uncommitted changes"
@@ -194,7 +195,7 @@ echo "work a" > work-a.txt
 git add work-a.txt && git commit -q -m "work a"
 
 # Go back and start second ticket
-git checkout -q develop
+git checkout -q main
 ./ticket.sh new "feature-b" >/dev/null 2>&1
 git add tickets .ticket-config.yaml && git commit -q -m "add b"
 TICKET_B=$(safe_get_ticket_name "*feature-b.md")
@@ -256,11 +257,11 @@ TICKET_2=$(safe_get_ticket_name "*priority-2.md")
 # Stay on feature branch to commit the started_at change
 git add tickets current-ticket.md && git commit -q -m "start ticket"
 
-# Merge the change back to develop so started_at is visible
-git checkout -q develop
+# Merge the change back to main so started_at is visible
+git checkout -q main
 git merge --no-ff -q "feature/$TICKET_2" -m "Merge feature branch" >/dev/null 2>&1
 
-# Now check order in list from develop branch
+# Now check order in list from main branch
 LIST_OUTPUT=$(./ticket.sh list 2>&1)
 # Get the first ticket name (should be priority-2 with doing status)
 FIRST_TICKET=$(echo "$LIST_OUTPUT" | grep "ticket_path:" | head -1 | awk '{print $2}')

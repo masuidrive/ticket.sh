@@ -12,12 +12,13 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 # Test directory
-TEST_DIR="test-close-force-$(date +%s)"
+TEST_DIR="tmp/test-close-force-$(date +%s)"
 
 echo -e "${YELLOW}=== Testing close --force option ===${NC}"
 echo
 
 # Setup
+mkdir -p tmp
 setup_test_repo "$TEST_DIR"
 
 # Test result
@@ -59,12 +60,12 @@ fi
 echo -e "\n2. Testing close --force with uncommitted changes..."
 # Now try with --force
 if ./ticket.sh close --force --no-push >/dev/null 2>&1; then
-    # Check if we're on develop branch
+    # Check if we're on main branch
     BRANCH=$(git branch --show-current)
-    if [[ "$BRANCH" == "develop" ]]; then
+    if [[ "$BRANCH" == "main" ]]; then
         test_result 0 "Successfully closed with --force"
     else
-        test_result 1 "Close succeeded but not on develop branch"
+        test_result 1 "Close succeeded but not on main branch (found: $BRANCH)"
     fi
 else
     test_result 1 "Close --force should succeed with uncommitted changes"

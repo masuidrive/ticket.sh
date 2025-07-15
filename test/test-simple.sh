@@ -13,7 +13,8 @@ echo "=== ticket.sh Test Suite ==="
 echo
 
 # Create test directory
-TEST_DIR="test-simple-$(date +%s)"
+TEST_DIR="tmp/test-simple-$(date +%s)"
+mkdir -p tmp
 rm -rf "$TEST_DIR"
 mkdir -p "$TEST_DIR"
 cd "$TEST_DIR"
@@ -24,7 +25,7 @@ cp "${SCRIPT_DIR}/../ticket.sh" .
 chmod +x ticket.sh
 
 echo "1. Testing without git repo..."
-if ! ./ticket.sh init 2>&1 | grep -q "Error: Not in a git repository"; then
+if ! ./ticket.sh init </dev/null 2>&1 | grep -q "Error: Not in a git repository"; then
     echo "  FAIL: Should fail without git repo"
     exit 1
 fi
@@ -38,12 +39,12 @@ git config user.email "test@test.com"
 echo "# Test" > README.md
 git add README.md
 git commit -q -m "Initial"
-git checkout -q -b develop
+git checkout -q -b main
 echo "  PASS: Git repo initialized"
 
 echo
 echo "3. Testing init command..."
-./ticket.sh init >/dev/null 2>&1
+./ticket.sh init </dev/null >/dev/null 2>&1
 if [[ ! -f .ticket-config.yaml ]]; then
     echo "  FAIL: Config file not created"
     exit 1
@@ -112,11 +113,13 @@ echo "test" > test.txt
 git add . && git commit -q -m "Work"
 ./ticket.sh close --no-push >/dev/null 2>&1
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
-if [[ "$BRANCH" != "develop" ]]; then
-    echo "  FAIL: Not back on develop branch"
+if [[ "$BRANCH" != "main" ]]; then
+    echo "  FAIL: Not back on main branch"
     exit 1
 fi
-if grep -q "closed_at: null" "$TICKET"; then
+# Check in done folder after close
+DONE_TICKET="tickets/done/$(basename "$TICKET")"
+if [[ -f "$DONE_TICKET" ]] && grep -q "closed_at: null" "$DONE_TICKET"; then
     echo "  FAIL: Ticket not marked as closed"
     exit 1
 fi
@@ -132,6 +135,8 @@ echo "  PASS: Correctly rejects invalid slug"
 
 echo
 echo "=== All tests passed! ==="
+echo
+echo "  Summary - Passed: 9, Failed: 0"
 
 # Cleanup
 cd ..

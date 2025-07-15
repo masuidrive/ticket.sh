@@ -16,7 +16,8 @@ echo
 source "${SCRIPT_DIR}/test-helpers.sh"
 
 # Setup
-TEST_DIR="test-close-after-commit-bug"
+TEST_DIR="tmp/test-close-after-commit-bug-$(date +%s)"
+mkdir -p tmp
 rm -rf "$TEST_DIR"
 setup_test_repo "$TEST_DIR"
 
@@ -76,8 +77,8 @@ fi
 
 # Verify ticket was properly closed
 FINAL_BRANCH=$(git branch --show-current)
-if [[ "$FINAL_BRANCH" != "develop" ]]; then
-    echo "   ✗ Expected to be on develop branch, got $FINAL_BRANCH"
+if [[ "$FINAL_BRANCH" != "main" ]]; then
+    echo "   ✗ Expected to be on main branch, got $FINAL_BRANCH"
     exit 1
 fi
 

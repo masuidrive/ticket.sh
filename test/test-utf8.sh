@@ -20,13 +20,14 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 # Test directory
-TEST_DIR="test-utf8-$(date +%s)"
+TEST_DIR="tmp/test-utf8-$(date +%s)"
 
 echo -e "${YELLOW}=== UTF-8 Support Tests ===${NC}"
 echo
 
 # Setup
 setup_test() {
+    mkdir -p tmp
     setup_test_repo "$TEST_DIR"
     # Copy ticket.sh to test directory
     cp "${SCRIPT_DIR}/../ticket.sh" .

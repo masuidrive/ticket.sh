@@ -7,7 +7,7 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Test configuration
-TEST_DIR="test-final-$(date +%s)"
+TEST_DIR="tmp/test-final-$(date +%s)"
 ORIGINAL_DIR=$(pwd)
 
 # Colors
@@ -22,6 +22,7 @@ echo
 
 # Create test environment
 echo "Setting up test environment..."
+mkdir -p tmp
 rm -rf "$TEST_DIR"
 mkdir -p "$TEST_DIR"
 cd "$TEST_DIR"
@@ -53,7 +54,7 @@ echo "Running tests..."
 echo
 
 # Test 1: Error handling without git
-if ./ticket.sh init 2>&1 | grep -q "Not in a git repository"; then
+if ./ticket.sh init </dev/null 2>&1 | grep -q "Not in a git repository"; then
     test_case "Detects missing git repository" "PASS"
 else
     test_case "Detects missing git repository" "FAIL"
@@ -66,7 +67,7 @@ git config user.email "test@example.com" >/dev/null 2>&1
 echo "# Test" > README.md
 git add README.md >/dev/null 2>&1
 git commit -q -m "Initial commit" >/dev/null 2>&1
-git checkout -q -b develop >/dev/null 2>&1
+git checkout -q -b main >/dev/null 2>&1
 
 # Test 2: Error handling without config
 if ./ticket.sh list 2>&1 | grep -q "not initialized"; then
@@ -76,7 +77,7 @@ else
 fi
 
 # Test 3: Initialize
-./ticket.sh init >/dev/null 2>&1
+./ticket.sh init </dev/null >/dev/null 2>&1
 if [[ -f .ticket-config.yaml ]] && [[ -d tickets ]] && [[ -f .gitignore ]]; then
     test_case "Initialize creates required files" "PASS"
 else
@@ -147,10 +148,10 @@ CLOSE_OUTPUT=$(./ticket.sh close --no-push 2>&1)
 CLOSE_EXIT=$?
 
 BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
-if [[ "$BRANCH" == "develop" ]] && [[ $CLOSE_EXIT -eq 0 ]]; then
-    test_case "Close returns to develop" "PASS"
+if [[ "$BRANCH" == "main" ]] && [[ $CLOSE_EXIT -eq 0 ]]; then
+    test_case "Close returns to main" "PASS"
 else
-    test_case "Close returns to develop" "FAIL"
+    test_case "Close returns to main" "FAIL"
     echo "  Close exit code: $CLOSE_EXIT"
     echo "  Current branch: $BRANCH"
 fi

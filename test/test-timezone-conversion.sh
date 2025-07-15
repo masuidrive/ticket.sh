@@ -15,13 +15,14 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 # Test directory
-TEST_DIR="test-timezone-$(date +%s)"
+TEST_DIR="tmp/test-timezone-$(date +%s)"
 
 echo -e "${YELLOW}=== Timezone Conversion Tests ===${NC}"
 echo
 
 # Setup
 setup_test() {
+    mkdir -p tmp
     rm -rf "$TEST_DIR"
     mkdir -p "$TEST_DIR"
     cd "$TEST_DIR"
@@ -52,7 +53,7 @@ test_result() {
 # Test 1: List shows local timezone for todo tickets
 echo "1. Testing todo ticket with local timezone..."
 setup_test
-./ticket.sh init >/dev/null 2>&1
+./ticket.sh init </dev/null >/dev/null 2>&1
 ./ticket.sh new "timezone-test-1" >/dev/null 2>&1
 
 # Get the created ticket and check list output
@@ -71,8 +72,8 @@ fi
 # Test 2: List shows closed_at for done tickets
 echo -e "\n2. Testing done ticket shows closed_at..."
 cd .. && setup_test
-./ticket.sh init >/dev/null 2>&1
-git checkout -q -b develop
+./ticket.sh init </dev/null >/dev/null 2>&1
+git checkout -q -b main
 ./ticket.sh new "done-test" >/dev/null 2>&1
 git add . && git commit -q -m "add ticket"
 
@@ -159,7 +160,7 @@ fi
 # Test 5: List performance with timezone conversion
 echo -e "\n5. Testing performance impact..."
 cd .. && setup_test
-./ticket.sh init >/dev/null 2>&1
+./ticket.sh init </dev/null >/dev/null 2>&1
 
 # Create multiple tickets
 for i in {1..5}; do

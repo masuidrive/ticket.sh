@@ -13,13 +13,14 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 # Test directory
-TEST_DIR="test-missing-$(date +%s)"
+TEST_DIR="tmp/test-missing-$(date +%s)"
 
 echo -e "${YELLOW}=== Missing Coverage Tests ===${NC}"
 echo
 
 # Setup
 setup_test() {
+    mkdir -p tmp
     setup_test_repo "$TEST_DIR"
 }
 
@@ -42,14 +43,14 @@ TICKET_NAME=$(safe_get_ticket_name "*test-file.md")
 
 # Test all three ways to specify ticket
 ./ticket.sh start "tickets/${TICKET_NAME}.md" --no-push >/dev/null 2>&1
-git add tickets current-ticket.md && git commit -q -m "start" && git checkout -q develop
+git add tickets current-ticket.md && git commit -q -m "start" && git checkout -q main
 
 if ./ticket.sh start "${TICKET_NAME}.md" --no-push >/dev/null 2>&1; then
     test_result 1 "Should not allow starting already started ticket"
 else
     # Try with just ticket name
     git checkout -q "feature/$TICKET_NAME" 2>/dev/null
-    git checkout -q develop
+    git checkout -q main
     if [[ -f current-ticket.md ]]; then
         rm current-ticket.md
     fi
@@ -187,8 +188,8 @@ git add tickets .ticket-config.yaml && git commit -q -m "add tickets"
 TICKET=$(safe_get_ticket_name "*multi-1.md")
 ./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1
 git add tickets current-ticket.md && git commit -q -m "start"
-# Merge back to develop so the started_at is visible
-git checkout -q develop
+# Merge back to main so the started_at is visible
+git checkout -q main
 git merge --no-ff -q "feature/$TICKET" -m "Merge" >/dev/null 2>&1
 
 # With multiple --status flags, the last one should win
