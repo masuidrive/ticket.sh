@@ -115,7 +115,7 @@ CURRENT_TICKET_LINK="current-ticket.md"
 
 # Default configuration values
 DEFAULT_TICKETS_DIR="tickets"
-DEFAULT_BRANCH="develop"
+DEFAULT_BRANCH="main"
 DEFAULT_BRANCH_PREFIX="feature/"
 DEFAULT_REPOSITORY="origin"
 DEFAULT_AUTO_PUSH="true"
