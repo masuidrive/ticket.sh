@@ -2,6 +2,15 @@
 
 # Run all tests for ticket.sh and yaml-sh
 # Usage: ./run-all.sh
+# 
+# Note: This script must be run with bash, not sh
+# Use: bash test/run-all.sh
+
+# Check if running with bash (POSIX compatible check)
+if [ -z "${BASH_VERSION:-}" ]; then
+    echo "Error: This script requires bash. Please run with 'bash test/run-all.sh'"
+    exit 1
+fi
 
 set -euo pipefail
 
@@ -79,14 +88,50 @@ echo
 echo -e "${YELLOW}=== ticket.sh Tests ===${NC}"
 echo
 
-# Run each test file in test directory
+# Define test order for better performance (fast tests first)
+FAST_TESTS=(
+    "test-check-simple.sh"
+    "test-prompt.sh"
+    "test-simple.sh"
+    "test-basic.sh"
+)
+
+SLOW_TESTS=(
+    "test-additional.sh"
+    "test-check.sh"
+    "test-comprehensive.sh"
+    "test-final.sh"
+)
+
+# Run fast tests first
+echo "Running fast tests..."
+for test_name in "${FAST_TESTS[@]}"; do
+    test_file="$SCRIPT_DIR/$test_name"
+    if [[ -f "$test_file" ]]; then
+        run_test "$(basename "${test_file%.sh}")" "bash $test_file"
+    fi
+done
+
+# Run remaining tests
+echo "Running remaining tests..."
 for test_file in "$SCRIPT_DIR"/test-*.sh; do
-    # Skip run-all scripts
-    if [[ "$(basename "$test_file")" == "run-all.sh" ]] || [[ "$(basename "$test_file")" == "run-all-on-docker.sh" ]] || [[ "$(basename "$test_file")" == "run-all-tests.sh" ]]; then
+    test_name=$(basename "$test_file")
+    
+    # Skip run-all scripts and already processed tests
+    if [[ "$test_name" == "run-all.sh" ]] || [[ "$test_name" == "run-all-on-docker.sh" ]] || [[ "$test_name" == "run-all-tests.sh" ]]; then
         continue
     fi
     
-    if [[ -f "$test_file" ]]; then
+    # Skip if already processed in fast tests
+    skip=false
+    for fast_test in "${FAST_TESTS[@]}"; do
+        if [[ "$test_name" == "$fast_test" ]]; then
+            skip=true
+            break
+        fi
+    done
+    
+    if [[ "$skip" == false ]] && [[ -f "$test_file" ]]; then
         run_test "$(basename "${test_file%.sh}")" "bash $test_file"
     fi
 done

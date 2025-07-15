@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 
+# Check if running with bash (POSIX compatible check)
+if [ -z "${BASH_VERSION:-}" ]; then
+    echo "Error: This script requires bash. Please run with 'bash ticket.sh' or make sure bash is your default shell."
+    echo "Current shell: $0"
+    exit 1
+fi
+
 # ticket.sh - Git-based Ticket Management System for Development
 # Version: 1.0.0
 #
@@ -551,6 +558,7 @@ EOF
     
     echo "Created ticket file: $ticket_file"
     echo "Please edit the file to add title, description and details."
+    echo "To start working on this ticket, you **must** run: $SCRIPT_COMMAND start $ticket_name"
 }
 
 # List tickets

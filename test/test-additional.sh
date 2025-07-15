@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 
+# Check if running with bash
+if [[ -z "${BASH_VERSION:-}" ]]; then
+    echo "Error: This test requires bash. Please run with 'bash test/test-additional.sh'"
+    echo "Current shell: $0"
+    exit 1
+fi
+
 # Additional test cases for ticket.sh
 # Tests edge cases and error conditions not covered by other tests
 
@@ -24,7 +31,9 @@ echo
 
 # Setup
 setup_test() {
+    echo "    Setting up test repository..."
     setup_test_repo "$TEST_DIR"
+    echo "    Test repository setup complete."
 }
 
 # Test result
@@ -39,8 +48,11 @@ test_result() {
 
 # Test 1: Duplicate ticket prevention
 echo "1. Testing duplicate ticket prevention..."
+echo "    Starting test setup..."
 setup_test
+echo "    Creating test ticket..."
 ./ticket.sh new test-duplicate >/dev/null 2>&1
+echo "    Test ticket created."
 
 # Check if tickets directory exists
 if [[ ! -d tickets ]]; then

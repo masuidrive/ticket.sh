@@ -20,6 +20,13 @@ echo "Version: $VERSION"
 cat > "$OUTPUT_FILE" << EOF
 #!/usr/bin/env bash
 
+# Early bash check (POSIX compatible)
+if [ -z "\${BASH_VERSION}" ]; then
+    echo "Error: This script requires bash. Please run with 'bash ticket.sh' or make sure bash is your default shell."
+    echo "Current shell: \$0"
+    exit 1
+fi
+
 # IMPORTANT NOTE: This file is generated from source files. DO NOT EDIT DIRECTLY!
 # To make changes, edit the source files in src/ directory and run ./build.sh
 # Source file: src/ticket.sh

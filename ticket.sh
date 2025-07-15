@@ -1,11 +1,18 @@
 #!/usr/bin/env bash
 
+# Early bash check (POSIX compatible)
+if [ -z "${BASH_VERSION}" ]; then
+    echo "Error: This script requires bash. Please run with 'bash ticket.sh' or make sure bash is your default shell."
+    echo "Current shell: $0"
+    exit 1
+fi
+
 # IMPORTANT NOTE: This file is generated from source files. DO NOT EDIT DIRECTLY!
 # To make changes, edit the source files in src/ directory and run ./build.sh
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250711.085223
+# Version: 20250715.154241
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -981,8 +988,15 @@ get_config_file() {
 # === Main Script ===
 
 
+# Check if running with bash (POSIX compatible check)
+if [ -z "${BASH_VERSION:-}" ]; then
+    echo "Error: This script requires bash. Please run with 'bash ticket.sh' or make sure bash is your default shell."
+    echo "Current shell: $0"
+    exit 1
+fi
+
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250711.085223
+# Version: 20250715.154241
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -1074,13 +1088,13 @@ SCRIPT_COMMAND=$(get_script_command)
 
 
 # Global variables
-VERSION="20250711.085223"  # This will be replaced during build
+VERSION="20250715.154241"  # This will be replaced during build
 CONFIG_FILE=""  # Will be set dynamically by get_config_file()
 CURRENT_TICKET_LINK="current-ticket.md"
 
 # Default configuration values
 DEFAULT_TICKETS_DIR="tickets"
-DEFAULT_BRANCH="develop"
+DEFAULT_BRANCH="main"
 DEFAULT_BRANCH_PREFIX="feature/"
 DEFAULT_REPOSITORY="origin"
 DEFAULT_AUTO_PUSH="true"
@@ -1516,6 +1530,7 @@ EOF
     
     echo "Created ticket file: $ticket_file"
     echo "Please edit the file to add title, description and details."
+    echo "To start working on this ticket, you **must** run: $SCRIPT_COMMAND start $ticket_name"
 }
 
 # List tickets

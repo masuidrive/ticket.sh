@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 
+# Check if running with bash (POSIX compatible check)
+if [ -z "${BASH_VERSION:-}" ]; then
+    echo "Error: This test helper requires bash. Please run tests with 'bash test/test-*.sh'"
+    echo "Current shell: $0"
+    exit 1
+fi
+
 # Helper functions for tests to handle cross-platform issues
 
 # Get the directory where this script is located
@@ -44,15 +51,22 @@ safe_get_ticket_name() {
 setup_test_repo() {
     local test_dir="${1:-test-tmp}"
     
+    echo "      Cleaning up old test directory..."
     rm -rf "$test_dir"
     mkdir "$test_dir"
     cd "$test_dir"
     
-    # Always rebuild to ensure latest version
-    (cd "${SCRIPT_DIR}/.." && bash ./build.sh >/dev/null 2>&1)
-    cp "${SCRIPT_DIR}/../ticket.sh" .
+    echo "      Copying ticket.sh..."
+    # Use existing ticket.sh without rebuild for performance
+    if [[ -f "${SCRIPT_DIR}/../ticket.sh" ]]; then
+        cp "${SCRIPT_DIR}/../ticket.sh" .
+    else
+        echo "      ERROR: ticket.sh not found. Please run 'bash build.sh' first."
+        return 1
+    fi
     chmod +x ticket.sh
     
+    echo "      Initializing git repository..."
     # Initialize git with proper gitignore
     git init -q
     git config user.name "Test"
@@ -66,19 +80,32 @@ lib/
 EOF
     echo "test" > README.md
     
+    echo "      Making initial commit..."
     # Only add specific files
     git add .gitignore README.md
     git commit -q -m "init"
-    git checkout -q -b develop
     
+    # Ensure we're on main branch
+    current_branch=$(git rev-parse --abbrev-ref HEAD)
+    if [[ "$current_branch" != "main" ]]; then
+        if git show-ref --verify --quiet refs/heads/main; then
+            git checkout -q main
+        else
+            git checkout -q -b main
+        fi
+    fi
+    
+    echo "      Initializing ticket system..."
     # Initialize ticket system
     ./ticket.sh init >/dev/null
     
+    echo "      Finalizing setup..."
     # Commit .gitignore changes from init
     if git status --porcelain | grep -q .gitignore; then
         git add .gitignore
         git commit -q -m "Update .gitignore from ticket init"
     fi
+    echo "      Repository setup complete."
 }
 
 # Cleanup test repository
