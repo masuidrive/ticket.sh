@@ -128,7 +128,7 @@ DEFAULT_REPOSITORY="origin"
 DEFAULT_AUTO_PUSH="true"
 DEFAULT_DELETE_REMOTE_ON_CLOSE="true"
 DEFAULT_NEW_SUCCESS_MESSAGE=""
-DEFAULT_START_SUCCESS_MESSAGE=""
+DEFAULT_START_SUCCESS_MESSAGE="Please review the ticket content in \`current-ticket.md\` and make any necessary adjustments before beginning work."
 DEFAULT_RESTORE_SUCCESS_MESSAGE=""
 DEFAULT_CLOSE_SUCCESS_MESSAGE=""
 DEFAULT_CONTENT='# Ticket Overview
@@ -319,7 +319,8 @@ new_success_message: |
   
 # Message displayed after starting work on a ticket
 start_success_message: |
-  
+  Please review the ticket content in \`current-ticket.md\` and make any necessary adjustments before beginning work.
+
 # Message displayed after restoring current ticket link
 restore_success_message: |
   
