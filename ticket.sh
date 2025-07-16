@@ -12,7 +12,7 @@ fi
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250715.231845
+# Version: 20250716.014815
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -1003,7 +1003,7 @@ if [ -z "${BASH_VERSION:-}" ]; then
 fi
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250715.231845
+# Version: 20250716.014815
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -1095,7 +1095,7 @@ SCRIPT_COMMAND=$(get_script_command)
 
 
 # Global variables
-VERSION="20250715.231845"  # This will be replaced during build
+VERSION="20250716.014815"  # This will be replaced during build
 CONFIG_FILE=""  # Will be set dynamically by get_config_file()
 CURRENT_TICKET_LINK="current-ticket.md"
 
@@ -1106,7 +1106,9 @@ DEFAULT_BRANCH_PREFIX="feature/"
 DEFAULT_REPOSITORY="origin"
 DEFAULT_AUTO_PUSH="true"
 DEFAULT_DELETE_REMOTE_ON_CLOSE="true"
-DEFAULT_START_SUCCESS_MESSAGE="Please review the ticket content in \`current-ticket.md\` and make any necessary adjustments before beginning work."
+DEFAULT_NEW_SUCCESS_MESSAGE=""
+DEFAULT_START_SUCCESS_MESSAGE=""
+DEFAULT_RESTORE_SUCCESS_MESSAGE=""
 DEFAULT_CLOSE_SUCCESS_MESSAGE=""
 DEFAULT_CONTENT='# Ticket Overview
 
@@ -1191,7 +1193,15 @@ Each ticket is a single Markdown file with YAML frontmatter metadata.
 
 - Config file: \`.ticket-config.yaml\` or \`.ticket-config.yml\` (in project root)
 - Initialize with: \`$SCRIPT_COMMAND init\`
-- Edit to customize directories, branches, and templates
+- Edit to customize directories, branches, templates, and success messages
+
+### Success Messages
+
+- \`new_success_message\`: Displayed after creating a new ticket
+- \`start_success_message\`: Displayed after starting work on a ticket
+- \`restore_success_message\`: Displayed after restoring current ticket link
+- \`close_success_message\`: Displayed after closing a ticket
+- All messages default to empty (disabled) and support multiline YAML format
 
 ## Push Control
 
@@ -1283,10 +1293,15 @@ auto_push: $DEFAULT_AUTO_PUSH
 delete_remote_on_close: $DEFAULT_DELETE_REMOTE_ON_CLOSE
 
 # Success messages (leave empty to disable)
+# Message displayed after creating a new ticket
+new_success_message: |
+  
 # Message displayed after starting work on a ticket
 start_success_message: |
-  Please review the ticket content in \`current-ticket.md\` and make any necessary adjustments before beginning work.
-
+  
+# Message displayed after restoring current ticket link
+restore_success_message: |
+  
 # Message displayed after closing a ticket
 close_success_message: |
   
@@ -1493,6 +1508,7 @@ cmd_new() {
     yaml_parse "$CONFIG_FILE"
     local tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
     local default_content=$(yaml_get "default_content" || echo "$DEFAULT_CONTENT")
+    local new_success_message=$(yaml_get "new_success_message" || echo "$DEFAULT_NEW_SUCCESS_MESSAGE")
     
     # Generate filename
     local ticket_name=$(generate_ticket_filename "$slug")
@@ -1538,6 +1554,12 @@ EOF
     echo "Created ticket file: $ticket_file"
     echo "Please edit the file to add title, description and details."
     echo "To start working on this ticket, you **must** run: $SCRIPT_COMMAND start $ticket_name"
+    
+    # Display success message if configured
+    if [[ -n "$new_success_message" ]]; then
+        echo ""
+        echo "$new_success_message"
+    fi
 }
 
 # List tickets
@@ -1873,6 +1895,7 @@ cmd_restore() {
     yaml_parse "$CONFIG_FILE"
     local tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
     local branch_prefix=$(yaml_get "branch_prefix" || echo "$DEFAULT_BRANCH_PREFIX")
+    local restore_success_message=$(yaml_get "restore_success_message" || echo "$DEFAULT_RESTORE_SUCCESS_MESSAGE")
     
     # Get current branch
     local current_branch=$(get_current_branch)
@@ -1923,6 +1946,12 @@ EOF
     fi
     
     echo "Restored current ticket link: $CURRENT_TICKET_LINK -> $ticket_file"
+    
+    # Display success message if configured
+    if [[ -n "$restore_success_message" ]]; then
+        echo ""
+        echo "$restore_success_message"
+    fi
 }
 
 # Check current directory and ticket/branch synchronization status
