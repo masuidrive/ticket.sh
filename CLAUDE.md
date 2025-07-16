@@ -42,5 +42,13 @@ Use `./ticket.sh` for ticket management.
    - Review `current-ticket.md` content and description
    - Check all tasks in checklist are completed (mark with `[x]`)
    - Run `bash ./build.sh`
-   - Get user approval before proceeding
+   - **CRITICAL: Get explicit user approval before proceeding**
 2. Complete: `./ticket.sh close`
+
+### ⚠️ IMPORTANT: User Approval Required
+
+**NEVER close a ticket without explicit user confirmation.** Always:
+- Summarize what was completed
+- Ask the user: "Should I close this ticket?"
+- Wait for clear confirmation (e.g., "yes", "close it", "go ahead")
+- Do NOT assume silence or indirect responses as approval
