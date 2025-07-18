@@ -11,10 +11,10 @@ A simple, portable YAML parser for Bash 3.2+ that provides basic YAML parsing ca
 ## Features
 
 - **Pure Bash/AWK**: No external dependencies required
-- **Bash 3.2+ Compatible**: Works on macOS and older Linux systems
+- **Bash 3.2+ Compatible**: Works on macOS and older Linux systems (tested up to Bash 5.1+)
 - **Simple API**: Easy-to-use functions for parsing and accessing YAML data
 - **Multiline String Support**: Handles literal (`|`) and folded (`>`) multiline strings
-- **List Support**: Both dash notation and inline lists
+- **List Support**: Both dash notation and inline lists `[item1, item2]`
 - **Comment Preservation**: Maintains comments when updating values
 - **Update Capability**: Can update simple key-value pairs
 
@@ -235,6 +235,17 @@ cd ticket-sh
 ## Contributing
 
 Contributions are welcome! Please ensure that any changes maintain compatibility with Bash 3.2 and don't introduce external dependencies.
+
+## Compatibility Notes
+
+### Bash Version Compatibility
+- **Bash 3.2**: Fully compatible (macOS default)
+- **Bash 4.x**: Fully compatible
+- **Bash 5.1+**: Fully compatible (fixed arithmetic operation issues with `set -euo pipefail`)
+
+### Known Issues (Fixed)
+- ~~Inline lists could cause hanging in Bash 5.1+ (fixed in v2.0.0)~~
+- ~~List items with spaces were truncated (fixed in v2.0.0)~~
 
 ## License
 

@@ -291,7 +291,14 @@ yaml_parse() {
     local temp_yaml_output="/tmp/yaml_parse_$$.tmp"
     _yaml_parse_awk "$file" > "$temp_yaml_output" 2>/dev/null || true
     
-    while IFS='' read -r line; do
+    # Ensure file exists and is not empty before processing
+    if [[ ! -f "$temp_yaml_output" ]]; then
+        echo "Error: Failed to create temporary YAML output" >&2
+        return 1
+    fi
+    
+    # Read line by line with explicit error handling for bash 5.1+ compatibility
+    while IFS='' read -r line || [[ -n "$line" ]]; do
         if [[ $reading_multiline -eq 1 ]]; then
             # Check if this is the start of a new entry
             if [[ "$line" =~ ^(KEY|VALUE|LIST|ILIST) ]]; then
@@ -316,6 +323,11 @@ yaml_parse() {
         local indent=$(echo "$line" | awk '{print $2}')
         local key=$(echo "$line" | awk '{print $3}')
         local value=$(echo "$line" | cut -d' ' -f4-)
+        
+        # For LIST/ILIST entries, key contains the full list item (may have spaces)
+        if [[ "$type" == "LIST" ]] || [[ "$type" == "ILIST" ]]; then
+            key=$(echo "$line" | cut -d' ' -f3-)
+        fi
         
         case "$type" in
             KEY)
@@ -346,7 +358,7 @@ yaml_parse() {
                     list_index=0
                     in_list=1
                 else
-                    ((list_index++))
+                    list_index=$((list_index + 1))
                 fi
                 _YAML_KEYS+=("${current_path}.${list_index}")
                 _YAML_VALUES+=("$key")  # key contains the list item
@@ -357,7 +369,7 @@ yaml_parse() {
                     list_index=0
                     in_list=1
                 else
-                    ((list_index++))
+                    list_index=$((list_index + 1))
                 fi
                 _YAML_KEYS+=("${current_path}.${list_index}")
                 _YAML_VALUES+=("$key")  # key contains the list item
@@ -388,7 +400,7 @@ yaml_get() {
             echo "${_YAML_VALUES[$i]}"
             return 0
         fi
-        ((i++))
+        i=$((i + 1))
     done
     
     return 1
@@ -401,7 +413,7 @@ yaml_keys() {
     
     while [[ $i -lt $len ]]; do
         echo "${_YAML_KEYS[$i]}"
-        ((i++))
+        i=$((i + 1))
     done
 }
 
@@ -415,7 +427,7 @@ yaml_has_key() {
         if [[ "${_YAML_KEYS[$i]}" == "$key" ]]; then
             return 0
         fi
-        ((i++))
+        i=$((i + 1))
     done
     
     return 1
@@ -435,7 +447,7 @@ yaml_list_size() {
                 count=$((index + 1))
             fi
         fi
-        ((i++))
+        i=$((i + 1))
     done
     
     echo "$count"
@@ -465,7 +477,7 @@ yaml_load() {
         # Export the variable in the caller's scope
         eval "export $var_name=\"\$value\""
         
-        ((i++))
+        i=$((i + 1))
     done
     
     return 0

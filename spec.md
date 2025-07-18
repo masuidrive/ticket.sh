@@ -19,7 +19,7 @@ A self-contained ticket management system using a single shell script + files + 
 
 ## 📋 System Requirements
 
-- **Bash**: Version 3.2 or higher
+- **Bash**: Version 3.2 or higher (tested up to 5.1+)
 - **Git**: Any recent version
 - **Standard UNIX commands**: ls, ln, sed, grep, etc.
 - **Character encoding**: UTF-8 support required

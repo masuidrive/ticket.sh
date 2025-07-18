@@ -3,3 +3,5 @@ current-ticket.md
 .claude
 tmp
 test-*
+test*.yml
+test_*.sh
