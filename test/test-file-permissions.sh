@@ -73,7 +73,7 @@ echo "1. Testing init in read-only directory..."
 setup_test
 # Make current directory read-only
 chmod 555 .
-OUTPUT=$(./ticket.sh init </dev/null 2>&1)
+OUTPUT=$(timeout 5 ./ticket.sh init  2>&1)
 RESULT=$?
 chmod 755 .  # Restore permissions immediately
 if [[ $RESULT -ne 0 ]] && echo "$OUTPUT" | grep -q "Permission denied"; then
@@ -86,10 +86,10 @@ fi
 echo -e "\n2. Testing new command with write-protected tickets directory..."
 # Start fresh
 cd .. && setup_test
-./ticket.sh init </dev/null >/dev/null 2>&1
+timeout 5 ./ticket.sh init  >/dev/null 2>&1
 # Make tickets directory read-only
 chmod 555 tickets
-OUTPUT=$(./ticket.sh new "test-ticket" 2>&1)
+OUTPUT=$(timeout 5 ./ticket.sh new "test-ticket" 2>&1)
 RESULT=$?
 chmod 755 tickets  # Restore permissions
 if [[ $RESULT -ne 0 ]] && echo "$OUTPUT" | grep -q "Permission denied"; then
@@ -101,14 +101,14 @@ fi
 # Test 3: Cannot create symlink (parent directory read-only)
 echo -e "\n3. Testing start command when cannot create symlink..."
 cd .. && setup_test
-./ticket.sh init </dev/null >/dev/null 2>&1
+timeout 5 ./ticket.sh init  >/dev/null 2>&1
 ./ticket.sh new "symlink-test" >/dev/null 2>&1
 git add . && git commit -q -m "add ticket"
 TICKET=$(safe_get_ticket_name "*symlink-test.md")
 
 # Make current directory read-only to prevent symlink creation
 chmod 555 .
-OUTPUT=$(./ticket.sh start "$TICKET" --no-push 2>&1)
+OUTPUT=$(timeout 5 ./ticket.sh start "$TICKET" --no-push 2>&1)
 RESULT=$?
 chmod 755 .  # Restore permissions
 if [[ $RESULT -ne 0 ]]; then
@@ -120,7 +120,7 @@ fi
 # Test 4: Cannot write to ticket file
 echo -e "\n4. Testing start command with read-only ticket file..."
 cd .. && setup_test
-./ticket.sh init </dev/null >/dev/null 2>&1
+timeout 5 ./ticket.sh init  >/dev/null 2>&1
 ./ticket.sh new "readonly-ticket" >/dev/null 2>&1
 git add . && git commit -q -m "add ticket"
 TICKET_FILE=$(safe_get_first_file "*readonly-ticket.md" "tickets")
@@ -128,7 +128,7 @@ TICKET_NAME=$(basename "$TICKET_FILE" .md)
 
 # Make ticket file read-only
 chmod 444 "$TICKET_FILE"
-OUTPUT=$(./ticket.sh start "$TICKET_NAME" --no-push 2>&1)
+OUTPUT=$(timeout 5 ./ticket.sh start "$TICKET_NAME" --no-push 2>&1)
 RESULT=$?
 chmod 644 "$TICKET_FILE"  # Restore permissions
 
@@ -147,7 +147,7 @@ fi
 # Test 5: Cannot create tickets/done directory
 echo -e "\n5. Testing close command when cannot create done directory..."
 cd .. && setup_test
-./ticket.sh init </dev/null >/dev/null 2>&1
+timeout 5 ./ticket.sh init  >/dev/null 2>&1
 
 # Create ticket and commit it
 ./ticket.sh new "done-dir-test" >/dev/null 2>&1
@@ -172,7 +172,7 @@ git add . && git commit -q -m "work"
 
 # Make tickets directory read-only to prevent done directory creation
 chmod 555 tickets
-OUTPUT=$(./ticket.sh close --no-push 2>&1)
+OUTPUT=$(timeout 5 ./ticket.sh close --no-push 2>&1)
 RESULT=$?
 chmod 755 tickets  # Restore permissions
 
@@ -194,11 +194,11 @@ fi
 # Test 6: Config file permissions
 echo -e "\n6. Testing operations with read-only config file..."
 cd .. && setup_test
-./ticket.sh init </dev/null >/dev/null 2>&1
+timeout 5 ./ticket.sh init  >/dev/null 2>&1
 
 # Make config file read-only
 chmod 444 .ticket-config.yaml
-OUTPUT=$(./ticket.sh list 2>&1)
+OUTPUT=$(timeout 5 ./ticket.sh list 2>&1)
 RESULT=$?
 # list should still work with read-only config
 if [[ $RESULT -eq 0 ]]; then
@@ -224,7 +224,7 @@ fi
 # Test 8: Cross-user permissions
 echo -e "\n8. Testing file ownership issues..."
 cd .. && setup_test
-./ticket.sh init </dev/null >/dev/null 2>&1
+timeout 5 ./ticket.sh init  >/dev/null 2>&1
 ./ticket.sh new "ownership-test" >/dev/null 2>&1
 
 # We can't actually change ownership without sudo, but we can test the messages

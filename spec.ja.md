@@ -39,6 +39,7 @@
 
 #### ファイルベース管理
 - `tickets/<チケット名>.md` の1ファイルでチケットが完結
+- オプション: `tickets/<チケット名>-note.md` 作業ノートファイル（`note_content`設定時）
 - YAML Front Matter部分にメタ情報を格納
 - Markdownボディ部分にチケット詳細を記述
 
@@ -58,6 +59,7 @@ closed_at: null   # Do not modify manually
 #### ブランチ連携
 - 作業は `feature/チケット名` ブランチで実施
 - current-ticket.md による現在作業チケットの可視化
+- current-note.md による作業ノートの可視化（note_content設定時）
 
 ---
 
@@ -82,7 +84,8 @@ closed_at: null   # Do not modify manually
 ```
 - 対応するfeatureブランチに移動
 - current-ticket.md にsymlinkを作成
-- 作業中は current-ticket.md を参照して開発
+- current-note.md にsymlinkを作成（ノートファイル存在時）
+- 作業中は current-ticket.md と current-note.md を参照して開発
 
 ### リンク復元
 ```bash

@@ -10,6 +10,7 @@ Gitブランチとマークダウンファイルを使った軽量で堅牢な�
 - 🔧 **依存関係なし**: 純粋なBash + Git、どこでも動作
 - 🚀 **AI対応**: シームレスなAIアシスタント連携を想定した設計
 - 🛡️ **堅牢性**: UTF-8対応、エラー回復、競合解決
+- 📓 **作業ノート分離**: デバッグ・調査ログ用の別ファイル（オプション）
 
 **言語版**: [English](README.md) | [日本語](README.ja.md)
 
@@ -168,6 +169,19 @@ close_success_message: |
   Run ticket.sh list to view all todo tickets; if you find any with overlapping content, review the corresponding `tickets/*.md` files.
   If you spot tasks that are already complete, update their tickets as needed.
 
+# Note template (optional - if not defined, no note file will be created)
+# Use this for debugging logs, investigation details, etc.
+note_content: |
+  # Work Notes for $$TICKET_NAME$$
+  
+  ## Implementation Details
+  
+  ...
+
+  ## Task 1
+  
+  ...
+
 # Ticket template
 default_content: |
   # Ticket Overview
@@ -247,6 +261,12 @@ default_content: |
 - **doneフォルダ**: 完了チケットを自動的に `tickets/done/` に移動
 - **リモートクリーンアップ**: リモートfeatureブランチの自動削除オプション
 - **Git履歴**: `current-ticket.md` の誤コミット防止
+
+### 作業ノート分離（オプション）
+- **別ノートファイル**: デバッグログや調査詳細を `*-note.md` ファイルに分離
+- **クリーンなチケット**: メインのチケットファイルは要件に集中し簡潔に
+- **自動管理**: ノートファイルの作成、移動、リンクを自動化
+- **後方互換性**: configで `note_content` が定義された場合のみ有効
 
 ### エラー回復
 - **checkコマンド**: 問題を診断して次のステップのガイダンス提供

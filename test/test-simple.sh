@@ -25,7 +25,7 @@ cp "${SCRIPT_DIR}/../ticket.sh" .
 chmod +x ticket.sh
 
 echo "1. Testing without git repo..."
-if ! ./ticket.sh init </dev/null 2>&1 | grep -q "Error: Not in a git repository"; then
+if ! timeout 5 ./ticket.sh init 2>&1 | grep -q "Error: Not in a git repository"; then
     echo "  FAIL: Should fail without git repo"
     exit 1
 fi
@@ -44,7 +44,7 @@ echo "  PASS: Git repo initialized"
 
 echo
 echo "3. Testing init command..."
-./ticket.sh init </dev/null >/dev/null 2>&1
+timeout 5 ./ticket.sh init
 if [[ ! -f .ticket-config.yaml ]]; then
     echo "  FAIL: Config file not created"
     exit 1
@@ -57,7 +57,7 @@ echo "  PASS: Init successful"
 
 echo
 echo "4. Testing new command..."
-./ticket.sh new test-feature >/dev/null 2>&1
+timeout 5 ./ticket.sh new test-feature
 TICKET=$(ls tickets/*.md 2>/dev/null | head -1)
 if [[ -z "$TICKET" ]]; then
     echo "  FAIL: Ticket not created"
@@ -68,7 +68,7 @@ echo "  PASS: Ticket created: $TICKET"
 echo
 echo "5. Testing list command..."
 # Capture output with error handling
-if OUTPUT=$(./ticket.sh list 2>&1); then
+if OUTPUT=$(timeout 5 ./ticket.sh list 2>&1); then
     if echo "$OUTPUT" | grep -q "test-feature"; then
         echo "  PASS: Ticket appears in list"
     else
@@ -127,7 +127,7 @@ echo "  PASS: Ticket closed and merged"
 
 echo
 echo "9. Testing error handling..."
-if ./ticket.sh new "Bad Name" >/dev/null 2>&1; then
+if timeout 5 ./ticket.sh new "Bad Name" >/dev/null 2>&1; then
     echo "  FAIL: Should reject invalid slug"
     exit 1
 fi

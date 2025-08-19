@@ -39,6 +39,7 @@ A self-contained ticket management system using a single shell script + files + 
 
 #### File-Based Management
 - Complete ticket in single file: `tickets/<ticket-name>.md`
+- Optional work notes file: `tickets/<ticket-name>-note.md` (when `note_content` is configured)
 - Metadata stored in YAML Front Matter section
 - Ticket details written in Markdown body section
 
@@ -58,6 +59,7 @@ closed_at: null   # Do not modify manually
 #### Branch Integration
 - Work performed on `feature/<ticket-name>` branches
 - Current work ticket visualization via current-ticket.md
+- Optional work notes visualization via current-note.md (when note_content is configured)
 
 ---
 
@@ -82,7 +84,8 @@ Creates empty ticket file, then edit to add title, description, and details
 ```
 - Switches to corresponding feature branch
 - Creates symlink to current-ticket.md
-- Reference current-ticket.md while developing
+- Creates symlink to current-note.md (when note file exists)
+- Reference current-ticket.md and current-note.md while developing
 
 ### Restore Link
 ```bash
@@ -147,9 +150,10 @@ project-root/
 │   └── done/                   # Completed tickets (auto-created)
 │       └── 240627-142030-bar.md
 ├── current-ticket.md           # Symlink to working ticket (.gitignore'd)
+├── current-note.md             # Symlink to working note (.gitignore'd, optional)
 ├── ticket.sh                   # Main script
 ├── .ticket-config.yaml         # Configuration file
-└── .gitignore                  # Contains current-ticket.md
+└── .gitignore                  # Contains current-ticket.md and current-note.md
 ```
 
 ---
@@ -275,7 +279,7 @@ Performs system initialization:
 
 1. Creates `.ticket-config.yaml` with default values (if not exists)
 2. Creates `{tickets_dir}/` directory
-3. Creates `.gitignore` file (if not exists) and adds `current-ticket.md` (with duplicate check)
+3. Creates `.gitignore` file (if not exists) and adds `current-ticket.md` and `current-note.md` (with duplicate check)
 
 **Note**: This command only skips configuration file existence check
 
@@ -420,7 +424,7 @@ Starts ticket work:
 
 1. Sets current time to specified ticket's `started_at`
 2. Creates Git branch as `{branch_prefix}<basename>`
-3. Creates symlink to `current-ticket.md`
+3. Creates symlink to `current-ticket.md` and optionally `current-note.md`
 4. **Push control**: Executes `git push -u {repository} <branch>` only when `auto_push: true` and `--no-push` not specified
 5. Displays executed Git commands and output in detail
 

@@ -53,11 +53,11 @@ test_result() {
 # Test 1: List shows local timezone for todo tickets
 echo "1. Testing todo ticket with local timezone..."
 setup_test
-./ticket.sh init </dev/null >/dev/null 2>&1
+timeout 5 ./ticket.sh init  >/dev/null 2>&1
 ./ticket.sh new "timezone-test-1" >/dev/null 2>&1
 
 # Get the created ticket and check list output
-OUTPUT=$(./ticket.sh list 2>&1)
+OUTPUT=$(timeout 5 ./ticket.sh list 2>&1)
 
 # Check if created_at is shown with timezone (not ending with Z) or UTC format
 if echo "$OUTPUT" | grep -q "created_at:.*[0-9]Z$"; then
@@ -72,7 +72,7 @@ fi
 # Test 2: List shows closed_at for done tickets
 echo -e "\n2. Testing done ticket shows closed_at..."
 cd .. && setup_test
-./ticket.sh init </dev/null >/dev/null 2>&1
+timeout 5 ./ticket.sh init  >/dev/null 2>&1
 git checkout -q -b main
 ./ticket.sh new "done-test" >/dev/null 2>&1
 git add . && git commit -q -m "add ticket"
@@ -97,7 +97,7 @@ mkdir -p tickets/done
 mv "$TICKET_FILE" tickets/done/
 
 # List done tickets
-OUTPUT=$(./ticket.sh list --status done 2>&1)
+OUTPUT=$(timeout 5 ./ticket.sh list --status done 2>&1)
 
 # Check if closed_at is displayed
 if echo "$OUTPUT" | grep -q "closed_at:"; then
@@ -160,11 +160,11 @@ fi
 # Test 5: List performance with timezone conversion
 echo -e "\n5. Testing performance impact..."
 cd .. && setup_test
-./ticket.sh init </dev/null >/dev/null 2>&1
+timeout 5 ./ticket.sh init  >/dev/null 2>&1
 
 # Create multiple tickets
 for i in {1..5}; do
-    ./ticket.sh new "perf-test-$i" >/dev/null 2>&1
+    timeout 5 ./ticket.sh new "perf-test-$i" >/dev/null 2>&1
 done
 
 # Measure list command time

@@ -23,7 +23,7 @@ echo "1. Testing prompt command first line..."
 cd "$PROJECT_ROOT"
 
 # Run prompt command and check first line
-FIRST_LINE=$(bash ./ticket.sh prompt | head -1)
+FIRST_LINE=$(timeout 5 ./ticket.sh prompt | head -1)
 EXPECTED="# Ticket Management Instructions"
 
 if [[ "$FIRST_LINE" == "$EXPECTED" ]]; then

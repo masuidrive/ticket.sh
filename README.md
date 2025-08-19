@@ -10,6 +10,7 @@ A lightweight, robust ticket management system that uses Git branches and markdo
 - 🔧 **Zero dependencies**: Pure Bash + Git, works everywhere
 - 🚀 **AI-friendly**: Designed for seamless AI assistant collaboration
 - 🛡️ **Robust**: UTF-8 support, error recovery, conflict resolution
+- 📓 **Work notes separation**: Optional separate note files for debugging/investigation logs
 
 **Language versions**: [English](README.md) | [日本語](README.ja.md)
 
@@ -168,6 +169,19 @@ close_success_message: |
   Run ticket.sh list to view all todo tickets; if you find any with overlapping content, review the corresponding `tickets/*.md` files.
   If you spot tasks that are already complete, update their tickets as needed.
 
+# Note template (optional - if not defined, no note file will be created)
+# Use this for debugging logs, investigation details, etc.
+note_content: |
+  # Work Notes for $$TICKET_NAME$$
+  
+  ## Implementation Details
+  
+  ...
+
+  ## Task 1
+  
+  ...
+
 # Ticket template
 default_content: |
   # Ticket Overview
@@ -246,6 +260,12 @@ default_content: |
 ### Automatic Organization
 - **Done folder**: Completed tickets moved to `tickets/done/` automatically
 - **Remote cleanup**: Optional automatic deletion of remote feature branches
+
+### Work Notes Separation (Optional)
+- **Separate note files**: Keep debugging logs and investigation details in separate `*-note.md` files
+- **Clean tickets**: Main ticket files stay concise and focused on requirements
+- **Automatic management**: Note files are created, moved, and linked automatically
+- **Backward compatible**: Only enabled when `note_content` is defined in config
 - **Git history**: Prevents accidental commits of `current-ticket.md`
 
 ### Error Recovery

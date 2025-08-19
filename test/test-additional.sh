@@ -66,7 +66,7 @@ else
         test_result 1 "First ticket not created"
     else
         sleep 1  # Ensure different timestamp
-        if ./ticket.sh new test-duplicate >/dev/null 2>&1; then
+        if timeout 5 ./ticket.sh new test-duplicate >/dev/null 2>&1; then
             # Find all matching files
             TICKET_COUNT=0
             for f in tickets/*test-duplicate.md; do
@@ -93,7 +93,7 @@ TICKET_NAME=$(basename "$FIRST_TICKET" .md)
 ./ticket.sh start "$TICKET_NAME" --no-push >/dev/null 2>&1
 git add tickets current-ticket.md && git commit -q -m "update"
 git checkout -q main
-if ./ticket.sh start "$TICKET_NAME" --no-push >/dev/null 2>&1; then
+if timeout 5 ./ticket.sh start "$TICKET_NAME" --no-push >/dev/null 2>&1; then
     test_result 1 "Should not allow starting already started ticket"
 else
     test_result 0 "Correctly prevents starting already started ticket"
@@ -102,7 +102,7 @@ fi
 # Test 3: Close from wrong branch
 echo -e "\n3. Testing close from wrong branch..."
 git checkout -q main 2>/dev/null || git checkout -q -b main
-if ./ticket.sh close --no-push >/dev/null 2>&1; then
+if timeout 5 ./ticket.sh close --no-push >/dev/null 2>&1; then
     test_result 1 "Should not allow close from non-feature branch"
 else
     test_result 0 "Correctly prevents close from wrong branch"
@@ -112,7 +112,7 @@ fi
 echo -e "\n4. Testing restore with broken symlink..."
 git checkout -q "feature/$TICKET_NAME"
 rm -f tickets/*.md  # Remove ticket file but keep symlink
-if ./ticket.sh restore >/dev/null 2>&1; then
+if timeout 5 ./ticket.sh restore >/dev/null 2>&1; then
     test_result 1 "Should fail when ticket file is missing"
 else
     test_result 0 "Correctly detects missing ticket file"
@@ -123,14 +123,14 @@ echo -e "\n5. Testing list count parameter..."
 cd .. && setup_test
 # Create multiple tickets
 for i in {1..5}; do
-    ./ticket.sh new "test-$i" >/dev/null 2>&1
+    timeout 5 ./ticket.sh new "test-$i" >/dev/null 2>&1
     sleep 0.1  # Small delay to ensure different timestamps
 done
 
 # Use more explicit grep pattern and ensure clean counting
-COUNT_1=$(./ticket.sh list --count 1 2>&1 | grep -E "^[[:space:]]*ticket_path:" | wc -l | tr -d ' ')
-COUNT_3=$(./ticket.sh list --count 3 2>&1 | grep -E "^[[:space:]]*ticket_path:" | wc -l | tr -d ' ')
-COUNT_10=$(./ticket.sh list --count 10 2>&1 | grep -E "^[[:space:]]*ticket_path:" | wc -l | tr -d ' ')
+COUNT_1=$(timeout 5 ./ticket.sh list --count 1 2>&1 | grep -E "^[[:space:]]*ticket_path:" | wc -l | tr -d ' ')
+COUNT_3=$(timeout 5 ./ticket.sh list --count 3 2>&1 | grep -E "^[[:space:]]*ticket_path:" | wc -l | tr -d ' ')
+COUNT_10=$(timeout 5 ./ticket.sh list --count 10 2>&1 | grep -E "^[[:space:]]*ticket_path:" | wc -l | tr -d ' ')
 
 if [[ $COUNT_1 -eq 1 ]] && [[ $COUNT_3 -eq 3 ]] && [[ $COUNT_10 -eq 5 ]]; then
     test_result 0 "Count parameter works correctly"
@@ -140,13 +140,13 @@ fi
 
 # Test 6: Invalid count values
 echo -e "\n6. Testing invalid count values..."
-if ./ticket.sh list --count 0 >/dev/null 2>&1; then
+if timeout 5 ./ticket.sh list --count 0 >/dev/null 2>&1; then
     test_result 1 "Should reject count 0"
 else
     test_result 0 "Correctly rejects count 0"
 fi
 
-if ./ticket.sh list --count abc >/dev/null 2>&1; then
+if timeout 5 ./ticket.sh list --count abc >/dev/null 2>&1; then
     test_result 1 "Should reject non-numeric count"
 else
     test_result 0 "Correctly rejects non-numeric count"
@@ -175,7 +175,7 @@ fi
 echo -e "\n8. Testing operations with dirty working directory..."
 git checkout -q main
 echo "dirty" > dirty.txt
-if ./ticket.sh start some-ticket --no-push >/dev/null 2>&1; then
+if timeout 5 ./ticket.sh start some-ticket --no-push >/dev/null 2>&1; then
     test_result 1 "Should prevent start with uncommitted changes"
 else
     test_result 0 "Correctly prevents start with dirty directory"
@@ -228,7 +228,7 @@ closed_at: null   # Do not modify manually
 # Test Ticket
 EOF
 
-OUTPUT=$(./ticket.sh list 2>&1)
+OUTPUT=$(timeout 5 ./ticket.sh list 2>&1)
 if echo "$OUTPUT" | grep -q "Test with: colons"; then
     test_result 0 "Handles special characters in YAML"
 else
@@ -241,7 +241,7 @@ cd .. && setup_test
 
 # Create tickets with different priorities
 for i in 3 1 2; do
-    ./ticket.sh new "priority-$i" >/dev/null 2>&1
+    timeout 5 ./ticket.sh new "priority-$i" >/dev/null 2>&1
     TICKET=$(safe_get_first_file "*priority-$i.md" "tickets")
     if [[ -n "$TICKET" ]]; then
         # Portable sed for priority update
@@ -262,7 +262,7 @@ git checkout -q main
 git merge --no-ff -q "feature/$TICKET_2" -m "Merge feature branch" >/dev/null 2>&1
 
 # Now check order in list from main branch
-LIST_OUTPUT=$(./ticket.sh list 2>&1)
+LIST_OUTPUT=$(timeout 5 ./ticket.sh list 2>&1)
 # Get the first ticket name (should be priority-2 with doing status)
 FIRST_TICKET=$(echo "$LIST_OUTPUT" | grep "ticket_path:" | head -1 | awk '{print $2}')
 if [[ "$FIRST_TICKET" == *"priority-2"* ]]; then
@@ -281,7 +281,7 @@ git add tickets .ticket-config.yaml && git commit -q -m "add"
 TICKET=$(safe_get_ticket_name "*push-test.md")
 
 # Should NOT execute push command in start anymore
-OUTPUT=$(./ticket.sh start "$TICKET" 2>&1)
+OUTPUT=$(timeout 5 ./ticket.sh start "$TICKET" 2>&1)
 # Check that it only mentions push in the note, not as executed command
 if echo "$OUTPUT" | grep -q "^# run command$" && echo "$OUTPUT" | grep -q "^git push"; then
     test_result 1 "Start command should not execute push"

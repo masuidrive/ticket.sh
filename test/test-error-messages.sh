@@ -54,7 +54,7 @@ cd "$TEST_DIR"
 # Copy ticket.sh to test directory
 cp "${SCRIPT_DIR}/../ticket.sh" .
 chmod +x ticket.sh
-OUTPUT=$(./ticket.sh init </dev/null 2>&1)
+OUTPUT=$(timeout 5 ./ticket.sh init  2>&1)
 test_error_message "Git repository error" "$OUTPUT" "Not in a git repository"
 
 # Initialize git for remaining tests
@@ -70,20 +70,20 @@ git checkout -q -b main
 
 # Test 2: Ticket system not initialized
 echo -e "\n2. Testing 'not initialized' error..."
-OUTPUT=$(./ticket.sh list 2>&1)
+OUTPUT=$(timeout 5 ./ticket.sh list 2>&1)
 test_error_message "Not initialized error" "$OUTPUT" "Ticket system not initialized"
 
 # Initialize ticket system
-./ticket.sh init </dev/null >/dev/null 2>&1
+timeout 5 ./ticket.sh init  >/dev/null 2>&1
 
 # Test 3: Invalid slug format
 echo -e "\n3. Testing 'invalid slug' error..."
-OUTPUT=$(./ticket.sh new "Invalid Slug!" 2>&1)
+OUTPUT=$(timeout 5 ./ticket.sh new "Invalid Slug!" 2>&1)
 test_error_message "Invalid slug error" "$OUTPUT" "Invalid slug format"
 
 # Test 4: Empty slug
 echo -e "\n4. Testing 'empty slug' error..."
-OUTPUT=$(./ticket.sh new "" 2>&1)
+OUTPUT=$(timeout 5 ./ticket.sh new "" 2>&1)
 test_error_message "Empty slug error" "$OUTPUT" "slug required"
 
 # Test 5: Ticket not found
@@ -92,7 +92,7 @@ echo -e "\n5. Testing 'ticket not found' error..."
 git add . && git commit -q -m "clean state" || true
 # Make sure we're on main branch
 git checkout -q main
-OUTPUT=$(./ticket.sh start "nonexistent-ticket" 2>&1)
+OUTPUT=$(timeout 5 ./ticket.sh start "nonexistent-ticket" 2>&1)
 test_error_message "Ticket not found error" "$OUTPUT" "Ticket not found"
 
 # Test 6: Resume existing branch (changed behavior)
@@ -111,7 +111,7 @@ TICKET=$(safe_get_ticket_name "*already-started-test.md")
 git add . && git commit -q -m "start ticket"
 git checkout -q main
 
-OUTPUT=$(./ticket.sh start "$TICKET" --no-push 2>&1)
+OUTPUT=$(timeout 5 ./ticket.sh start "$TICKET" --no-push 2>&1)
 # Now we expect success with resume message
 if echo "$OUTPUT" | grep -q "already exists. Resuming work"; then
     echo -e "  \033[0;32m✓\033[0m Resume existing branch behavior"
@@ -125,7 +125,7 @@ fi
 echo -e "\n7. Testing 'wrong branch' error for close..."
 # Make sure we're on main branch after Test 6
 git checkout -q main
-OUTPUT=$(./ticket.sh close 2>&1)
+OUTPUT=$(timeout 5 ./ticket.sh close 2>&1)
 test_error_message "Wrong branch error" "$OUTPUT" "Not on a feature branch"
 
 # Test 8: No current ticket
@@ -136,29 +136,29 @@ git branch -D feature/test-no-current 2>/dev/null || true
 git checkout -q -b feature/test-no-current
 # Make sure no current-ticket.md exists
 rm -f current-ticket.md
-OUTPUT=$(./ticket.sh close 2>&1)
+OUTPUT=$(timeout 5 ./ticket.sh close 2>&1)
 test_error_message "No current ticket error" "$OUTPUT" "No current ticket"
 
 # Test 9: Dirty working directory
 echo -e "\n9. Testing 'uncommitted changes' error..."
 git checkout -q "feature/$TICKET"
 echo "dirty" > dirty.txt
-OUTPUT=$(./ticket.sh close 2>&1)
+OUTPUT=$(timeout 5 ./ticket.sh close 2>&1)
 test_error_message "Uncommitted changes error" "$OUTPUT" "uncommitted changes"
 
 # Test 10: Invalid count value
 echo -e "\n10. Testing 'invalid count' error..."
 git checkout -q main 2>/dev/null || true
 rm -f dirty.txt
-OUTPUT=$(./ticket.sh list --count -5 2>&1)
+OUTPUT=$(timeout 5 ./ticket.sh list --count -5 2>&1)
 test_error_message "Invalid count error" "$OUTPUT" "Invalid count value"
 
-OUTPUT=$(./ticket.sh list --count abc 2>&1)
+OUTPUT=$(timeout 5 ./ticket.sh list --count abc 2>&1)
 test_error_message "Non-numeric count error" "$OUTPUT" "Invalid count value"
 
 # Test 11: Invalid status value
 echo -e "\n11. Testing 'invalid status' error..."
-OUTPUT=$(./ticket.sh list --status invalid 2>&1)
+OUTPUT=$(timeout 5 ./ticket.sh list --status invalid 2>&1)
 test_error_message "Invalid status error" "$OUTPUT" "Invalid status"
 
 # Test 12: Already closed ticket
@@ -178,7 +178,7 @@ git add . && git commit -q -m "add test content" || true
 git checkout -q main 2>/dev/null || true
 # The ticket.sh start command expects the ticket name without path
 CLOSE_TICKET_NAME=$(basename "$CLOSE_TICKET" .md)
-OUTPUT=$(./ticket.sh start "$CLOSE_TICKET_NAME" --no-push 2>&1)
+OUTPUT=$(timeout 5 ./ticket.sh start "$CLOSE_TICKET_NAME" --no-push 2>&1)
 
 # Check what error we got - ticket.sh should find the ticket in done folder
 if echo "$OUTPUT" | grep -q "has already been closed"; then
@@ -193,13 +193,13 @@ fi
 
 # Test 13: Restore on non-feature branch
 echo -e "\n13. Testing 'restore on wrong branch' error..."
-OUTPUT=$(./ticket.sh restore 2>&1)
+OUTPUT=$(timeout 5 ./ticket.sh restore 2>&1)
 test_error_message "Restore wrong branch error" "$OUTPUT" "Not on a feature branch"
 
 # Test 14: Restore with no matching ticket
 echo -e "\n14. Testing 'restore no ticket' error..."
 git checkout -q -b feature/orphan-branch
-OUTPUT=$(./ticket.sh restore 2>&1)
+OUTPUT=$(timeout 5 ./ticket.sh restore 2>&1)
 test_error_message "Restore no ticket error" "$OUTPUT" "No matching ticket found"
 
 # Test 15: Permissions error simulation
@@ -208,7 +208,7 @@ cd .. && setup_test
 
 # Make tickets directory read-only
 chmod 555 tickets
-OUTPUT=$(./ticket.sh new "permission-test" 2>&1)
+OUTPUT=$(timeout 5 ./ticket.sh new "permission-test" 2>&1)
 chmod 755 tickets
 test_error_message "Permission denied error" "$OUTPUT" "Permission denied"
 
@@ -227,7 +227,7 @@ git add . && git commit -q -m "start"
 # Close should auto-create done folder
 echo "work" > work.txt
 git add . && git commit -q -m "work"
-OUTPUT=$(./ticket.sh close --no-push 2>&1)
+OUTPUT=$(timeout 5 ./ticket.sh close --no-push 2>&1)
 
 if [[ -d tickets/done ]] && ls tickets/done/*.md >/dev/null 2>&1; then
     echo -e "  ${GREEN}✓${NC} Done folder auto-created"

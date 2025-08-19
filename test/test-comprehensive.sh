@@ -66,7 +66,7 @@ run_tests() {
     section "1. Prerequisites and Error Handling"
     
     # No git repo
-    if ./ticket.sh init </dev/null 2>&1 | grep -q "Not in a git repository"; then
+    if timeout 5 ./ticket.sh init  2>&1 | grep -q "Not in a git repository"; then
         pass "Detects missing git repository"
     else
         fail "Should detect missing git repository"
@@ -82,7 +82,7 @@ run_tests() {
     git checkout -q -b main
     
     # No config
-    if ./ticket.sh list 2>&1 | grep -q "not initialized"; then
+    if timeout 5 ./ticket.sh list 2>&1 | grep -q "not initialized"; then
         pass "Detects missing config"
     else
         fail "Should detect missing config"
@@ -91,7 +91,7 @@ run_tests() {
     # Test 2: Initialization
     section "2. Initialization"
     
-    ./ticket.sh init </dev/null >/dev/null 2>&1
+    timeout 5 ./ticket.sh init  >/dev/null 2>&1
     
     [[ -f .ticket-config.yaml ]] && pass "Creates config file" || fail "Config file not created"
     [[ -d tickets ]] && pass "Creates tickets directory" || fail "Tickets directory not created"
@@ -107,12 +107,12 @@ run_tests() {
     section "3. Ticket Creation"
     
     # Valid slugs
-    ./ticket.sh new feature-abc >/dev/null 2>&1
+    timeout 5 ./ticket.sh new feature-abc >/dev/null 2>&1
     TICKET1=$(safe_get_first_file "*feature-abc.md" "tickets")
     [[ -n "$TICKET1" ]] && pass "Creates ticket with valid slug" || fail "Failed to create ticket"
     
     # Invalid slugs
-    if ! ./ticket.sh new "Feature ABC" >/dev/null 2>&1; then
+    if ! timeout 5 ./ticket.sh new "Feature ABC" >/dev/null 2>&1; then
         pass "Rejects slug with spaces"
     else
         fail "Should reject slug with spaces"
@@ -121,7 +121,7 @@ run_tests() {
     # Test 4: Listing
     section "4. Ticket Listing"
     
-    OUTPUT=$(./ticket.sh list 2>&1)
+    OUTPUT=$(timeout 5 ./ticket.sh list 2>&1)
     if echo "$OUTPUT" | grep -q "feature-abc"; then
         pass "List shows created tickets"
     else
@@ -140,7 +140,7 @@ run_tests() {
     if [[ -n "$TICKET1" ]]; then
         TICKET_NAME=$(basename "$TICKET1" .md)
     fi
-    ./ticket.sh start "$TICKET_NAME" --no-push >/dev/null 2>&1
+    timeout 5 ./ticket.sh start "$TICKET_NAME" --no-push >/dev/null 2>&1
     
     # Commit the started_at change
     git add . >/dev/null 2>&1
@@ -161,7 +161,7 @@ run_tests() {
     git add work.txt
     git commit -q -m "Do work"
     
-    ./ticket.sh close --no-push >/dev/null 2>&1
+    timeout 5 ./ticket.sh close --no-push >/dev/null 2>&1
     
     BRANCH=$(git rev-parse --abbrev-ref HEAD)
     if [[ "$BRANCH" == "main" ]]; then

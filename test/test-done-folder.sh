@@ -7,16 +7,16 @@ echo "=== Testing done folder functionality ==="
 
 # Get ticket.sh path
 if [[ -z "${TICKET_SH:-}" ]]; then
-    TICKET_SH="../ticket.sh"
+    TICKET_SH=".timeout 5 ./ticket.sh"
 fi
 
 # Setup
 TEST_DIR=$(mktemp -d)
 # Copy ticket.sh to test directory
-cp "$TICKET_SH" "$TEST_DIR/ticket.sh"
+cp "../ticket.sh" "$TEST_DIR/ticket.sh"
 chmod +x "$TEST_DIR/ticket.sh"
 cd "$TEST_DIR"
-TICKET_SH="./ticket.sh"
+TICKET_SH="timeout 5 ./ticket.sh"
 git init -q
 git config user.email "test@example.com"
 git config user.name "Test User"

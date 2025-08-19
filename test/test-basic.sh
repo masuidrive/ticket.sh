@@ -30,7 +30,7 @@ echo "Test environment ready."
 # Test 1: Init
 echo "1. Testing init..."
 echo "   Initializing ticket system..."
-./ticket.sh init </dev/null >/dev/null
+timeout 5 ./ticket.sh init  >/dev/null
 echo "   ✓ Init completed"
 
 # Test 2: New ticket
@@ -70,7 +70,7 @@ git add work.txt && git commit -q -m "work"
 echo "   Running close command..."
 echo "   Current branch: $(git branch --show-current)"
 echo "   Working directory status: $(git status --porcelain | wc -l) changes"
-if ./ticket.sh close --no-push; then
+if timeout 5 ./ticket.sh close --no-push; then
     echo "   ✓ Close succeeded"
     echo "   ✓ Final branch: $(git branch --show-current)"
     # Check ticket in done folder after close

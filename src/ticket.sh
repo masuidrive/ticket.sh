@@ -119,6 +119,7 @@ fi
 VERSION="1.0.0"  # This will be replaced during build
 CONFIG_FILE=""  # Will be set dynamically by get_config_file()
 CURRENT_TICKET_LINK="current-ticket.md"
+CURRENT_NOTE_LINK="current-note.md"
 
 # Default configuration values
 DEFAULT_TICKETS_DIR="tickets"
@@ -328,25 +329,49 @@ restore_success_message: |
 close_success_message: |
   
 
+# Note template (optional - if not defined, no note file will be created)
+note_content: |
+  # Work Notes for \$\$TICKET_NAME\$\$
+  
+  ## Implementation Details
+  
+  ...
+
+  ## Task 1
+  
+  ...
+
+  ## Task N
+  
+  ...
+  
+  
+  ## Reviewer note #N
+  
+  ...
+  
+
 # Ticket template
 default_content: |
   # Ticket Overview
   
-  {{Write the overview and tasks for this ticket here.}}
-  
-  
+  Write the overview and tasks for this ticket here.
+
+  Please record any notes related to this ticket, such as debugging information, review results, or other work logs, \`\$\$NOTE_PATH\$\$\`.
+
+
   ## Tasks
   
-  - [ ] {{Task 1}}
-  - [ ] {{Task 2}}
+  - [ ] Task 1
+  - [ ] Task 2
   ...
   - [ ] Run tests before closing and pass all tests (No exceptions)
+  - [ ] Run \`bash build.sh\` to build the project
+  - [ ] Update documentation if necessary
+    - [ ] Update README.*.md
+    - [ ] Update spec.*.md
+    - [ ] Update DEV.md
   - [ ] Get developer approval before closing
-  
-  
-  ## Notes
-  
-  {{Additional notes or requirements.}}
 EOF
         echo "Created configuration file: $CONFIG_FILE"
     else
@@ -406,14 +431,14 @@ The \`$SCRIPT_COMMAND close\` command handles merging and cleanup automatically.
 ## Getting Help
 
 For detailed usage instructions, run:
-```bash
+\`\`\`bash
 $SCRIPT_COMMAND help
-```
+\`\`\`
 
 For a list of all available commands:
-```bash
+\`\`\`bash
 $SCRIPT_COMMAND --help
-```
+\`\`\`
 EOF
         echo "Created README file: $readme_file"
     else
@@ -423,13 +448,20 @@ EOF
     # Update .gitignore
     if [[ ! -f .gitignore ]]; then
         echo "$CURRENT_TICKET_LINK" > .gitignore
-        echo "Created .gitignore with: $CURRENT_TICKET_LINK"
+        echo "$CURRENT_NOTE_LINK" >> .gitignore
+        echo "Created .gitignore with: $CURRENT_TICKET_LINK and $CURRENT_NOTE_LINK"
     else
         if ! grep -q "^${CURRENT_TICKET_LINK}$" .gitignore; then
             echo "$CURRENT_TICKET_LINK" >> .gitignore
             echo "Added to .gitignore: $CURRENT_TICKET_LINK"
         else
             echo ".gitignore already contains: $CURRENT_TICKET_LINK"
+        fi
+        if ! grep -q "^${CURRENT_NOTE_LINK}$" .gitignore; then
+            echo "$CURRENT_NOTE_LINK" >> .gitignore
+            echo "Added to .gitignore: $CURRENT_NOTE_LINK"
+        else
+            echo ".gitignore already contains: $CURRENT_NOTE_LINK"
         fi
     fi
     
@@ -493,13 +525,17 @@ EOF
     echo ""
     echo "1. Check available tickets: \`$SCRIPT_COMMAND list\` or browse tickets directory"
     echo "2. Start work: \`$SCRIPT_COMMAND start 241225-143502-feature-name\`"
-    echo "3. Develop on feature branch (\`current-ticket.md\` shows active ticket)"
+    echo "3. Develop on feature branch"
+    echo "4. Reference work files:"
+    echo "   - \`current-ticket.md\` shows active ticket with tasks"
+    echo "   - \`current-note.md\` for debugging logs and investigation notes (if configured)"
     echo ""
     echo "## Closing Tickets"
     echo ""
     echo "1. Before closing:"
     echo "   - Review \`current-ticket.md\` content and description"
     echo "   - Check all tasks in checklist are completed (mark with \`[x]\`)"
+    echo "   - Commit all your work: \`git add . && git commit -m \"your message\"\`"
     echo "   - Get user approval before proceeding"
     echo "2. Complete: \`$SCRIPT_COMMAND close\`"
     echo "\`\`\`"
@@ -530,11 +566,13 @@ cmd_new() {
     yaml_parse "$CONFIG_FILE"
     local tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
     local default_content=$(yaml_get "default_content" || echo "$DEFAULT_CONTENT")
+    local note_content=$(yaml_get "note_content" || echo "")
     local new_success_message=$(yaml_get "new_success_message" || echo "$DEFAULT_NEW_SUCCESS_MESSAGE")
     
     # Generate filename
     local ticket_name=$(generate_ticket_filename "$slug")
     local ticket_file="${tickets_dir}/${ticket_name}.md"
+    local note_file="${tickets_dir}/${ticket_name}-note.md"
     
     # Check if file already exists
     if [[ -f "$ticket_file" ]]; then
@@ -546,6 +584,34 @@ File '$ticket_file' already exists. Please:
 3. Remove the existing file if it's no longer needed
 EOF
         return 1
+    fi
+    
+    # Check if note file already exists (when note_content is defined)
+    if [[ -n "$note_content" ]] && [[ -f "$note_file" ]]; then
+        cat >&2 << EOF
+Error: Note file already exists
+File '$note_file' already exists. Please:
+1. Use a different slug name, or
+2. Remove the existing file if it's no longer needed
+EOF
+        return 1
+    fi
+    
+    # Process placeholders in default_content
+    local processed_content="$default_content"
+    if [[ -n "$note_content" ]]; then
+        # Replace $$NOTE_PATH$$ with relative path to note file
+        local note_path="${ticket_name}-note.md"
+        processed_content="${processed_content//\$\$NOTE_PATH\$\$/$note_path}"
+    else
+        # Remove $$NOTE_PATH$$ placeholder if no note file
+        processed_content="${processed_content//\$\$NOTE_PATH\$\$/}"
+    fi
+    
+    # Replace $$TICKET_NAME$$ in both contents
+    processed_content="${processed_content//\$\$TICKET_NAME\$\$/$ticket_name}"
+    if [[ -n "$note_content" ]]; then
+        note_content="${note_content//\$\$TICKET_NAME\$\$/$ticket_name}"
     fi
     
     # Create ticket file
@@ -560,7 +626,7 @@ started_at: null  # Do not modify manually
 closed_at: null   # Do not modify manually
 ---
 
-$default_content
+$processed_content
 EOF
     then
         cat >&2 << EOF
@@ -574,6 +640,26 @@ EOF
     fi
     
     echo "Created ticket file: $ticket_file"
+    
+    # Create note file if note_content is defined
+    if [[ -n "$note_content" ]]; then
+        if ! cat > "$note_file" << EOF
+$note_content
+EOF
+        then
+            cat >&2 << EOF
+Error: Permission denied
+Cannot create note file '$note_file'. Please:
+1. Check write permissions in tickets directory, or
+2. Run with appropriate permissions
+EOF
+            # Clean up ticket file since note creation failed
+            rm -f "$ticket_file"
+            return 1
+        fi
+        echo "Created note file: $note_file"
+    fi
+    
     echo "Please edit the file to add title, description and details."
     echo "To start working on this ticket, you **must** run: $SCRIPT_COMMAND start $ticket_name"
     
@@ -855,8 +941,19 @@ EOF
         rm -f "$CURRENT_TICKET_LINK"
         ln -s "$ticket_file" "$CURRENT_TICKET_LINK"
         
-        echo "Resumed ticket: $ticket_name"
-        echo "Current ticket linked: $CURRENT_TICKET_LINK -> $ticket_file"
+        # Create note symlink if note file exists
+        local note_file="${tickets_dir}/${ticket_name}-note.md"
+        if [[ -f "$note_file" ]]; then
+            rm -f "$CURRENT_NOTE_LINK"
+            ln -s "$note_file" "$CURRENT_NOTE_LINK"
+            echo "Resumed ticket: $ticket_name"
+            echo "Current ticket linked: $CURRENT_TICKET_LINK -> $ticket_file"
+            echo "Current note linked: $CURRENT_NOTE_LINK -> $note_file"
+        else
+            rm -f "$CURRENT_NOTE_LINK"  # Clean up any old note link
+            echo "Resumed ticket: $ticket_name"
+            echo "Current ticket linked: $CURRENT_TICKET_LINK -> $ticket_file"
+        fi
         echo "Continuing work on existing feature branch."
         
         # Display success message if configured
@@ -896,8 +993,19 @@ EOF
     rm -f "$CURRENT_TICKET_LINK"
     ln -s "$ticket_file" "$CURRENT_TICKET_LINK"
     
-    echo "Started ticket: $ticket_name"
-    echo "Current ticket linked: $CURRENT_TICKET_LINK -> $ticket_file"
+    # Create note symlink if note file exists
+    local note_file="${tickets_dir}/${ticket_name}-note.md"
+    if [[ -f "$note_file" ]]; then
+        rm -f "$CURRENT_NOTE_LINK"
+        ln -s "$note_file" "$CURRENT_NOTE_LINK"
+        echo "Started ticket: $ticket_name"
+        echo "Current ticket linked: $CURRENT_TICKET_LINK -> $ticket_file"
+        echo "Current note linked: $CURRENT_NOTE_LINK -> $note_file"
+    else
+        rm -f "$CURRENT_NOTE_LINK"  # Clean up any old note link
+        echo "Started ticket: $ticket_name"
+        echo "Current ticket linked: $CURRENT_TICKET_LINK -> $ticket_file"
+    fi
     echo "Note: Branch created locally. Use 'git push -u $repository $branch_name' when ready to share."
     
     # Display success message if configured
@@ -967,7 +1075,26 @@ EOF
         return 1
     fi
     
-    echo "Restored current ticket link: $CURRENT_TICKET_LINK -> $ticket_file"
+    # Restore note symlink if note file exists
+    local note_file_regular="${tickets_dir}/${ticket_name}-note.md"
+    local note_file_done="${tickets_dir}/done/${ticket_name}-note.md"
+    local note_file=""
+    
+    if [[ -f "$note_file_regular" ]]; then
+        note_file="$note_file_regular"
+    elif [[ -f "$note_file_done" ]]; then
+        note_file="$note_file_done"
+    fi
+    
+    if [[ -n "$note_file" ]] && [[ -f "$note_file" ]]; then
+        rm -f "$CURRENT_NOTE_LINK"
+        ln -s "$note_file" "$CURRENT_NOTE_LINK"
+        echo "Restored current ticket link: $CURRENT_TICKET_LINK -> $ticket_file"
+        echo "Restored current note link: $CURRENT_NOTE_LINK -> $note_file"
+    else
+        rm -f "$CURRENT_NOTE_LINK"  # Clean up any old note link
+        echo "Restored current ticket link: $CURRENT_TICKET_LINK -> $ticket_file"
+    fi
     
     # Display success message if configured
     if [[ -n "$restore_success_message" ]]; then
@@ -1263,11 +1390,19 @@ EOF
         return 1
     }
     
-    # Remove current-ticket.md from git history if it exists
-    # This prevents accidental commits of current-ticket.md when force-added
+    # Remove current-ticket.md and current-note.md from git history if they exist
+    # This prevents accidental commits of these files when force-added
     if git ls-files | grep -q "^current-ticket.md$"; then
         run_git_command "git rm --cached current-ticket.md" || {
             echo "Error: Failed to remove current-ticket.md from git history" >&2
+            # Rollback ticket file changes
+            echo "$original_ticket_content" > "$ticket_file"
+            return 1
+        }
+    fi
+    if git ls-files | grep -q "^current-note.md$"; then
+        run_git_command "git rm --cached current-note.md" || {
+            echo "Error: Failed to remove current-note.md from git history" >&2
             # Rollback ticket file changes
             echo "$original_ticket_content" > "$ticket_file"
             return 1
@@ -1344,6 +1479,15 @@ EOF
         run_git_command "git mv \"$ticket_file\" \"$new_ticket_path\"" || {
             echo "Warning: Failed to move ticket to done folder" >&2
         }
+        
+        # Move note file if it exists
+        local note_file="${tickets_dir}/${ticket_name}-note.md"
+        if [[ -f "$note_file" ]]; then
+            local new_note_path="${done_dir}/$(basename "$note_file")"
+            run_git_command "git mv \"$note_file\" \"$new_note_path\"" || {
+                echo "Warning: Failed to move note to done folder" >&2
+            }
+        fi
     fi
     
     # Commit with ticket content and done folder move together
@@ -1382,8 +1526,9 @@ EOF
     # At this point, all critical operations have succeeded
     # Now proceed with cleanup operations
     
-    # Remove current ticket link - core workflow is complete, safe to remove
+    # Remove current ticket and note links - core workflow is complete, safe to remove
     rm -f "$CURRENT_TICKET_LINK"
+    rm -f "$CURRENT_NOTE_LINK"
     
     echo "Ticket completed: $ticket_name"
     echo "Merged to $default_branch branch"
@@ -1436,13 +1581,17 @@ Use `./ticket.sh` for ticket management.
 
 1. Check available tickets: `./ticket.sh` list or browse tickets directory
 2. Start work: `./ticket.sh start 241225-143502-feature-name`
-3. Develop on feature branch (`current-ticket.md` shows active ticket)
+3. Develop on feature branch
+4. Reference work files:
+   - `current-ticket.md` shows active ticket with tasks
+   - `current-note.md` for debugging logs and investigation notes (if configured)
 
 ## Closing Tickets
 
 1. Before closing:
    - Review `current-ticket.md` content and description
    - Check all tasks in checklist are completed (mark with `[x]`)
+   - Commit all your work: `git add . && git commit -m "your message"`
    - Get user approval before proceeding
 2. Complete: `./ticket.sh close`
 EOF

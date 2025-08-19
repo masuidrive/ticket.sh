@@ -49,7 +49,7 @@ echo "1. Testing UTF-8 in ticket slug..."
 setup_test
 
 # Create ticket with Japanese characters converted to slug format
-if ./ticket.sh new "日本語-テスト" >/dev/null 2>&1 || ./ticket.sh new "nihongo-test" >/dev/null 2>&1; then
+if timeout 5 ./ticket.sh new "日本語-テスト" >/dev/null 2>&1 || timeout 5 ./ticket.sh new "nihongo-test" >/dev/null 2>&1; then
     if ls tickets/*nihongo-test.md >/dev/null 2>&1 || ls tickets/*test.md >/dev/null 2>&1; then
         test_result 0 "Created ticket with UTF-8 related slug"
     else
@@ -69,7 +69,7 @@ if [[ -n "$TICKET" ]]; then
     sed_i 's/description: ".*"/description: "日本語の説明: テスト用チケット 🎉"/' "$TICKET"
     
     # Verify it can be read
-    if ./ticket.sh list 2>&1 | grep -q "日本語の説明"; then
+    if timeout 5 ./ticket.sh list 2>&1 | grep -q "日本語の説明"; then
         test_result 0 "UTF-8 description displayed correctly"
     else
         test_result 1 "UTF-8 description not displayed"
@@ -106,7 +106,7 @@ EOF
     git add tickets .ticket-config.yaml && git commit -q -m "add utf8 ticket"
     TICKET_NAME=$(basename "$TICKET" .md)
     
-    if ./ticket.sh start "$TICKET_NAME" --no-push >/dev/null 2>&1; then
+    if timeout 5 ./ticket.sh start "$TICKET_NAME" --no-push >/dev/null 2>&1; then
         test_result 0 "Started ticket with UTF-8 content"
         
         # Check if symlink works with UTF-8 content
@@ -148,7 +148,7 @@ if [[ -n "$TICKET" ]]; then
     sed_i 's/tags: \[\]/tags: ["機能", "テスト", "🏷️"]/' "$TICKET"
     
     # List should handle UTF-8 tags
-    OUTPUT=$(./ticket.sh list 2>&1)
+    OUTPUT=$(timeout 5 ./ticket.sh list 2>&1)
     if echo "$OUTPUT" | grep -q "utf8-tags-test"; then
         test_result 0 "Ticket with UTF-8 tags listed successfully"
     else
@@ -175,7 +175,7 @@ if [[ -n "$LOCALE_TICKET" ]]; then
     sed_i 's/description: ".*"/description: "ロケールテスト 🌍"/' "$LOCALE_TICKET"
     
     # Run list command - should handle UTF-8 even with C locale
-    OUTPUT=$(./ticket.sh list 2>&1)
+    OUTPUT=$(timeout 5 ./ticket.sh list 2>&1)
     if echo "$OUTPUT" | grep -q "ロケールテスト"; then
         test_result 0 "Locale auto-setting works (UTF-8 handled with C locale)"
     else
@@ -199,7 +199,7 @@ TICKET=$(safe_get_first_file "*long-utf8-test.md" "tickets")
 if [[ -n "$TICKET" ]]; then
     sed_i "s/description: \".*\"/description: \"$LONG_DESC\"/" "$TICKET"
     
-    if ./ticket.sh list 2>&1 | grep -q "長い日本語"; then
+    if timeout 5 ./ticket.sh list 2>&1 | grep -q "長い日本語"; then
         test_result 0 "Long UTF-8 strings handled correctly"
     else
         test_result 1 "Issue with long UTF-8 strings"

@@ -56,12 +56,12 @@ EOF
     mkdir test-tickets
     
     # Test that it uses .yaml
-    if "$SCRIPT_DIR/../ticket.sh" list </dev/null >/dev/null 2>&1; then
+    if timeout 5 "$SCRIPT_DIR/../ticket.sh" list  >/dev/null 2>&1; then
         echo "  ✓ Successfully used .ticket-config.yaml"
     else
         echo "  ✗ Failed to use .ticket-config.yaml"
         # Debug output
-        echo "  Debug: $("$SCRIPT_DIR/../ticket.sh" list </dev/null 2>&1)"
+        echo "  Debug: $(timeout 5 "$SCRIPT_DIR/../ticket.sh" list  2>&1)"
         return 1
     fi
     
@@ -87,7 +87,7 @@ EOF
     mkdir test-tickets
     
     # Test that it uses .yml
-    if "$SCRIPT_DIR/../ticket.sh" list </dev/null 2>/dev/null; then
+    if timeout 5 "$SCRIPT_DIR/../ticket.sh" list 2>/dev/null; then
         echo "  ✓ Successfully used .ticket-config.yml"
     else
         echo "  ✗ Failed to use .ticket-config.yml"
@@ -127,7 +127,7 @@ EOF
     rm .ticket-config.*
     
     # Test that init creates .yaml by default
-    if "$SCRIPT_DIR/../ticket.sh" init </dev/null >/dev/null 2>&1; then
+    if timeout 5 "$SCRIPT_DIR/../ticket.sh" init >/dev/null 2>&1; then
         if [[ -f .ticket-config.yaml ]]; then
             echo "  ✓ Init creates .ticket-config.yaml by default"
         else
@@ -152,7 +152,7 @@ test_no_config_file() {
     
     # Test that it shows proper error
     local output
-    output=$("$SCRIPT_DIR/../ticket.sh" list </dev/null 2>&1)
+    output=$(timeout 5 "$SCRIPT_DIR/../ticket.sh" list 2>&1)
     if echo "$output" | grep -q "Configuration file not found"; then
         echo "  ✓ Shows correct error message"
     else
@@ -198,7 +198,7 @@ EOF
     mkdir tickets
     
     # Test that existing .yml projects continue to work
-    if "$SCRIPT_DIR/../ticket.sh" list </dev/null >/dev/null 2>&1; then
+    if timeout 5 "$SCRIPT_DIR/../ticket.sh" list  >/dev/null 2>&1; then
         echo "  ✓ Existing .yml projects continue to work"
     else
         echo "  ✗ Existing .yml projects broken"
@@ -206,7 +206,7 @@ EOF
     fi
     
     # Test that we can create tickets
-    if "$SCRIPT_DIR/../ticket.sh" new test-compat >/dev/null 2>&1; then
+    if timeout 5 "$SCRIPT_DIR/../ticket.sh" new test-compat >/dev/null 2>&1; then
         echo "  ✓ Can create tickets with existing .yml config"
     else
         echo "  ✗ Cannot create tickets with existing .yml config"

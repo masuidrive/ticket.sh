@@ -49,7 +49,7 @@ git add test-file.txt
 # Don't commit yet - this simulates the bug scenario
 
 # Try to close with uncommitted changes - should fail
-if ./ticket.sh close >/dev/null 2>&1; then
+if timeout 5 ./ticket.sh close >/dev/null 2>&1; then
     echo "   ✗ Expected close to fail with uncommitted changes"
     exit 1
 fi
@@ -70,7 +70,7 @@ fi
 git commit -m "test commit" >/dev/null
 
 # Try to close again - this should succeed now (bug was here)
-if ! ./ticket.sh close >/dev/null 2>&1; then
+if ! timeout 5 ./ticket.sh close >/dev/null 2>&1; then
     echo "   ✗ Close failed after commit - bug reproduced!"
     exit 1
 fi

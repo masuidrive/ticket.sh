@@ -6,6 +6,9 @@
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Source test helpers for timeout function
+source "$SCRIPT_DIR/test-helpers.sh"
+
 # Test configuration
 TEST_DIR="tmp/test-final-$(date +%s)"
 ORIGINAL_DIR=$(pwd)
@@ -54,7 +57,7 @@ echo "Running tests..."
 echo
 
 # Test 1: Error handling without git
-if ./ticket.sh init </dev/null 2>&1 | grep -q "Not in a git repository"; then
+if timeout 5 ./ticket.sh init  2>&1 | grep -q "Not in a git repository"; then
     test_case "Detects missing git repository" "PASS"
 else
     test_case "Detects missing git repository" "FAIL"
@@ -70,14 +73,14 @@ git commit -q -m "Initial commit" >/dev/null 2>&1
 git checkout -q -b main >/dev/null 2>&1
 
 # Test 2: Error handling without config
-if ./ticket.sh list 2>&1 | grep -q "not initialized"; then
+if timeout 5 ./ticket.sh list 2>&1 | grep -q "not initialized"; then
     test_case "Detects missing config" "PASS"
 else
     test_case "Detects missing config" "FAIL"
 fi
 
 # Test 3: Initialize
-./ticket.sh init </dev/null >/dev/null 2>&1
+timeout 5 ./ticket.sh init  >/dev/null 2>&1
 if [[ -f .ticket-config.yaml ]] && [[ -d tickets ]] && [[ -f .gitignore ]]; then
     test_case "Initialize creates required files" "PASS"
 else
@@ -93,14 +96,14 @@ else
 fi
 
 # Test 5: Invalid slug
-if ! ./ticket.sh new "Bad Name" >/dev/null 2>&1; then
+if ! timeout 5 ./ticket.sh new "Bad Name" >/dev/null 2>&1; then
     test_case "Reject invalid slug" "PASS"
 else
     test_case "Reject invalid slug" "FAIL"
 fi
 
 # Test 6: List tickets
-if ./ticket.sh list 2>&1 | grep -q "test-feature"; then
+if timeout 5 ./ticket.sh list 2>&1 | grep -q "test-feature"; then
     test_case "List shows tickets" "PASS"
 else
     test_case "List shows tickets" "FAIL"
@@ -144,7 +147,7 @@ git add work.txt >/dev/null 2>&1
 git commit -q -m "Do work" >/dev/null 2>&1
 
 # Close should work from feature branch with current-ticket.md
-CLOSE_OUTPUT=$(./ticket.sh close --no-push 2>&1)
+CLOSE_OUTPUT=$(timeout 5 ./ticket.sh close --no-push 2>&1)
 CLOSE_EXIT=$?
 
 BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
@@ -164,7 +167,7 @@ else
 fi
 
 # Test 10: List with filters
-if ./ticket.sh list --status done 2>&1 | grep -q "test-feature"; then
+if timeout 5 ./ticket.sh list --status done 2>&1 | grep -q "test-feature"; then
     test_case "List filters by status" "PASS"
 else
     test_case "List filters by status" "FAIL"

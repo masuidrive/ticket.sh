@@ -13,7 +13,37 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source compatibility layer
-source "$(dirname "$0")/test-compat.sh"
+source "$SCRIPT_DIR/test-compat.sh"
+
+# Timeout wrapper for better portability
+# Track if we've shown the warning
+TIMEOUT_WARNING_SHOWN=${TIMEOUT_WARNING_SHOWN:-false}
+
+timeout() {
+    local duration="$1"
+    shift
+    
+    # If real timeout exists, use it
+    if command -v /usr/bin/timeout >/dev/null 2>&1; then
+        /usr/bin/timeout "$duration" "$@"
+        return $?
+    elif command -v gtimeout >/dev/null 2>&1; then
+        gtimeout "$duration" "$@"
+        return $?
+    else
+        # Show warning once per test run
+        if [[ "$TIMEOUT_WARNING_SHOWN" != "true" ]]; then
+            echo "⚠️  WARNING: timeout command not found. Tests may hang if commands enter interactive mode." >&2
+            echo "   Consider installing GNU coreutils (e.g., 'brew install coreutils' on macOS)" >&2
+            TIMEOUT_WARNING_SHOWN=true
+        fi
+        
+        # Simple fallback - just run the command without timeout
+        # This maintains test functionality even without timeout support
+        "$@"
+        return $?
+    fi
+}
 
 # Safe way to get first matching file
 safe_get_first_file() {
@@ -96,9 +126,8 @@ EOF
     fi
     
     echo "      Initializing ticket system..."
-    # Initialize ticket system
-    # Redirect stdin from /dev/null to prevent interactive mode
-    ./ticket.sh init </dev/null >/dev/null 2>&1
+    # Initialize ticket system with timeout protection
+    timeout 5 ./ticket.sh init
     
     echo "      Finalizing setup..."
     # Commit .gitignore changes from init
@@ -115,6 +144,7 @@ EOF
     
     echo "      Repository setup complete."
 }
+
 
 # Cleanup test repository
 cleanup_test_repo() {

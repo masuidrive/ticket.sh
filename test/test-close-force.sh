@@ -21,6 +21,10 @@ echo
 mkdir -p tmp
 setup_test_repo "$TEST_DIR"
 
+# Disable note_content for this test to maintain old behavior
+sed -i.bak 's/note_content:/_note_content_:/' .ticket-config.yaml
+rm -f .ticket-config.yaml.bak
+
 # Test result
 test_result() {
     if [[ $1 -eq 0 ]]; then
@@ -32,11 +36,11 @@ test_result() {
 }
 
 echo "1. Testing close with uncommitted changes (should fail)..."
-./ticket.sh new test-force >/dev/null 2>&1
+timeout 5 ./ticket.sh new test-force
 git add tickets .ticket-config.yaml && git commit -q -m "add ticket"
 TICKET=$(safe_get_ticket_name "*.md")
 if [[ -n "$TICKET" ]]; then
-    ./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1
+    timeout 5 ./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1
     # Commit the started_at change
     git add tickets && git commit -q -m "start ticket"
 fi
@@ -45,11 +49,11 @@ fi
 echo "uncommitted content" > dirty.txt
 
 # Try to close without force
-if ./ticket.sh close --no-push >/dev/null 2>&1; then
+if timeout 5 ./ticket.sh close --no-push >/dev/null 2>&1; then
     test_result 1 "Should fail with uncommitted changes"
 else
     # Check if the error message mentions --force
-    OUTPUT=$(./ticket.sh close --no-push 2>&1)
+    OUTPUT=$(timeout 5 ./ticket.sh close --no-push 2>&1)
     if echo "$OUTPUT" | grep -q "close --force"; then
         test_result 0 "Correctly fails and suggests --force option"
     else
@@ -59,7 +63,7 @@ fi
 
 echo -e "\n2. Testing close --force with uncommitted changes..."
 # Now try with --force
-if ./ticket.sh close --force --no-push >/dev/null 2>&1; then
+if timeout 5 ./ticket.sh close --force --no-push >/dev/null 2>&1; then
     # Check if we're on main branch
     BRANCH=$(git branch --show-current)
     if [[ "$BRANCH" == "main" ]]; then
@@ -77,11 +81,15 @@ cd ..
 rm -rf "$TEST_DIR"
 setup_test_repo "$TEST_DIR"
 
-./ticket.sh new test-short >/dev/null 2>&1
+# Disable note_content for this test to maintain old behavior
+sed -i.bak 's/note_content:/_note_content_:/' .ticket-config.yaml
+rm -f .ticket-config.yaml.bak
+
+timeout 5 ./ticket.sh new test-short
 git add tickets .ticket-config.yaml && git commit -q -m "add ticket"
 TICKET=$(safe_get_ticket_name "*.md")
 if [[ -n "$TICKET" ]]; then
-    ./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1
+    timeout 5 ./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1
     # Commit the started_at change
     git add tickets && git commit -q -m "start ticket"
 fi
@@ -90,7 +98,7 @@ fi
 echo "more uncommitted" > another-dirty.txt
 
 # Try with -f short form
-if ./ticket.sh close -f --no-push >/dev/null 2>&1; then
+if timeout 5 ./ticket.sh close -f --no-push >/dev/null 2>&1; then
     test_result 0 "Short form -f works correctly"
 else
     test_result 1 "Short form -f should work"
@@ -102,11 +110,15 @@ cd ..
 rm -rf "$TEST_DIR"
 setup_test_repo "$TEST_DIR"
 
-./ticket.sh new test-combined >/dev/null 2>&1
+# Disable note_content for this test to maintain old behavior
+sed -i.bak 's/note_content:/_note_content_:/' .ticket-config.yaml
+rm -f .ticket-config.yaml.bak
+
+timeout 5 ./ticket.sh new test-combined
 git add tickets .ticket-config.yaml && git commit -q -m "add ticket"
 TICKET=$(safe_get_ticket_name "*.md")
 if [[ -n "$TICKET" ]]; then
-    ./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1
+    timeout 5 ./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1
     # Commit the started_at change
     git add tickets && git commit -q -m "start ticket"
 fi
@@ -115,14 +127,14 @@ fi
 echo "combined test" > combined.txt
 
 # Try with both --no-push and --force
-if ./ticket.sh close --no-push --force >/dev/null 2>&1; then
+if timeout 5 ./ticket.sh close --no-push --force >/dev/null 2>&1; then
     test_result 0 "Combined --no-push --force works"
 else
     test_result 1 "Combined options should work"
 fi
 
 echo -e "\n5. Testing invalid option handling..."
-if ./ticket.sh close --invalid-option 2>&1 | grep -q "Unknown option"; then
+if timeout 5 ./ticket.sh close --invalid-option 2>&1 | grep -q "Unknown option"; then
     test_result 0 "Correctly rejects invalid options"
 else
     test_result 1 "Should reject invalid options"
@@ -134,11 +146,15 @@ cd ..
 rm -rf "$TEST_DIR"
 setup_test_repo "$TEST_DIR"
 
-./ticket.sh new test-current-ticket >/dev/null 2>&1
+# Disable note_content for this test to maintain old behavior
+sed -i.bak 's/note_content:/_note_content_:/' .ticket-config.yaml
+rm -f .ticket-config.yaml.bak
+
+timeout 5 ./ticket.sh new test-current-ticket
 git add tickets .ticket-config.yaml && git commit -q -m "add ticket"
 TICKET=$(safe_get_ticket_name "*.md")
 if [[ -n "$TICKET" ]]; then
-    ./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1
+    timeout 5 ./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1
     # Commit the started_at change
     git add tickets && git commit -q -m "start ticket"
 fi
@@ -150,7 +166,7 @@ git commit -q -m "Force add current-ticket.md" >/dev/null 2>&1
 # Verify current-ticket.md is in git history
 if git ls-files | grep -q "^current-ticket.md$"; then
     # Now close the ticket
-    if ./ticket.sh close --no-push >/dev/null 2>&1; then
+    if timeout 5 ./ticket.sh close --no-push >/dev/null 2>&1; then
         # Check if current-ticket.md is removed from git history
         if git ls-files | grep -q "^current-ticket.md$"; then
             test_result 1 "current-ticket.md should be removed from git history"
@@ -175,17 +191,21 @@ cd ..
 rm -rf "$TEST_DIR"
 setup_test_repo "$TEST_DIR"
 
-./ticket.sh new test-normal >/dev/null 2>&1
+# Disable note_content for this test to maintain old behavior
+sed -i.bak 's/note_content:/_note_content_:/' .ticket-config.yaml
+rm -f .ticket-config.yaml.bak
+
+timeout 5 ./ticket.sh new test-normal
 git add tickets .ticket-config.yaml && git commit -q -m "add ticket"
 TICKET=$(safe_get_ticket_name "*.md")
 if [[ -n "$TICKET" ]]; then
-    ./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1
+    timeout 5 ./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1
     # Commit the started_at change
     git add tickets && git commit -q -m "start ticket"
 fi
 
 # Close without force-adding current-ticket.md
-if ./ticket.sh close --no-push >/dev/null 2>&1; then
+if timeout 5 ./ticket.sh close --no-push >/dev/null 2>&1; then
     test_result 0 "Normal close works when current-ticket.md not in git history"
 else
     test_result 1 "Normal close should work when current-ticket.md not in git history"

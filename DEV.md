@@ -108,17 +108,19 @@ The main script uses a case statement to route commands:
 - Validates slug format
 - Generates timestamp-based filename
 - Creates ticket file with template
+- Creates optional note file when `note_content` is configured
 
 #### `start_ticket()`
 - Creates feature branch
 - Updates `started_at` timestamp
 - Creates `current-ticket.md` symlink
+- Creates `current-note.md` symlink when note file exists
 
 #### `close_ticket()`
 - Updates `closed_at` timestamp
-- Removes current-ticket.md from git history
+- Removes current-ticket.md and current-note.md from git history
 - Squash merges to default branch
-- Moves ticket to `done/` folder
+- Moves ticket and note files to `done/` folder
 - Optional remote branch cleanup
 
 ## Testing
@@ -286,6 +288,7 @@ Documentation updates should be part of the same PR as code changes.
 - **UTF-8 support**: Full Unicode support for international users
 - **Done folder organization**: Automatic organization of completed tickets
 - **Git history protection**: Prevents accidental commits of working files
+- **Work notes separation**: Optional separate note files for debugging and investigation logs
 
 ## Troubleshooting
 

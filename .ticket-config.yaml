@@ -24,6 +24,28 @@ start_success_message: |
 
 # Message displayed after closing a ticket
 close_success_message: |
+  .
+
+# Note template (optional - if not defined, no note file will be created)
+note_content: |
+  # Work Notes for $$TICKET_NAME$$
+  
+  ## Implementation Details
+  
+  ...
+
+  ## Task 1
+  
+  ...
+
+  ## Task N
+  
+  ...
+  
+  
+  ## Reviewer note #N
+  
+  ...
   
 
 # Ticket template
@@ -31,7 +53,9 @@ default_content: |
   # Ticket Overview
   
   Write the overview and tasks for this ticket here.
-  
+
+  Please record any notes related to this ticket, such as debugging information, review results, or other work logs, `$$NOTE_PATH$$`.
+
 
   ## Tasks
   
@@ -45,8 +69,3 @@ default_content: |
     - [ ] Update spec.*.md
     - [ ] Update DEV.md
   - [ ] Get developer approval before closing
-
-  
-  ## Notes
-  
-  Additional notes or requirements.

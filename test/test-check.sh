@@ -50,7 +50,7 @@ cd "$TEST_DIR"
 # Copy ticket.sh to test directory
 cp "$TICKET_SH" .
 chmod +x ticket.sh
-TICKET_SH="./ticket.sh"
+TICKET_SH="timeout 5 ./ticket.sh"
 
 # Initialize git and ticket system
 git init > /dev/null 2>&1

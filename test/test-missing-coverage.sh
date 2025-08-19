@@ -45,7 +45,7 @@ TICKET_NAME=$(safe_get_ticket_name "*test-file.md")
 ./ticket.sh start "tickets/${TICKET_NAME}.md" --no-push >/dev/null 2>&1
 git add tickets current-ticket.md && git commit -q -m "start" && git checkout -q main
 
-if ./ticket.sh start "${TICKET_NAME}.md" --no-push >/dev/null 2>&1; then
+if timeout 5 ./ticket.sh start "${TICKET_NAME}.md" --no-push >/dev/null 2>&1; then
     test_result 1 "Should not allow starting already started ticket"
 else
     # Try with just ticket name
@@ -56,7 +56,7 @@ else
     fi
     
     # Test with just the ticket name (no .md extension)
-    if ./ticket.sh start "$TICKET_NAME" --no-push >/dev/null 2>&1; then
+    if timeout 5 ./ticket.sh start "$TICKET_NAME" --no-push >/dev/null 2>&1; then
         test_result 1 "Should not allow starting already started ticket"
     else
         test_result 0 "All three file specification methods work correctly"
@@ -72,7 +72,7 @@ TICKET=$(safe_get_first_file "*unstarted.md" "tickets")
 ln -s "$TICKET" current-ticket.md
 git checkout -q -b feature/fake-branch
 
-if ./ticket.sh close --no-push >/dev/null 2>&1; then
+if timeout 5 ./ticket.sh close --no-push >/dev/null 2>&1; then
     test_result 1 "Should not allow closing unstarted ticket"
 else
     test_result 0 "Correctly prevents closing unstarted ticket"
@@ -90,7 +90,7 @@ sed_i 's/started_at: null/started_at: "2025-01-01T00:00:00Z"/' "$TICKET_FILE"
 sed_i 's/closed_at: null/closed_at: "2025-01-01T01:00:00Z"/' "$TICKET_FILE"
 
 # Try to start a closed ticket
-if ./ticket.sh start "$TICKET_NAME" --no-push >/dev/null 2>&1; then
+if timeout 5 ./ticket.sh start "$TICKET_NAME" --no-push >/dev/null 2>&1; then
     test_result 1 "Should not allow starting closed ticket"
 else
     test_result 0 "Correctly prevents starting closed ticket"
@@ -100,7 +100,7 @@ fi
 echo -e "\n4. Testing invalid count value edge cases..."
 cd .. && setup_test
 # Test negative count
-if ./ticket.sh list --count -5 >/dev/null 2>&1; then
+if timeout 5 ./ticket.sh list --count -5 >/dev/null 2>&1; then
     test_result 1 "Should reject negative count"
 else
     test_result 0 "Correctly rejects negative count"
@@ -108,7 +108,7 @@ fi
 
 # Test 5: Empty slug
 echo -e "\n5. Testing empty slug..."
-if ./ticket.sh new "" >/dev/null 2>&1; then
+if timeout 5 ./ticket.sh new "" >/dev/null 2>&1; then
     test_result 1 "Should reject empty slug"
 else
     test_result 0 "Correctly rejects empty slug"
@@ -118,7 +118,7 @@ fi
 echo -e "\n6. Testing missing tickets directory..."
 cd .. && setup_test
 rm -rf tickets
-if ./ticket.sh list >/dev/null 2>&1; then
+if timeout 5 ./ticket.sh list >/dev/null 2>&1; then
     test_result 1 "Should fail when tickets directory is missing"
 else
     test_result 0 "Correctly detects missing tickets directory"
@@ -135,7 +135,7 @@ if [[ -n "$TICKET" ]]; then
     echo "more content" >> "$TICKET"
 fi
 
-OUTPUT=$(./ticket.sh list 2>&1)
+OUTPUT=$(timeout 5 ./ticket.sh list 2>&1)
 if echo "$OUTPUT" | grep -q "corrupt"; then
     test_result 1 "Should handle corrupted YAML gracefully"
 else
@@ -146,7 +146,7 @@ fi
 # Test 8: Very long slug
 echo -e "\n8. Testing very long slug..."
 LONG_SLUG=$(printf 'a%.0s' {1..100})
-if ./ticket.sh new "$LONG_SLUG" >/dev/null 2>&1; then
+if timeout 5 ./ticket.sh new "$LONG_SLUG" >/dev/null 2>&1; then
     # Check if file was created
     if ls tickets/*"$LONG_SLUG"* >/dev/null 2>&1; then
         test_result 0 "Accepts long slugs"
@@ -167,7 +167,7 @@ sed_i 's|branch_prefix: "feature/"|branch_prefix: "feature/team/"|' .ticket-conf
 git add tickets .ticket-config.yaml && git commit -q -m "add"
 TICKET=$(safe_get_ticket_name "*slash-test.md")
 
-if ./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1; then
+if timeout 5 ./ticket.sh start "$TICKET" --no-push >/dev/null 2>&1; then
     BRANCH=$(git branch --show-current)
     if [[ "$BRANCH" == "feature/team/$TICKET" ]]; then
         test_result 0 "Handles multi-level branch prefixes"
@@ -193,7 +193,7 @@ git checkout -q main
 git merge --no-ff -q "feature/$TICKET" -m "Merge" >/dev/null 2>&1
 
 # With multiple --status flags, the last one should win
-OUTPUT=$(./ticket.sh list --status todo --status doing 2>&1)
+OUTPUT=$(timeout 5 ./ticket.sh list --status todo --status doing 2>&1)
 if echo "$OUTPUT" | grep -q "status: doing"; then
     # Should only show "doing" tickets (last --status value)
     if echo "$OUTPUT" | grep -q "status: todo"; then
