@@ -3,8 +3,8 @@ priority: 2
 tags: []
 description: "チケットファイルから使用されていないtagsフィールドを削除する"
 created_at: "2025-08-23T06:52:00Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2025-08-23T06:52:52Z # Do not modify manually
+closed_at: 2025-08-23T07:21:07Z # Do not modify manually
 ---
 
 # 未使用tagsフィールドの削除
@@ -22,11 +22,12 @@ closed_at: null   # Do not modify manually
 
 ## Tasks
 
-- [ ] 現在のチケット作成テンプレートでのtagsフィールド使用箇所を特定
-- [ ] tagsフィールドに依存する処理がないか確認
-- [ ] テンプレートからtagsフィールドを削除
-- [ ] 既存チケットファイルのtagsフィールドは残す（後方互換性）
-- [ ] テストケースの確認・追加
-- [ ] Run tests before closing and pass all tests (No exceptions)
-- [ ] Run `bash build.sh` to build the project
+- [x] 現在のチケット作成テンプレートでのtagsフィールド使用箇所を特定
+- [x] tagsフィールドに依存する処理がないか確認
+- [x] テンプレートからtagsフィールドを削除
+- [x] 既存チケットファイルのtagsフィールドは残す（後方互換性）
+- [x] テストケースの確認・追加
+- [x] Run tests before closing and pass all tests (No exceptions)
+- [x] Run `bash build.sh` to build the project
+- [x] Update documentation (spec.md and spec.ja.md)
 - [ ] Get developer approval before closing

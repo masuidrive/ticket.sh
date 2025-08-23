@@ -619,7 +619,6 @@ EOF
     if ! cat > "$ticket_file" << EOF
 ---
 priority: 2
-tags: []
 description: ""
 created_at: "$timestamp"
 started_at: null  # Do not modify manually

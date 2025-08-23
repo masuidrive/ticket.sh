@@ -231,7 +231,6 @@ YYMMDD-hhmmss-<slug>.md
 ```yaml
 ---
 priority: 2
-tags: []
 description: ""
 created_at: "2025-06-28 15:32:45 UTC"
 started_at: null
@@ -347,7 +346,6 @@ closed_at: null
 ```yaml
 ---
 priority: 2
-tags: []
 description: ""  # single line
 created_at: "2025-06-28T15:32:45Z"
 started_at: null  # Do not modify manually
@@ -739,7 +737,6 @@ Note: Changes not pushed to remote. Use 'git push origin develop' and 'git push 
 
 ---
 priority: 2
-tags: []
 description: "User authentication POST handler"
 created_at: "2025-06-28T15:32:45Z"
 started_at: "2025-06-28T16:15:30Z"
