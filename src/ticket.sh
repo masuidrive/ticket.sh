@@ -1626,6 +1626,20 @@ cmd_selfupdate() {
 # Wait for parent process to exit
 sleep 1
 
+# Ensure LF line endings (CRLF compatibility fix)
+# This prevents "/usr/bin/env: 'bash\r': No such file or directory" errors
+if command -v dos2unix >/dev/null 2>&1; then
+    dos2unix "$temp_file" >/dev/null 2>&1
+elif command -v sed >/dev/null 2>&1; then
+    # Remove any CR characters using sed (more portable)
+    sed -i.bak 's/\r$//' "$temp_file" && rm -f "${temp_file}.bak"
+else
+    # Fallback: try tr command
+    if command -v tr >/dev/null 2>&1; then
+        tr -d '\r' < "$temp_file" > "${temp_file}.tmp" && mv "${temp_file}.tmp" "$temp_file"
+    fi
+fi
+
 # Replace with new version
 mv "$temp_file" "$script_path" 2>/dev/null || cp "$temp_file" "$script_path"
 chmod +x "$script_path"

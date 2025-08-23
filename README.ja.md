@@ -22,6 +22,14 @@ curl -O https://raw.githubusercontent.com/masuidrive/ticket.sh/main/ticket.sh
 chmod +x ticket.sh
 ```
 
+**⚠️ Windows/VSCodeユーザー**: `/usr/bin/env: 'bash\r': No such file or directory` エラーが発生した場合:
+```bash
+# CRLF改行コードを修正（どちらか選択）:
+dos2unix ticket.sh              # dos2unixがインストール済みの場合
+sed -i 's/\r$//' ticket.sh      # sedを使用
+```
+この問題は`selfupdate`コマンドによる新しいダウンロードでは自動的に防止されます。
+
 ### コーディングエージェント向け
 
 Claude CodeやGemini CLIのようなコーディングエージェントでは、下記のような会話で操作。

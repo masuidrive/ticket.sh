@@ -102,6 +102,20 @@ awk -v version="$VERSION" '
 # Make executable
 chmod +x "$OUTPUT_FILE"
 
+# Ensure LF line endings (CRLF compatibility fix)
+# This prevents "/usr/bin/env: 'bash\r': No such file or directory" errors
+if command -v dos2unix >/dev/null 2>&1; then
+    dos2unix "$OUTPUT_FILE" >/dev/null 2>&1
+elif command -v sed >/dev/null 2>&1; then
+    # Remove any CR characters using sed (more portable)
+    sed -i.bak 's/\r$//' "$OUTPUT_FILE" && rm -f "${OUTPUT_FILE}.bak"
+else
+    # Fallback: try tr command
+    if command -v tr >/dev/null 2>&1; then
+        tr -d '\r' < "$OUTPUT_FILE" > "${OUTPUT_FILE}.tmp" && mv "${OUTPUT_FILE}.tmp" "$OUTPUT_FILE"
+    fi
+fi
+
 echo "Build complete: $OUTPUT_FILE"
 echo "File size: $(stat -f%z "$OUTPUT_FILE" 2>/dev/null || stat -c%s "$OUTPUT_FILE" 2>/dev/null || echo "unknown") bytes"
 echo ""

@@ -1,0 +1,18 @@
+# Ensure shell scripts always use LF line endings
+*.sh text eol=lf
+ticket.sh text eol=lf
+
+# Ensure markdown files use LF (but allow CRLF compatibility for reading)
+*.md text eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+
+# YAML files should use LF
+*.yaml text eol=lf
+*.yml text eol=lf

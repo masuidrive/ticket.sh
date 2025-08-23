@@ -12,7 +12,7 @@ fi
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250823.071009
+# Version: 20250823.101201
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -1027,7 +1027,7 @@ if [ -z "${BASH_VERSION:-}" ]; then
 fi
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250823.071009
+# Version: 20250823.101201
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -1119,7 +1119,7 @@ SCRIPT_COMMAND=$(get_script_command)
 
 
 # Global variables
-VERSION="20250823.071009"  # This will be replaced during build
+VERSION="20250823.101201"  # This will be replaced during build
 CONFIG_FILE=""  # Will be set dynamically by get_config_file()
 CURRENT_TICKET_LINK="current-ticket.md"
 CURRENT_NOTE_LINK="current-note.md"
@@ -2627,6 +2627,20 @@ cmd_selfupdate() {
     cat > "$update_script" << EOF
 # Wait for parent process to exit
 sleep 1
+
+# Ensure LF line endings (CRLF compatibility fix)
+# This prevents "/usr/bin/env: 'bash\r': No such file or directory" errors
+if command -v dos2unix >/dev/null 2>&1; then
+    dos2unix "$temp_file" >/dev/null 2>&1
+elif command -v sed >/dev/null 2>&1; then
+    # Remove any CR characters using sed (more portable)
+    sed -i.bak 's/\r$//' "$temp_file" && rm -f "${temp_file}.bak"
+else
+    # Fallback: try tr command
+    if command -v tr >/dev/null 2>&1; then
+        tr -d '\r' < "$temp_file" > "${temp_file}.tmp" && mv "${temp_file}.tmp" "$temp_file"
+    fi
+fi
 
 # Replace with new version
 mv "$temp_file" "$script_path" 2>/dev/null || cp "$temp_file" "$script_path"
