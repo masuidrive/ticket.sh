@@ -15,12 +15,15 @@ Use `./ticket.sh` for ticket management.
 
 ## Working with current-ticket.md
 
-### If current-ticket.md exists in project root
+### If `current-ticket.md` exists in project root
+
 - This file is your work instruction - follow its contents
-- When receiving additional instructions from users, document them in this file before proceeding
+- When receiving additional instructions from users, add them as new tasks under `## Tasks` and record details in `current-note.md` before proceeding
+- During the work, also write down notes, logs, and findings in `current-note.md`
 - Continue working on the active ticket
 
 ### If current-ticket.md does not exist in project root
+
 - When receiving user requests, first ask whether to create a new ticket
 - Do not start work without confirming ticket creation
 - Even small requests should be tracked through the ticket system
@@ -32,17 +35,17 @@ Use `./ticket.sh` for ticket management.
 
 ## Start Working on Ticket
 
-1. Check available tickets: `./ticket.sh` list or browse tickets directory
+1. Check available tickets: `./ticket.sh list` or browse tickets directory
 2. Start work: `./ticket.sh start 241225-143502-feature-name`
 3. Develop on feature branch
 4. Reference work files:
    - `current-ticket.md` shows active ticket with tasks
-   - `current-note.md` for debugging logs and investigation notes (if configured)
+   - `current-note.md` for working notes related to this ticket (if used)
 
 ## Closing Tickets
 
 1. Before closing:
-   - Review `current-ticket.md` content and description
+   - Review `current-ticket.md` content and description, collect information from `current-note.md` and other notes, and summarize the final work results and conclusions so that anyone reading the ticket can understand the work done on this branch
    - Check all tasks in checklist are completed (mark with `[x]`)
    - Commit all your work: `git add . && git commit -m "your message"`
    - Get user approval before proceeding

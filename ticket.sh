@@ -12,7 +12,7 @@ fi
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250823.101201
+# Version: 20250823.104538
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -1027,7 +1027,7 @@ if [ -z "${BASH_VERSION:-}" ]; then
 fi
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250823.101201
+# Version: 20250823.104538
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -1119,7 +1119,7 @@ SCRIPT_COMMAND=$(get_script_command)
 
 
 # Global variables
-VERSION="20250823.101201"  # This will be replaced during build
+VERSION="20250823.104538"  # This will be replaced during build
 CONFIG_FILE=""  # Will be set dynamically by get_config_file()
 CURRENT_TICKET_LINK="current-ticket.md"
 CURRENT_NOTE_LINK="current-note.md"
@@ -1509,9 +1509,11 @@ EOF
     echo ""
     echo "## Working with current-ticket.md"
     echo ""
-    echo "### If current-ticket.md exists in project root"
+    echo "### If \`current-ticket.md\` exists in project root"
+    echo ""
     echo "- This file is your work instruction - follow its contents"
-    echo "- When receiving additional instructions from users, document them in this file before proceeding"
+    echo "- When receiving additional instructions from users, add them as new tasks under \`## Tasks\` and record details in \`current-note.md\` before proceeding"
+    echo "- During the work, also write down notes, logs, and findings in \`current-note.md\`"
     echo "- Continue working on the active ticket"
     echo ""
     echo "### If current-ticket.md does not exist in project root"
@@ -1531,12 +1533,12 @@ EOF
     echo "3. Develop on feature branch"
     echo "4. Reference work files:"
     echo "   - \`current-ticket.md\` shows active ticket with tasks"
-    echo "   - \`current-note.md\` for debugging logs and investigation notes (if configured)"
+    echo "   - \`current-note.md\` for working notes related to this ticket (if used)"
     echo ""
     echo "## Closing Tickets"
     echo ""
     echo "1. Before closing:"
-    echo "   - Review \`current-ticket.md\` content and description"
+    echo "   - Review \`current-ticket.md\` content and description, collect information from \`current-note.md\` and other notes, and summarize the final work results and conclusions so that anyone reading the ticket can understand the work done on this branch"
     echo "   - Check all tasks in checklist are completed (mark with \`[x]\`)"
     echo "   - Commit all your work: \`git add . && git commit -m \"your message\"\`"
     echo "   - Get user approval before proceeding"
@@ -2564,9 +2566,11 @@ Use `./ticket.sh` for ticket management.
 
 ## Working with current-ticket.md
 
-### If current-ticket.md exists in project root
+### If `current-ticket.md` exists in project root
+
 - This file is your work instruction - follow its contents
-- When receiving additional instructions from users, document them in this file before proceeding
+- When receiving additional instructions from users, add them as new tasks under `## Tasks` and record details in `current-note.md` before proceeding
+- During the work, also write down notes, logs, and findings in `current-note.md`
 - Continue working on the active ticket
 
 ### If current-ticket.md does not exist in project root
@@ -2586,12 +2590,12 @@ Use `./ticket.sh` for ticket management.
 3. Develop on feature branch
 4. Reference work files:
    - `current-ticket.md` shows active ticket with tasks
-   - `current-note.md` for debugging logs and investigation notes (if configured)
+   - `current-note.md` for working notes related to this ticket (if used)
 
 ## Closing Tickets
 
 1. Before closing:
-   - Review `current-ticket.md` content and description
+   - Review `current-ticket.md` content and description, collect information from `current-note.md` and other notes, and summarize the final work results and conclusions so that anyone reading the ticket can understand the work done on this branch
    - Check all tasks in checklist are completed (mark with `[x]`)
    - Commit all your work: `git add . && git commit -m "your message"`
    - Get user approval before proceeding
