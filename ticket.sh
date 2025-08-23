@@ -12,7 +12,7 @@ fi
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250819.031149
+# Version: 20250823.062527
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -338,6 +338,8 @@ yaml_parse() {
     
     # Read line by line with explicit error handling for bash 5.1+ compatibility
     while IFS='' read -r line || [[ -n "$line" ]]; do
+        # Remove CRLF line endings
+        line=${line%$'\r'}
         if [[ $reading_multiline -eq 1 ]]; then
             # Check if this is the start of a new entry
             if [[ "$line" =~ ^(KEY|VALUE|LIST|ILIST) ]]; then
@@ -545,6 +547,8 @@ yaml_update() {
     
     # Process the file line by line
     while IFS= read -r line || [[ -n "$line" ]]; do
+        # Remove CRLF line endings
+        line=${line%$'\r'}
         # Check if this line contains the key we're looking for
         if [[ "$line" =~ ^[[:space:]]*${key}:[[:space:]]* ]]; then
             # Extract the value part after the colon
@@ -620,6 +624,8 @@ update_yaml_frontmatter_field() {
     
     # First pass: find frontmatter boundaries
     while IFS= read -r line; do
+        # Remove CRLF line endings
+        line=${line%$'\r'}
         ((line_num++))
         
         if [[ $line_num -eq 1 ]] && [[ "$line" == "---" ]]; then
@@ -642,6 +648,8 @@ update_yaml_frontmatter_field() {
     in_frontmatter=0
     
     while IFS= read -r line || [[ -n "$line" ]]; do
+        # Remove CRLF line endings
+        line=${line%$'\r'}
         ((line_num++))
         
         if [[ $line_num -eq 1 ]] && [[ "$line" == "---" ]]; then
@@ -710,6 +718,8 @@ extract_yaml_frontmatter() {
     local content=""
     
     while IFS= read -r line; do
+        # Remove CRLF line endings
+        line=${line%$'\r'}
         ((line_num++))
         
         if [[ $line_num -eq 1 ]] && [[ "$line" == "---" ]]; then
@@ -746,6 +756,8 @@ extract_markdown_body() {
     local first_body_line=1
     
     while IFS= read -r line || [[ -n "$line" ]]; do
+        # Remove CRLF line endings
+        line=${line%$'\r'}
         ((line_num++))
         
         if [[ $line_num -eq 1 ]] && [[ "$line" == "---" ]]; then
@@ -1015,7 +1027,7 @@ if [ -z "${BASH_VERSION:-}" ]; then
 fi
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250819.031149
+# Version: 20250823.062527
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -1107,7 +1119,7 @@ SCRIPT_COMMAND=$(get_script_command)
 
 
 # Global variables
-VERSION="20250819.031149"  # This will be replaced during build
+VERSION="20250823.062527"  # This will be replaced during build
 CONFIG_FILE=""  # Will be set dynamically by get_config_file()
 CURRENT_TICKET_LINK="current-ticket.md"
 CURRENT_NOTE_LINK="current-note.md"

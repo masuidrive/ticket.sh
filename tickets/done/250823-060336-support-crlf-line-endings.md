@@ -3,8 +3,8 @@ priority: 2
 tags: []
 description: "チケットファイルの改行コードを\\n以外に\\r\\nでも対応できるようにする"
 created_at: "2025-08-23T06:03:36Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2025-08-23T06:04:27Z # Do not modify manually
+closed_at: 2025-08-23T06:29:51Z # Do not modify manually
 ---
 
 # チケットファイルの改行コード対応
@@ -23,11 +23,11 @@ Windows環境などで作成されたファイルで使用される\r\n（CRLF�
 
 ## Tasks
 
-- [ ] 現在のチケットファイル処理部分のコードを調査
-- [ ] 改行コード依存の処理箇所を特定
-- [ ] \r\n（CRLF）対応の実装
-- [ ] テストケースの追加（LF/CRLF両方のパターン）
-- [ ] Run tests before closing and pass all tests (No exceptions)
-- [ ] Run `bash build.sh` to build the project
+- [x] 現在のチケットファイル処理部分のコードを調査
+- [x] 改行コード依存の処理箇所を特定
+- [x] \r\n（CRLF）対応の実装
+- [x] テストケースの追加（LF/CRLF両方のパターン）
+- [x] Run tests before closing and pass all tests (No exceptions)
+- [x] Run `bash build.sh` to build the project
 - [ ] Update documentation if necessary
 - [ ] Get developer approval before closing

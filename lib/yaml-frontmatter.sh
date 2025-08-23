@@ -26,6 +26,8 @@ update_yaml_frontmatter_field() {
     
     # First pass: find frontmatter boundaries
     while IFS= read -r line; do
+        # Remove CRLF line endings
+        line=${line%$'\r'}
         ((line_num++))
         
         if [[ $line_num -eq 1 ]] && [[ "$line" == "---" ]]; then
@@ -48,6 +50,8 @@ update_yaml_frontmatter_field() {
     in_frontmatter=0
     
     while IFS= read -r line || [[ -n "$line" ]]; do
+        # Remove CRLF line endings
+        line=${line%$'\r'}
         ((line_num++))
         
         if [[ $line_num -eq 1 ]] && [[ "$line" == "---" ]]; then
@@ -116,6 +120,8 @@ extract_yaml_frontmatter() {
     local content=""
     
     while IFS= read -r line; do
+        # Remove CRLF line endings
+        line=${line%$'\r'}
         ((line_num++))
         
         if [[ $line_num -eq 1 ]] && [[ "$line" == "---" ]]; then
@@ -152,6 +158,8 @@ extract_markdown_body() {
     local first_body_line=1
     
     while IFS= read -r line || [[ -n "$line" ]]; do
+        # Remove CRLF line endings
+        line=${line%$'\r'}
         ((line_num++))
         
         if [[ $line_num -eq 1 ]] && [[ "$line" == "---" ]]; then

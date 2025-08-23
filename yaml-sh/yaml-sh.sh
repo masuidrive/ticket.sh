@@ -299,6 +299,8 @@ yaml_parse() {
     
     # Read line by line with explicit error handling for bash 5.1+ compatibility
     while IFS='' read -r line || [[ -n "$line" ]]; do
+        # Remove CRLF line endings
+        line=${line%$'\r'}
         if [[ $reading_multiline -eq 1 ]]; then
             # Check if this is the start of a new entry
             if [[ "$line" =~ ^(KEY|VALUE|LIST|ILIST) ]]; then
@@ -506,6 +508,8 @@ yaml_update() {
     
     # Process the file line by line
     while IFS= read -r line || [[ -n "$line" ]]; do
+        # Remove CRLF line endings
+        line=${line%$'\r'}
         # Check if this line contains the key we're looking for
         if [[ "$line" =~ ^[[:space:]]*${key}:[[:space:]]* ]]; then
             # Extract the value part after the colon
