@@ -34,21 +34,16 @@ Use `./ticket.sh` for ticket management.
 
 1. Check available tickets: `./ticket.sh` list or browse tickets directory
 2. Start work: `./ticket.sh start 241225-143502-feature-name`
-3. Develop on feature branch (`current-ticket.md` shows active ticket)
+3. Develop on feature branch
+4. Reference work files:
+   - `current-ticket.md` shows active ticket with tasks
+   - `current-note.md` for debugging logs and investigation notes (if configured)
 
 ## Closing Tickets
 
 1. Before closing:
    - Review `current-ticket.md` content and description
    - Check all tasks in checklist are completed (mark with `[x]`)
-   - Run `bash ./build.sh`
-   - **CRITICAL: Get explicit user approval before proceeding**
+   - Commit all your work: `git add . && git commit -m "your message"`
+   - Get user approval before proceeding
 2. Complete: `./ticket.sh close`
-
-### ⚠️ IMPORTANT: User Approval Required
-
-**NEVER close a ticket without explicit user confirmation.** Always:
-- Summarize what was completed
-- Ask the user: "Should I close this ticket?"
-- Wait for clear confirmation (e.g., "yes", "close it", "go ahead")
-- Do NOT assume silence or indirect responses as approval
