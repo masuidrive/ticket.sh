@@ -26,25 +26,35 @@ run_docker_tests() {
         echo "Installing dependencies..."
         if command -v apk >/dev/null 2>&1; then
             # Alpine Linux
-            apk add --no-cache git bash >/dev/null 2>&1
+            apk add --no-cache git bash sudo >/dev/null 2>&1
         elif command -v apt-get >/dev/null 2>&1; then
             # Ubuntu/Debian
             apt-get update -qq >/dev/null 2>&1
-            apt-get install -y -qq git >/dev/null 2>&1
+            apt-get install -y -qq git sudo >/dev/null 2>&1
         fi
         
-        echo "Configuring Git..."
-        git config --global user.name "Test User"
-        git config --global user.email "test@example.com"
-        git config --global --add safe.directory "*"
+        echo "Creating test user..."
+        useradd -m -s /bin/bash testuser 2>/dev/null || adduser -D -s /bin/bash testuser 2>/dev/null
+        echo "testuser ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/testuser 2>/dev/null || true
         
-        echo "Running tests..."
+        echo "Setting up workspace permissions..."
+        chown -R testuser:testuser /workspace || chown -R testuser:users /workspace
+        
+        echo "Configuring Git for test user..."
+        sudo -u testuser git config --global user.name "Test User"
+        sudo -u testuser git config --global user.email "test@example.com"
+        sudo -u testuser git config --global --add safe.directory "*"
+        
+        echo "Running tests as non-root user..."
         # Make scripts executable
         chmod +x ./build.sh ./ticket.sh
         chmod +x ./test/*.sh
         
-        # Run tests
-        ./test/run-all.sh
+        # Set environment variables for testuser
+        export DOCKER_ENV=1
+        
+        # Run tests as testuser
+        sudo -u testuser -E ./test/run-all.sh
       '
     
     echo

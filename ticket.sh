@@ -12,7 +12,7 @@ fi
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250823.104538
+# Version: 20250824.051551
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -1027,7 +1027,7 @@ if [ -z "${BASH_VERSION:-}" ]; then
 fi
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250823.104538
+# Version: 20250824.051551
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -1119,7 +1119,7 @@ SCRIPT_COMMAND=$(get_script_command)
 
 
 # Global variables
-VERSION="20250823.104538"  # This will be replaced during build
+VERSION="20250824.051551"  # This will be replaced during build
 CONFIG_FILE=""  # Will be set dynamically by get_config_file()
 CURRENT_TICKET_LINK="current-ticket.md"
 CURRENT_NOTE_LINK="current-note.md"
@@ -1568,7 +1568,11 @@ cmd_new() {
     validate_slug "$slug" || return 1
     
     # Load configuration
-    yaml_parse "$CONFIG_FILE"
+    if ! yaml_parse "$CONFIG_FILE"; then
+        echo "Error: Cannot parse configuration file: $CONFIG_FILE" >&2
+        echo "Configuration file may be corrupted or unreadable" >&2
+        return 1
+    fi
     local tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
     local default_content=$(yaml_get "default_content" || echo "$DEFAULT_CONTENT")
     local note_content=$(yaml_get "note_content" || echo "")
@@ -1723,7 +1727,11 @@ EOF
     check_config || return 1
     
     # Load configuration
-    yaml_parse "$CONFIG_FILE"
+    if ! yaml_parse "$CONFIG_FILE"; then
+        echo "Error: Cannot parse configuration file: $CONFIG_FILE" >&2
+        echo "Configuration file may be corrupted or unreadable" >&2
+        return 1
+    fi
     local tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
     
     # Check if tickets directory exists
@@ -1843,7 +1851,11 @@ cmd_start() {
     check_config || return 1
     
     # Load configuration
-    yaml_parse "$CONFIG_FILE"
+    if ! yaml_parse "$CONFIG_FILE"; then
+        echo "Error: Cannot parse configuration file: $CONFIG_FILE" >&2
+        echo "Configuration file may be corrupted or unreadable" >&2
+        return 1
+    fi
     local tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
     local default_branch=$(yaml_get "default_branch" || echo "$DEFAULT_BRANCH")
     local branch_prefix=$(yaml_get "branch_prefix" || echo "$DEFAULT_BRANCH_PREFIX")
@@ -1855,7 +1867,13 @@ cmd_start() {
     local current_branch=$(get_current_branch)
     if [[ "$current_branch" != "$default_branch" ]]; then
         # We're on a feature branch - handle different scenarios
-        if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
+        local git_status_output
+        if ! git_status_output=$(git status --porcelain 2>&1); then
+            echo "Error: Failed to check git status" >&2
+            echo "Git repository may be corrupted or inaccessible" >&2
+            return 1
+        fi
+        if [[ -n "$git_status_output" ]]; then
             # Feature branch with uncommitted changes - prompt for commit and exit
             cat >&2 << EOF
 Error: Uncommitted changes on feature branch
@@ -1875,7 +1893,12 @@ EOF
             run_git_command "git checkout $default_branch" || return 1
             
             # Check if default branch has differences with the feature branch we were on
-            local diff_count=$(git rev-list --count "$current_branch..$default_branch" 2>/dev/null || echo "0")
+            local diff_count
+            if ! diff_count=$(git rev-list --count "$current_branch..$default_branch" 2>&1); then
+                echo "Warning: Cannot compare branches - using git log instead" >&2
+                # Fallback to simpler check if rev-list fails
+                diff_count="0"
+            fi
             if [[ "$diff_count" -gt 0 ]]; then
                 cat << EOF
 
@@ -1914,7 +1937,8 @@ EOF
     local branch_name="${branch_prefix}${ticket_name}"
     
     # Check if branch already exists
-    if git show-ref --verify --quiet "refs/heads/$branch_name"; then
+    local branch_exists_check
+    if branch_exists_check=$(git show-ref --verify "refs/heads/$branch_name" 2>&1); then
         # Branch exists - checkout and restore
         echo "Branch '$branch_name' already exists. Resuming work on existing ticket..."
         
@@ -1922,8 +1946,15 @@ EOF
         run_git_command "git checkout $branch_name" || return 1
         
         # Check if there are differences between this feature branch and the default branch
-        local ahead_count=$(git rev-list --count "$default_branch..$branch_name" 2>/dev/null || echo "0")
-        local behind_count=$(git rev-list --count "$branch_name..$default_branch" 2>/dev/null || echo "0")
+        local ahead_count behind_count
+        if ! ahead_count=$(git rev-list --count "$default_branch..$branch_name" 2>&1); then
+            echo "Warning: Cannot determine if feature branch is ahead of default branch" >&2
+            ahead_count="0"
+        fi
+        if ! behind_count=$(git rev-list --count "$branch_name..$default_branch" 2>&1); then
+            echo "Warning: Cannot determine if feature branch is behind default branch" >&2
+            behind_count="0"
+        fi
         
         if [[ "$behind_count" -gt 0 ]]; then
             cat << EOF
@@ -1943,13 +1974,20 @@ EOF
         
         # Create symlink (restore functionality)
         rm -f "$CURRENT_TICKET_LINK"
-        ln -s "$ticket_file" "$CURRENT_TICKET_LINK"
+        if ! ln -s "$ticket_file" "$CURRENT_TICKET_LINK"; then
+            echo "Error: Cannot create symlink $CURRENT_TICKET_LINK" >&2
+            echo "Permission denied or filesystem issue" >&2
+            return 1
+        fi
         
         # Create note symlink if note file exists
         local note_file="${tickets_dir}/${ticket_name}-note.md"
         if [[ -f "$note_file" ]]; then
             rm -f "$CURRENT_NOTE_LINK"
-            ln -s "$note_file" "$CURRENT_NOTE_LINK"
+            if ! ln -s "$note_file" "$CURRENT_NOTE_LINK"; then
+                echo "Warning: Cannot create note symlink $CURRENT_NOTE_LINK" >&2
+                # Continue execution - note link is not critical
+            fi
             echo "Resumed ticket: $ticket_name"
             echo "Current ticket linked: $CURRENT_TICKET_LINK -> $ticket_file"
             echo "Current note linked: $CURRENT_NOTE_LINK -> $note_file"
@@ -1995,13 +2033,20 @@ EOF
     
     # Create symlink
     rm -f "$CURRENT_TICKET_LINK"
-    ln -s "$ticket_file" "$CURRENT_TICKET_LINK"
+    if ! ln -s "$ticket_file" "$CURRENT_TICKET_LINK"; then
+        echo "Error: Cannot create symlink $CURRENT_TICKET_LINK" >&2
+        echo "Permission denied or filesystem issue" >&2
+        return 1
+    fi
     
     # Create note symlink if note file exists
     local note_file="${tickets_dir}/${ticket_name}-note.md"
     if [[ -f "$note_file" ]]; then
         rm -f "$CURRENT_NOTE_LINK"
-        ln -s "$note_file" "$CURRENT_NOTE_LINK"
+        if ! ln -s "$note_file" "$CURRENT_NOTE_LINK"; then
+            echo "Warning: Cannot create note symlink $CURRENT_NOTE_LINK" >&2
+            # Continue execution - note link is not critical
+        fi
         echo "Started ticket: $ticket_name"
         echo "Current ticket linked: $CURRENT_TICKET_LINK -> $ticket_file"
         echo "Current note linked: $CURRENT_NOTE_LINK -> $note_file"
@@ -2026,7 +2071,11 @@ cmd_restore() {
     check_config || return 1
     
     # Load configuration
-    yaml_parse "$CONFIG_FILE"
+    if ! yaml_parse "$CONFIG_FILE"; then
+        echo "Error: Cannot parse configuration file: $CONFIG_FILE" >&2
+        echo "Configuration file may be corrupted or unreadable" >&2
+        return 1
+    fi
     local tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
     local branch_prefix=$(yaml_get "branch_prefix" || echo "$DEFAULT_BRANCH_PREFIX")
     local restore_success_message=$(yaml_get "restore_success_message" || echo "$DEFAULT_RESTORE_SUCCESS_MESSAGE")
@@ -2092,7 +2141,10 @@ EOF
     
     if [[ -n "$note_file" ]] && [[ -f "$note_file" ]]; then
         rm -f "$CURRENT_NOTE_LINK"
-        ln -s "$note_file" "$CURRENT_NOTE_LINK"
+        if ! ln -s "$note_file" "$CURRENT_NOTE_LINK"; then
+            echo "Warning: Cannot create note symlink $CURRENT_NOTE_LINK" >&2
+            # Continue execution - note link is not critical
+        fi
         echo "Restored current ticket link: $CURRENT_TICKET_LINK -> $ticket_file"
         echo "Restored current note link: $CURRENT_NOTE_LINK -> $note_file"
     else
@@ -2114,7 +2166,11 @@ cmd_check() {
     check_config || return 1
     
     # Load configuration
-    yaml_parse "$CONFIG_FILE"
+    if ! yaml_parse "$CONFIG_FILE"; then
+        echo "Error: Cannot parse configuration file: $CONFIG_FILE" >&2
+        echo "Configuration file may be corrupted or unreadable" >&2
+        return 1
+    fi
     local default_branch=$(yaml_get "default_branch" || echo "$DEFAULT_BRANCH")
     local tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
     local branch_prefix=$(yaml_get "branch_prefix" || echo "$DEFAULT_BRANCH_PREFIX")
@@ -2187,8 +2243,8 @@ cmd_check() {
                         echo "Restored ticket link: $ticket_name"
                         echo "Continue working on this ticket."
                     else
-                        echo "✗ Failed to restore ticket link"
-                        echo "Permission denied creating symlink."
+                        echo "Error: Cannot create symlink $CURRENT_TICKET_LINK" >&2
+                        echo "Permission denied or filesystem issue" >&2
                         return 1
                     fi
                 fi
@@ -2225,8 +2281,8 @@ cmd_check() {
                             echo "Restored ticket link: $ticket_name"
                             echo "Continue working on this ticket."
                         else
-                            echo "✗ Failed to restore ticket link"
-                            echo "Permission denied creating symlink."
+                            echo "Error: Cannot create symlink $CURRENT_TICKET_LINK" >&2
+                            echo "Permission denied or filesystem issue" >&2
                             return 1
                         fi
                     fi
@@ -2332,7 +2388,11 @@ EOF
     fi
     
     # Load configuration
-    yaml_parse "$CONFIG_FILE"
+    if ! yaml_parse "$CONFIG_FILE"; then
+        echo "Error: Cannot parse configuration file: $CONFIG_FILE" >&2
+        echo "Configuration file may be corrupted or unreadable" >&2
+        return 1
+    fi
     local default_branch=$(yaml_get "default_branch" || echo "$DEFAULT_BRANCH")
     local branch_prefix=$(yaml_get "branch_prefix" || echo "$DEFAULT_BRANCH_PREFIX")
     local repository=$(yaml_get "repository" || echo "$DEFAULT_REPOSITORY")
@@ -2426,7 +2486,9 @@ EOF
         # Rollback ticket file changes
         echo "$original_ticket_content" > "$ticket_file"
         # Unstage if needed
-        git restore --staged "$ticket_file" 2>/dev/null || true
+        if ! git restore --staged "$ticket_file" 2>&1; then
+            echo "Warning: Could not unstage ticket file - manual cleanup may be needed" >&2
+        fi
         return 1
     }
     
@@ -2472,16 +2534,20 @@ EOF
     
     # Create done directory if it doesn't exist
     if [[ ! -d "$done_dir" ]]; then
-        mkdir -p "$done_dir" || {
-            echo "Warning: Failed to create done directory: $done_dir" >&2
-        }
+        if ! mkdir -p "$done_dir"; then
+            echo "Error: Failed to create done directory: $done_dir" >&2
+            echo "Permission denied or filesystem issue" >&2
+            return 1
+        fi
     fi
     
     # Move the ticket file to done folder
     if [[ -d "$done_dir" ]]; then
         local new_ticket_path="${done_dir}/$(basename "$ticket_file")"
         run_git_command "git mv \"$ticket_file\" \"$new_ticket_path\"" || {
-            echo "Warning: Failed to move ticket to done folder" >&2
+            echo "Error: Failed to move ticket to done folder" >&2
+            echo "Check if done directory exists and has proper permissions" >&2
+            return 1
         }
         
         # Move note file if it exists
@@ -2489,7 +2555,9 @@ EOF
         if [[ -f "$note_file" ]]; then
             local new_note_path="${done_dir}/$(basename "$note_file")"
             run_git_command "git mv \"$note_file\" \"$new_note_path\"" || {
-                echo "Warning: Failed to move note to done folder" >&2
+                echo "Error: Failed to move note file to done folder" >&2
+                echo "Check if done directory exists and has proper permissions" >&2
+                return 1
             }
         fi
     fi
