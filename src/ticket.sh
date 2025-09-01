@@ -379,7 +379,7 @@ EOF
     fi
     
     # Parse config to get tickets_dir
-    if ! yaml_parse "$CONFIG_FILE"; then
+    if ! load_config_with_override "$CONFIG_FILE"; then
         echo "Warning: Could not parse config file, using defaults" >&2
         local tickets_dir="$DEFAULT_TICKETS_DIR"
     else
@@ -449,7 +449,8 @@ EOF
     if [[ ! -f .gitignore ]]; then
         echo "$CURRENT_TICKET_LINK" > .gitignore
         echo "$CURRENT_NOTE_LINK" >> .gitignore
-        echo "Created .gitignore with: $CURRENT_TICKET_LINK and $CURRENT_NOTE_LINK"
+        echo ".ticket-config.override.yaml" >> .gitignore
+        echo "Created .gitignore with: $CURRENT_TICKET_LINK, $CURRENT_NOTE_LINK, and .ticket-config.override.yaml"
     else
         if ! grep -q "^${CURRENT_TICKET_LINK}$" .gitignore; then
             echo "$CURRENT_TICKET_LINK" >> .gitignore
@@ -462,6 +463,12 @@ EOF
             echo "Added to .gitignore: $CURRENT_NOTE_LINK"
         else
             echo ".gitignore already contains: $CURRENT_NOTE_LINK"
+        fi
+        if ! grep -q "^\.ticket-config\.override\.yaml$" .gitignore; then
+            echo ".ticket-config.override.yaml" >> .gitignore
+            echo "Added to .gitignore: .ticket-config.override.yaml"
+        else
+            echo ".gitignore already contains: .ticket-config.override.yaml"
         fi
     fi
     
@@ -565,7 +572,7 @@ cmd_new() {
     validate_slug "$slug" || return 1
     
     # Load configuration
-    if ! yaml_parse "$CONFIG_FILE"; then
+    if ! load_config_with_override "$CONFIG_FILE"; then
         echo "Error: Cannot parse configuration file: $CONFIG_FILE" >&2
         echo "Configuration file may be corrupted or unreadable" >&2
         return 1
@@ -724,7 +731,7 @@ EOF
     check_config || return 1
     
     # Load configuration
-    if ! yaml_parse "$CONFIG_FILE"; then
+    if ! load_config_with_override "$CONFIG_FILE"; then
         echo "Error: Cannot parse configuration file: $CONFIG_FILE" >&2
         echo "Configuration file may be corrupted or unreadable" >&2
         return 1
@@ -848,7 +855,7 @@ cmd_start() {
     check_config || return 1
     
     # Load configuration
-    if ! yaml_parse "$CONFIG_FILE"; then
+    if ! load_config_with_override "$CONFIG_FILE"; then
         echo "Error: Cannot parse configuration file: $CONFIG_FILE" >&2
         echo "Configuration file may be corrupted or unreadable" >&2
         return 1
@@ -1068,7 +1075,7 @@ cmd_restore() {
     check_config || return 1
     
     # Load configuration
-    if ! yaml_parse "$CONFIG_FILE"; then
+    if ! load_config_with_override "$CONFIG_FILE"; then
         echo "Error: Cannot parse configuration file: $CONFIG_FILE" >&2
         echo "Configuration file may be corrupted or unreadable" >&2
         return 1
@@ -1163,7 +1170,7 @@ cmd_check() {
     check_config || return 1
     
     # Load configuration
-    if ! yaml_parse "$CONFIG_FILE"; then
+    if ! load_config_with_override "$CONFIG_FILE"; then
         echo "Error: Cannot parse configuration file: $CONFIG_FILE" >&2
         echo "Configuration file may be corrupted or unreadable" >&2
         return 1
@@ -1385,7 +1392,7 @@ EOF
     fi
     
     # Load configuration
-    if ! yaml_parse "$CONFIG_FILE"; then
+    if ! load_config_with_override "$CONFIG_FILE"; then
         echo "Error: Cannot parse configuration file: $CONFIG_FILE" >&2
         echo "Configuration file may be corrupted or unreadable" >&2
         return 1

@@ -204,6 +204,24 @@ default_content: |
   Additional notes or requirements.
 ```
 
+### 設定オーバーライド
+
+ローカルカスタマイズ用のオプションファイル `.ticket-config.override.yaml`:
+
+```yaml
+# メイン設定から任意の値をオーバーライド
+tickets_dir: "custom-tickets"
+auto_push: false
+start_success_message: "カスタムワークフローメッセージ"
+```
+
+**動作:**
+- オーバーライドファイルは完全にオプション
+- オーバーライドファイルの値がメイン設定より優先される
+- 新しい設定フィールドを追加可能
+- メイン設定の読み込み後に処理される
+- initコマンドにより自動的に `.gitignore` に追加される
+
 ---
 
 ## 🧭 コマンド一覧

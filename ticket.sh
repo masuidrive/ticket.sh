@@ -12,7 +12,7 @@ fi
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250825.045746
+# Version: 20250901.143520
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -1016,6 +1016,65 @@ get_config_file() {
         echo ".ticket-config.yaml"
     fi
 }
+
+# Load configuration with override support
+# This function loads the main config first, then applies any overrides from .ticket-config.override.yaml
+load_config_with_override() {
+    local main_config_file="$1"
+    local override_config_file=".ticket-config.override.yaml"
+    
+    # Parse main config file
+    if ! yaml_parse "$main_config_file"; then
+        echo "Error: Cannot parse configuration file: $main_config_file" >&2
+        return 1
+    fi
+    
+    # If override file exists, parse it and apply overrides
+    if [[ -f "$override_config_file" ]]; then
+        # Create backup of current parsed config
+        local temp_keys=("${_YAML_KEYS[@]}")
+        local temp_values=("${_YAML_VALUES[@]}")
+        
+        # Parse override file
+        if yaml_parse "$override_config_file"; then
+            # Get override keys and values
+            local override_keys=("${_YAML_KEYS[@]}")
+            local override_values=("${_YAML_VALUES[@]}")
+            
+            # Restore main config
+            _YAML_KEYS=("${temp_keys[@]}")
+            _YAML_VALUES=("${temp_values[@]}")
+            
+            # Apply overrides
+            local i j
+            for i in "${!override_keys[@]}"; do
+                local override_key="${override_keys[$i]}"
+                local override_value="${override_values[$i]}"
+                
+                # Find if key exists in main config and replace it
+                local key_found=false
+                for j in "${!_YAML_KEYS[@]}"; do
+                    if [[ "${_YAML_KEYS[$j]}" == "$override_key" ]]; then
+                        _YAML_VALUES[$j]="$override_value"
+                        key_found=true
+                        break
+                    fi
+                done
+                
+                # If key doesn't exist in main config, add it
+                if [[ "$key_found" == false ]]; then
+                    _YAML_KEYS+=("$override_key")
+                    _YAML_VALUES+=("$override_value")
+                fi
+            done
+        else
+            echo "Error: Cannot parse override configuration file: $override_config_file" >&2
+            return 1
+        fi
+    fi
+    
+    return 0
+}
 # === Main Script ===
 
 
@@ -1027,7 +1086,7 @@ if [ -z "${BASH_VERSION:-}" ]; then
 fi
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20250825.045746
+# Version: 20250901.143520
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -1119,7 +1178,7 @@ SCRIPT_COMMAND=$(get_script_command)
 
 
 # Global variables
-VERSION="20250825.045746"  # This will be replaced during build
+VERSION="20250901.143520"  # This will be replaced during build
 CONFIG_FILE=""  # Will be set dynamically by get_config_file()
 CURRENT_TICKET_LINK="current-ticket.md"
 CURRENT_NOTE_LINK="current-note.md"
@@ -1382,7 +1441,7 @@ EOF
     fi
     
     # Parse config to get tickets_dir
-    if ! yaml_parse "$CONFIG_FILE"; then
+    if ! load_config_with_override "$CONFIG_FILE"; then
         echo "Warning: Could not parse config file, using defaults" >&2
         local tickets_dir="$DEFAULT_TICKETS_DIR"
     else
@@ -1452,7 +1511,8 @@ EOF
     if [[ ! -f .gitignore ]]; then
         echo "$CURRENT_TICKET_LINK" > .gitignore
         echo "$CURRENT_NOTE_LINK" >> .gitignore
-        echo "Created .gitignore with: $CURRENT_TICKET_LINK and $CURRENT_NOTE_LINK"
+        echo ".ticket-config.override.yaml" >> .gitignore
+        echo "Created .gitignore with: $CURRENT_TICKET_LINK, $CURRENT_NOTE_LINK, and .ticket-config.override.yaml"
     else
         if ! grep -q "^${CURRENT_TICKET_LINK}$" .gitignore; then
             echo "$CURRENT_TICKET_LINK" >> .gitignore
@@ -1465,6 +1525,12 @@ EOF
             echo "Added to .gitignore: $CURRENT_NOTE_LINK"
         else
             echo ".gitignore already contains: $CURRENT_NOTE_LINK"
+        fi
+        if ! grep -q "^\.ticket-config\.override\.yaml$" .gitignore; then
+            echo ".ticket-config.override.yaml" >> .gitignore
+            echo "Added to .gitignore: .ticket-config.override.yaml"
+        else
+            echo ".gitignore already contains: .ticket-config.override.yaml"
         fi
     fi
     
@@ -1568,7 +1634,7 @@ cmd_new() {
     validate_slug "$slug" || return 1
     
     # Load configuration
-    if ! yaml_parse "$CONFIG_FILE"; then
+    if ! load_config_with_override "$CONFIG_FILE"; then
         echo "Error: Cannot parse configuration file: $CONFIG_FILE" >&2
         echo "Configuration file may be corrupted or unreadable" >&2
         return 1
@@ -1727,7 +1793,7 @@ EOF
     check_config || return 1
     
     # Load configuration
-    if ! yaml_parse "$CONFIG_FILE"; then
+    if ! load_config_with_override "$CONFIG_FILE"; then
         echo "Error: Cannot parse configuration file: $CONFIG_FILE" >&2
         echo "Configuration file may be corrupted or unreadable" >&2
         return 1
@@ -1851,7 +1917,7 @@ cmd_start() {
     check_config || return 1
     
     # Load configuration
-    if ! yaml_parse "$CONFIG_FILE"; then
+    if ! load_config_with_override "$CONFIG_FILE"; then
         echo "Error: Cannot parse configuration file: $CONFIG_FILE" >&2
         echo "Configuration file may be corrupted or unreadable" >&2
         return 1
@@ -2071,7 +2137,7 @@ cmd_restore() {
     check_config || return 1
     
     # Load configuration
-    if ! yaml_parse "$CONFIG_FILE"; then
+    if ! load_config_with_override "$CONFIG_FILE"; then
         echo "Error: Cannot parse configuration file: $CONFIG_FILE" >&2
         echo "Configuration file may be corrupted or unreadable" >&2
         return 1
@@ -2166,7 +2232,7 @@ cmd_check() {
     check_config || return 1
     
     # Load configuration
-    if ! yaml_parse "$CONFIG_FILE"; then
+    if ! load_config_with_override "$CONFIG_FILE"; then
         echo "Error: Cannot parse configuration file: $CONFIG_FILE" >&2
         echo "Configuration file may be corrupted or unreadable" >&2
         return 1
@@ -2388,7 +2454,7 @@ EOF
     fi
     
     # Load configuration
-    if ! yaml_parse "$CONFIG_FILE"; then
+    if ! load_config_with_override "$CONFIG_FILE"; then
         echo "Error: Cannot parse configuration file: $CONFIG_FILE" >&2
         echo "Configuration file may be corrupted or unreadable" >&2
         return 1

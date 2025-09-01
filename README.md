@@ -258,6 +258,30 @@ default_content: |
   {{Additional notes or requirements.}}
 ```
 
+### Configuration Override
+
+For local customization without modifying the main configuration file, create `.ticket-config.override.yaml`:
+
+```yaml
+# Override specific values from main config
+tickets_dir: "my-custom-tickets"
+auto_push: false
+start_success_message: |
+  Custom message for this environment
+```
+
+**How it works:**
+- Override file is optional - system works normally without it
+- Values in `.ticket-config.override.yaml` take precedence over main config
+- Can override existing values or add new configuration fields
+- Automatically added to `.gitignore` (not committed to repository)
+- Useful for local development, different team members, or environment-specific settings
+
+**Common use cases:**
+- **Developer-specific settings**: Different branch prefixes, directories, or messages
+- **Environment-specific config**: Disable auto-push for testing environments
+- **Team customization**: Different team members can have personalized workflows
+
 ## Advanced Features
 
 ### Smart Branch Handling

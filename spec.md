@@ -205,6 +205,24 @@ default_content: |
   Additional notes or requirements.
 ```
 
+### Configuration Override
+
+Optional `.ticket-config.override.yaml` file for local customization:
+
+```yaml
+# Override any values from main config
+tickets_dir: "custom-tickets"
+auto_push: false
+start_success_message: "Custom workflow message"
+```
+
+**Behavior:**
+- Override file is completely optional
+- Values in override file take precedence over main config
+- Can add new configuration fields
+- Processed after main config is loaded
+- Automatically added to `.gitignore` by init command
+
 ---
 
 ## 🧭 Command List
