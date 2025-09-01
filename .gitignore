@@ -1,4 +1,6 @@
 current-ticket.md
+current-note.md
+.ticket-config.override.yaml
 .DS_Store
 .claude
 tmp

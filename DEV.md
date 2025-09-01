@@ -104,6 +104,12 @@ The main script uses a case statement to route commands:
 - Creates `tickets/` directory
 - Updates `.gitignore`
 
+#### `load_config_with_override()`
+- Loads main configuration from `.ticket-config.yaml` or `.ticket-config.yml`
+- Optionally applies overrides from `.ticket-config.override.yaml`
+- Override values take precedence over main config values
+- Supports adding new configuration fields via override
+
 #### `create_ticket()`
 - Validates slug format
 - Generates timestamp-based filename

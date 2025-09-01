@@ -228,3 +228,62 @@ get_config_file() {
         echo ".ticket-config.yaml"
     fi
 }
+
+# Load configuration with override support
+# This function loads the main config first, then applies any overrides from .ticket-config.override.yaml
+load_config_with_override() {
+    local main_config_file="$1"
+    local override_config_file=".ticket-config.override.yaml"
+    
+    # Parse main config file
+    if ! yaml_parse "$main_config_file"; then
+        echo "Error: Cannot parse configuration file: $main_config_file" >&2
+        return 1
+    fi
+    
+    # If override file exists, parse it and apply overrides
+    if [[ -f "$override_config_file" ]]; then
+        # Create backup of current parsed config
+        local temp_keys=("${_YAML_KEYS[@]}")
+        local temp_values=("${_YAML_VALUES[@]}")
+        
+        # Parse override file
+        if yaml_parse "$override_config_file"; then
+            # Get override keys and values
+            local override_keys=("${_YAML_KEYS[@]}")
+            local override_values=("${_YAML_VALUES[@]}")
+            
+            # Restore main config
+            _YAML_KEYS=("${temp_keys[@]}")
+            _YAML_VALUES=("${temp_values[@]}")
+            
+            # Apply overrides
+            local i j
+            for i in "${!override_keys[@]}"; do
+                local override_key="${override_keys[$i]}"
+                local override_value="${override_values[$i]}"
+                
+                # Find if key exists in main config and replace it
+                local key_found=false
+                for j in "${!_YAML_KEYS[@]}"; do
+                    if [[ "${_YAML_KEYS[$j]}" == "$override_key" ]]; then
+                        _YAML_VALUES[$j]="$override_value"
+                        key_found=true
+                        break
+                    fi
+                done
+                
+                # If key doesn't exist in main config, add it
+                if [[ "$key_found" == false ]]; then
+                    _YAML_KEYS+=("$override_key")
+                    _YAML_VALUES+=("$override_value")
+                fi
+            done
+        else
+            echo "Error: Cannot parse override configuration file: $override_config_file" >&2
+            return 1
+        fi
+    fi
+    
+    return 0
+}
