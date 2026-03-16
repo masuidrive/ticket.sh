@@ -28,6 +28,23 @@ if [[ $EUID -eq 0 ]]; then
     exit 0
 fi
 
+# Check if chmod actually restricts access on the test directory filesystem
+# Docker bind mounts (macOS) may ignore permissions
+check_chmod_works() {
+    local check_dir="${1:-.}"
+    local probe_dir=$(mktemp -d -p "$check_dir" 2>/dev/null || mktemp -d)
+    chmod 555 "$probe_dir"
+    if echo "x" > "${probe_dir}/probe" 2>/dev/null; then
+        rm -f "${probe_dir}/probe"
+        chmod 755 "$probe_dir"
+        rm -rf "$probe_dir"
+        return 1  # chmod does not work
+    fi
+    chmod 755 "$probe_dir"
+    rm -rf "$probe_dir"
+    return 0  # chmod works
+}
+
 # Setup
 setup_test() {
     mkdir -p tmp
@@ -67,6 +84,14 @@ cleanup_permissions() {
 
 # Register cleanup on exit
 trap cleanup_permissions EXIT
+
+# Check chmod works on the actual test filesystem (not /tmp)
+mkdir -p tmp
+if ! check_chmod_works "tmp"; then
+    echo -e "${YELLOW}Warning: chmod does not restrict access on this filesystem (e.g., Docker bind mount).${NC}"
+    echo "Permission tests will be skipped."
+    exit 0
+fi
 
 # Test 1: Read-only directory for init
 echo "1. Testing init in read-only directory..."

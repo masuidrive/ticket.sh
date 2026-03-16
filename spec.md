@@ -50,12 +50,14 @@ merge_to: default  # Override merge target branch (default: use default_branch f
 description: ""
 started_at: null  # Do not modify manually
 closed_at: null   # Do not modify manually
+canceled_at: null  # Do not modify manually
 ```
 
 #### State Management
 - **todo**: `started_at` is null
-- **doing**: `started_at` is set and `closed_at` is null
+- **doing**: `started_at` is set and `closed_at` is null and `canceled_at` is null
 - **done**: `closed_at` is set
+- **canceled**: `canceled_at` is set
 
 #### Branch Integration
 - Work performed on `feature/<ticket-name>` branches
@@ -103,11 +105,22 @@ Auto-restores from branch name when current-ticket.md is lost after clone/pull
 - Updates ticket status to completed
 - Moves ticket file to `tickets/done/` folder
 
+### Cancel Work
+```bash
+./ticket.sh cancel [--force|-f]
+```
+- Cancels the current ticket without merging
+- Sets `canceled_at` timestamp and adds `[CANCELED]` prefix to description
+- Renames file with `-CANCELED-` prefix (e.g., `YYMMDD-hhmmss-CANCELED-slug.md`)
+- Moves ticket to `tickets/done/` folder
+- Switches back to default branch (feature branch is kept)
+- Removes current-ticket.md / current-note.md symlinks
+
 ### List View
 ```bash
-./ticket.sh list [--status todo|doing|done] [--count N]
+./ticket.sh list [--status todo|doing|done|canceled] [--count N]
 ```
-Displays ticket status list (default: todo+doing)
+Displays ticket status list (default: todo+doing, excludes canceled)
 
 **Output Format:**
 ```
@@ -217,6 +230,7 @@ default_content: |
 ./ticket.sh start <ticket-name> [--no-push]  # Start ticket/create branch
 ./ticket.sh restore                       # Restore current-ticket link
 ./ticket.sh close [--no-push] [--force|-f]  # Complete ticket/merge process
+./ticket.sh cancel [--force|-f]           # Cancel ticket without merging
 ```
 
 ---
@@ -238,6 +252,7 @@ description: ""
 created_at: "2025-06-28 15:32:45 UTC"
 started_at: null
 closed_at: null
+canceled_at: null
 ---
 
 # Ticket Title
@@ -247,8 +262,9 @@ Ticket details...
 
 ### State Determination Logic
 - **todo**: `started_at` is null
-- **doing**: `started_at` is set and `closed_at` is null  
+- **doing**: `started_at` is set and `closed_at` is null and `canceled_at` is null
 - **done**: `closed_at` is set
+- **canceled**: `canceled_at` is set
 
 ---
 
@@ -354,6 +370,7 @@ description: ""  # single line
 created_at: "2025-06-28T15:32:45Z"
 started_at: null  # Do not modify manually
 closed_at: null   # Do not modify manually
+canceled_at: null  # Do not modify manually
 ---
 
 # Ticket Overview
@@ -368,10 +385,10 @@ Write the overview and tasks for this ticket here.
 Additional notes or requirements.
 ```
 
-### `list [--status todo|doing|done] [--count N]`
+### `list [--status todo|doing|done|canceled] [--count N]`
 Displays ticket list:
 
-- **Default**: Shows only `todo` and `doing` without `--status` specification
+- **Default**: Shows only `todo` and `doing` without `--status` specification (excludes canceled)
 - **Default count**: `--count 20` (configurable)
 - **Sort order**: Evaluated by `status` → `priority`
 - State auto-determined from datetime fields
@@ -409,8 +426,9 @@ Displays ticket list:
   Error: Invalid status
   Status '{status}' is not valid. Please use one of:
   - todo (for unstarted tickets)
-  - doing (for in-progress tickets)  
+  - doing (for in-progress tickets)
   - done (for completed tickets)
+  - canceled (for canceled tickets)
   ```
 - Invalid count value: 
   ```
@@ -736,6 +754,36 @@ Note: Changes not pushed to remote. Use 'git push origin develop' and 'git push 
   4. Check if remote repository exists
   ```
 
+### `cancel [--force|-f]`
+Cancels the current ticket without merging:
+
+**Options:**
+- `--force` or `-f`: Bypass uncommitted changes check and force cancel the ticket
+
+**Execution Flow:**
+1. **Check working directory**: Ensures no uncommitted changes (unless `--force` is used)
+2. **Update ticket**: Sets current time to `canceled_at` of ticket referenced by current-ticket.md
+3. **Update description**: Adds `[CANCELED]` prefix to the `description` field
+4. **Rename file**: Renames ticket file with `-CANCELED-` prefix before slug (e.g., `YYMMDD-hhmmss-CANCELED-slug.md`)
+5. **Move to done folder**: Moves renamed ticket file to `tickets/done/` directory
+6. **Commit**: Commits the changes
+7. **Switch branch**: Checks out default branch without merging
+8. **Cleanup**: Removes `current-ticket.md` and `current-note.md` symlinks
+9. Feature branch is kept (not deleted)
+
+**Example Output:**
+```bash
+$ ./ticket.sh cancel
+
+Ticket canceled: 240628-153245-implement-auth
+Switched to branch 'develop'
+```
+
+**Error Cases:**
+- Same as `close` command: requires current-ticket.md, must be on feature branch, ticket must be started, working directory must be clean (unless `--force`)
+
+---
+
 **Merge Commit Message Format:**
 ```
 [240628-153245-create-post-handler] User authentication POST handler
@@ -785,6 +833,7 @@ USAGE:
   ./ticket.sh start <ticket-name> [--no-push]     Start working on ticket (creates feature branch)
   ./ticket.sh restore                  Restore current-ticket.md symlink from branch name
   ./ticket.sh close [--no-push]       Complete current ticket (squash merge to default branch)
+  ./ticket.sh cancel [--force|-f]    Cancel current ticket without merging
 
 TICKET NAMING:
 - Format: YYMMDD-hhmmss-<slug>
@@ -793,8 +842,9 @@ TICKET NAMING:
 
 TICKET STATUS:
 - todo: not started (started_at: null)
-- doing: in progress (started_at set, closed_at: null)
+- doing: in progress (started_at set, closed_at: null, canceled_at: null)
 - done: completed (closed_at set)
+- canceled: canceled (canceled_at set)
 
 CONFIGURATION:
 - Config file: .ticket-config.yaml or .ticket-config.yml (in project root)

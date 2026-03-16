@@ -3,7 +3,7 @@
 Gitブランチとマークダウンファイルを使った軽量で堅牢なチケット管理システム。個人開発、小規模チーム、AIペアプログラミングに最適。
 
 ## 主な機能
-- 🎯 **シンプルなワークフロー**: 作成、開始、作業、完了
+- 🎯 **シンプルなワークフロー**: 作成、開始、作業、完了（またはキャンセル）
 - 📝 **マークダウンチケット**: YAMLフロントマッター付きリッチフォーマット
 - 🌿 **Git統合**: チケット毎の自動ブランチ管理
 - 📁 **スマートな整理**: 自動doneフォルダ整理、タイムゾーン対応タイムスタンプ
@@ -52,6 +52,10 @@ CLAUDE.mdにカスタムプロンプトを追記
 ```
 
 ```
+そのチケットはもう不要なのでキャンセルして
+```
+
+```
 残ってるチケットは何？
 ```
 
@@ -68,6 +72,9 @@ CLAUDE.mdにカスタムプロンプトを追記
 
 # 作業完了
 ./ticket.sh close
+
+# 不要になった場合はキャンセル
+./ticket.sh cancel
 ```
 
 ## インストール
@@ -91,7 +98,7 @@ cp ticket.sh /usr/local/bin/
 1. **初期化**: `./ticket.sh init`
 2. **チケット作成**: `./ticket.sh new feature-name`
 3. **作業開始**: `./ticket.sh start <ticket-name>`
-4. **チケット完了**: `./ticket.sh close`
+4. **チケット完了**: `./ticket.sh close`（または `./ticket.sh cancel` でキャンセル）
 
 ## 使用例
 
@@ -106,6 +113,9 @@ cp ticket.sh /usr/local/bin/
 
 # プロンプトなしで強制完了
 ./ticket.sh close --force
+
+# マージせずにチケットをキャンセル
+./ticket.sh cancel
 
 # 最新版にアップデート
 ./ticket.sh selfupdate
@@ -125,9 +135,10 @@ cp ticket.sh /usr/local/bin/
 ### コアコマンド
 - `init` - チケットシステムを初期化（冪等性、再実行安全）
 - `new <slug>` - 新しいチケットを作成
-- `list [--status todo|doing|done] [--count N]` - チケット一覧
+- `list [--status todo|doing|done|canceled] [--count N]` - チケット一覧
 - `start <ticket> [--no-push]` - チケットの作業を開始
 - `close [--no-push] [--force] [--no-delete-remote]` - チケットを完了
+- `cancel [--force|-f]` - マージせずにチケットをキャンセル
 - `restore` - current-ticket.mdシンボリックリンクを復元
 
 ### ユーティリティコマンド
@@ -136,7 +147,7 @@ cp ticket.sh /usr/local/bin/
 - `selfupdate` - GitHubから最新リリースにアップデート
 
 ### listコマンドの機能
-- **ステータス絞り込み**: `--status todo|doing|done` でチケットステータス別表示
+- **ステータス絞り込み**: `--status todo|doing|done|canceled` でチケットステータス別表示
 - **件数制限**: `--count N` で表示結果数を制限
 - **完了チケット**: 完了日時順でソート（新しい順）
 - **タイムゾーン表示**: 完了時刻をローカルタイムゾーンで表示

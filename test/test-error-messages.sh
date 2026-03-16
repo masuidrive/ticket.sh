@@ -205,24 +205,37 @@ test_error_message "Restore no ticket error" "$OUTPUT" "No matching ticket found
 # Test 15: Permissions error simulation
 echo -e "\n15. Testing permissions-related errors..."
 
-# Skip only if running as root
+# Skip if running as root or if chmod doesn't work (e.g., Docker bind mounts)
+_check_chmod_works() {
+    local check_dir="${1:-.}"
+    local d=$(mktemp -d -p "$check_dir" 2>/dev/null || mktemp -d)
+    chmod 555 "$d"
+    if echo "x" > "${d}/probe" 2>/dev/null; then
+        rm -f "${d}/probe"; chmod 755 "$d"; rm -rf "$d"; return 1
+    fi
+    chmod 755 "$d"; rm -rf "$d"; return 0
+}
 if [[ $EUID -eq 0 ]]; then
     echo "  ✓ Permission denied error (skipped for root user)"
 else
     cd .. && setup_test
-    
+    if ! _check_chmod_works "."; then
+        echo "  ✓ Permission denied error (skipped - chmod ineffective on this filesystem)"
+    else
+
     # Make tickets directory read-only
     chmod 555 tickets
     OUTPUT=$(timeout 5 ./ticket.sh new "permission-test" 2>&1)
     RESULT=$?
     chmod 755 tickets
-    
+
     # Test: ticket.sh propagates system permission errors
     if [[ $RESULT -ne 0 ]]; then
         echo "  ✓ Permission denied error (propagated system error)"
     else
         echo "  ✗ Permission denied error (should propagate system error)"
         echo "    Output: $OUTPUT"
+    fi
     fi
 fi
 

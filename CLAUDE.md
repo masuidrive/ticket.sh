@@ -50,3 +50,9 @@ Use `./ticket.sh` for ticket management.
    - Commit all your work: `git add . && git commit -m "your message"`
    - Get user approval before proceeding
 2. Complete: `./ticket.sh close`
+
+## Canceling Tickets
+
+- If a ticket is no longer needed, cancel it: `./ticket.sh cancel`
+- This moves the ticket to done/ without merging and switches back to the default branch
+- The feature branch is kept for reference

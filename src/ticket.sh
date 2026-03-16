@@ -195,6 +195,7 @@ Each ticket is a single Markdown file with YAML frontmatter metadata.
 - \`$SCRIPT_COMMAND restore\` - Restore current-ticket.md symlink from branch name
 - \`$SCRIPT_COMMAND check\` - Check current directory and ticket/branch synchronization status
 - \`$SCRIPT_COMMAND close [--no-push] [--force|-f] [--no-delete-remote]\` - Complete current ticket (squash merge to default branch)
+- \`$SCRIPT_COMMAND cancel [--force|-f]\` - Cancel current ticket (no merge, moves to done/ with CANCELED marker)
 - \`$SCRIPT_COMMAND selfupdate\` - Update ticket.sh to the latest version from GitHub
 - \`$SCRIPT_COMMAND version\` - Display version information
 - \`$SCRIPT_COMMAND prompt\` - Display prompt instructions for AI coding assistants
@@ -210,6 +211,11 @@ Each ticket is a single Markdown file with YAML frontmatter metadata.
 - \`todo\`: not started (started_at: null)
 - \`doing\`: in progress (started_at set, closed_at: null)
 - \`done\`: completed (closed_at set)
+- \`canceled\`: canceled (canceled_at set)
+
+## YAML Frontmatter Fields
+
+- \`merge_to\`: Override merge target branch per ticket (default: use default_branch from config)
 
 ## Configuration
 
@@ -630,6 +636,7 @@ description: ""
 created_at: "$timestamp"
 started_at: null  # Do not modify manually
 closed_at: null   # Do not modify manually
+canceled_at: null # Do not modify manually
 ---
 
 $processed_content
@@ -687,13 +694,14 @@ cmd_list() {
             --status)
                 shift
                 filter_status="$1"
-                if [[ ! "$filter_status" =~ ^(todo|doing|done)$ ]]; then
+                if [[ ! "$filter_status" =~ ^(todo|doing|done|canceled)$ ]]; then
                     cat >&2 << EOF
 Error: Invalid status
 Status '$filter_status' is not valid. Please use one of:
 - todo (for unstarted tickets)
 - doing (for in-progress tickets)
 - done (for completed tickets)
+- canceled (for canceled tickets)
 EOF
                     return 1
                 fi
@@ -748,6 +756,8 @@ EOF
     echo "---------------------------"
     if [[ "$filter_status" == "done" ]]; then
         echo "(sorted by closed date, newest first)"
+    elif [[ "$filter_status" == "canceled" ]]; then
+        echo "(sorted by canceled date, newest first)"
     elif [[ -z "$filter_status" ]]; then
         echo "(sorted by status: doing, todo, done, then by priority asc)"
     fi
@@ -773,17 +783,18 @@ EOF
         local created_at=$(yaml_get "created_at" 2>/dev/null || echo "")
         local started_at=$(yaml_get "started_at" 2>/dev/null || echo "null")
         local closed_at=$(yaml_get "closed_at" 2>/dev/null || echo "null")
-        
+        local canceled_at=$(yaml_get "canceled_at" 2>/dev/null || echo "null")
+
         # Determine status
-        local status=$(get_ticket_status "$started_at" "$closed_at")
-        
+        local status=$(get_ticket_status "$started_at" "$closed_at" "$canceled_at")
+
         # Apply filter
         if [[ -n "$filter_status" ]] && [[ "$status" != "$filter_status" ]]; then
             continue
         fi
-        
+
         # Default filter: show only todo and doing
-        if [[ -z "$filter_status" ]] && [[ "$status" == "done" ]]; then
+        if [[ -z "$filter_status" ]] && [[ "$status" == "done" || "$status" == "canceled" ]]; then
             continue
         fi
         
@@ -791,8 +802,8 @@ EOF
         local ticket_path="${ticket_file#./}"
         
         # Store in temp file for sorting
-        # Format: status|priority|ticket_path|description|created_at|started_at|closed_at
-        echo "${status}|${priority}|${ticket_path}|${description}|${created_at}|${started_at}|${closed_at}" >> "$temp_file"
+        # Format: status|priority|ticket_path|description|created_at|started_at|closed_at|canceled_at
+        echo "${status}|${priority}|${ticket_path}|${description}|${created_at}|${started_at}|${closed_at}|${canceled_at}" >> "$temp_file"
     done
     
     # Sort and display
@@ -802,19 +813,23 @@ EOF
     if [[ "$filter_status" == "done" ]]; then
         # For done tickets only: sort by closed_at in descending order
         sort -t'|' -k7,7r "$temp_file" > "$sorted_file"
+    elif [[ "$filter_status" == "canceled" ]]; then
+        # For canceled tickets only: sort by canceled_at in descending order
+        sort -t'|' -k8,8r "$temp_file" > "$sorted_file"
     else
         # For all tickets or other statuses: use original sorting logic
-        sort -t'|' -k1,1 -k2,2n "$temp_file" | sed 's/^doing|/0|/; s/^todo|/1|/; s/^done|/2|/' | sort -t'|' -k1,1n -k2,2n | sed 's/^0|/doing|/; s/^1|/todo|/; s/^2|/done|/' > "$sorted_file"
+        sort -t'|' -k1,1 -k2,2n "$temp_file" | sed 's/^doing|/0|/; s/^todo|/1|/; s/^done|/2|/; s/^canceled|/3|/' | sort -t'|' -k1,1n -k2,2n | sed 's/^0|/doing|/; s/^1|/todo|/; s/^2|/done|/; s/^3|/canceled|/' > "$sorted_file"
     fi
-    
-    while IFS='|' read -r status priority ticket_path description created_at started_at closed_at; do
+
+    while IFS='|' read -r status priority ticket_path description created_at started_at closed_at canceled_at; do
         [[ $displayed -ge $count ]] && break
-        
+
         # Convert timestamps to local timezone
         local created_at_local=$(convert_utc_to_local "$created_at")
         local started_at_local=$(convert_utc_to_local "$started_at")
         local closed_at_local=$(convert_utc_to_local "$closed_at")
-        
+        local canceled_at_local=$(convert_utc_to_local "$canceled_at")
+
         echo "- status: $status"
         echo "  ticket_path: $ticket_path"
         [[ -n "$description" ]] && echo "  description: $description"
@@ -822,6 +837,7 @@ EOF
         echo "  created_at: $created_at_local"
         [[ "$status" != "todo" ]] && echo "  started_at: $started_at_local"
         [[ "$status" == "done" ]] && [[ "$closed_at" != "null" ]] && echo "  closed_at: $closed_at_local"
+        [[ "$status" == "canceled" ]] && [[ "$canceled_at" != "null" ]] && echo "  canceled_at: $canceled_at_local"
         echo
         
         ((displayed++))
@@ -1627,6 +1643,236 @@ EOF
     fi
 }
 
+# Command: cancel
+# Cancel the current ticket without merging
+cmd_cancel() {
+    local force=false
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --force|-f)
+                force=true
+                shift
+                ;;
+            *)
+                echo "Error: Unknown option: $1" >&2
+                echo "Usage: $SCRIPT_COMMAND cancel [--force|-f]" >&2
+                return 1
+                ;;
+        esac
+    done
+
+    # Check prerequisites
+    check_git_repo || return 1
+    check_config || return 1
+
+    # Check clean working directory unless --force is used
+    if [[ "$force" == "false" ]]; then
+        if ! check_clean_working_dir; then
+            cat >&2 << EOF
+
+To ignore uncommitted changes and force cancel, use:
+  $SCRIPT_COMMAND cancel --force (or -f)
+
+Or handle the changes:
+  1. Commit your changes: git add . && git commit -m "message"
+  2. Stash changes: git stash
+
+IMPORTANT: Never discard changes without explicit user permission.
+EOF
+            return 1
+        fi
+    fi
+
+    # Check current ticket link
+    if [[ ! -L "$CURRENT_TICKET_LINK" ]]; then
+        cat >&2 << EOF
+Error: No current ticket
+No current ticket found ($CURRENT_TICKET_LINK missing). Please:
+1. Start a ticket: $SCRIPT_COMMAND start <ticket-name>
+2. Or restore link: $SCRIPT_COMMAND restore (if on feature branch)
+EOF
+        return 1
+    fi
+
+    # Get ticket file
+    local ticket_file=$(readlink "$CURRENT_TICKET_LINK")
+    if [[ ! -f "$ticket_file" ]]; then
+        cat >&2 << EOF
+Error: Invalid current ticket
+Current ticket file not found or corrupted. Please:
+1. Use '$SCRIPT_COMMAND restore' to fix the link
+2. Or start a new ticket: $SCRIPT_COMMAND start <ticket-name>
+EOF
+        return 1
+    fi
+
+    # Load configuration
+    if ! yaml_parse "$CONFIG_FILE"; then
+        echo "Error: Cannot parse configuration file: $CONFIG_FILE" >&2
+        return 1
+    fi
+    local default_branch=$(yaml_get "default_branch" || echo "$DEFAULT_BRANCH")
+    local branch_prefix=$(yaml_get "branch_prefix" || echo "$DEFAULT_BRANCH_PREFIX")
+
+    # Check current branch
+    local current_branch=$(get_current_branch)
+    if [[ ! "$current_branch" =~ ^${branch_prefix} ]]; then
+        cat >&2 << EOF
+Error: Not on a feature branch
+Must be on a feature branch to cancel ticket. Please:
+1. Switch to feature branch: git checkout ${branch_prefix}<ticket-name>
+2. Or check current branch: git branch
+EOF
+        return 1
+    fi
+
+    # Check ticket status
+    local yaml_content=$(extract_yaml_frontmatter "$ticket_file")
+    echo "$yaml_content" >| /tmp/ticket_yaml.yml
+    yaml_parse /tmp/ticket_yaml.yml
+    local started_at=$(yaml_get "started_at" || echo "null")
+    local closed_at=$(yaml_get "closed_at" || echo "null")
+    local canceled_at=$(yaml_get "canceled_at" || echo "null")
+    local description=$(yaml_get "description" || echo "")
+    rm -f /tmp/ticket_yaml.yml
+
+    if ! is_null_or_empty "$closed_at"; then
+        echo "Error: Ticket already completed (closed_at is set)" >&2
+        return 1
+    fi
+
+    if ! is_null_or_empty "$canceled_at"; then
+        echo "Error: Ticket already canceled (canceled_at is set)" >&2
+        return 1
+    fi
+
+    # Store original ticket state for rollback
+    local original_ticket_content=$(cat "$ticket_file")
+
+    # Update canceled_at
+    local timestamp=$(get_utc_timestamp)
+    update_yaml_frontmatter_field "$ticket_file" "canceled_at" "$timestamp" || {
+        echo "Error: Failed to update ticket canceled_at field" >&2
+        return 1
+    }
+
+    # Update description with [CANCELED] prefix
+    local new_description="[CANCELED] ${description}"
+    update_yaml_frontmatter_field "$ticket_file" "description" "$new_description" || {
+        echo "Error: Failed to update ticket description" >&2
+        echo "$original_ticket_content" > "$ticket_file"
+        return 1
+    }
+
+    # Remove current-ticket.md and current-note.md from git history if they exist
+    if git ls-files | grep -q "^current-ticket.md$"; then
+        run_git_command "git rm --cached current-ticket.md" || {
+            echo "Error: Failed to remove current-ticket.md from git history" >&2
+            echo "$original_ticket_content" > "$ticket_file"
+            return 1
+        }
+    fi
+    if git ls-files | grep -q "^current-note.md$"; then
+        run_git_command "git rm --cached current-note.md" || {
+            echo "Error: Failed to remove current-note.md from git history" >&2
+            echo "$original_ticket_content" > "$ticket_file"
+            return 1
+        }
+    fi
+
+    # Commit the change on feature branch
+    run_git_command "git add $ticket_file" || {
+        echo "Error: Failed to stage ticket file" >&2
+        echo "$original_ticket_content" > "$ticket_file"
+        return 1
+    }
+
+    run_git_command "git commit -m \"Cancel ticket\"" || {
+        echo "Error: Failed to commit ticket cancellation" >&2
+        echo "$original_ticket_content" > "$ticket_file"
+        git restore --staged "$ticket_file" 2>/dev/null || true
+        return 1
+    }
+
+    # Get ticket name BEFORE switching branches
+    local ticket_name=$(basename "$ticket_file" .md)
+
+    # Switch to default branch (no merge)
+    run_git_command "git checkout $default_branch" || {
+        echo "Error: Failed to switch to default branch '$default_branch'" >&2
+        echo "Your changes have been committed on feature branch '$current_branch'" >&2
+        return 1
+    }
+
+    # Move ticket to done folder with CANCELED prefix in filename
+    local tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
+    local done_dir="${tickets_dir}/done"
+
+    if [[ ! -d "$done_dir" ]]; then
+        if ! mkdir -p "$done_dir"; then
+            echo "Error: Failed to create done directory: $done_dir" >&2
+            return 1
+        fi
+    fi
+
+    # Build canceled filename: insert -CANCELED- before the slug part
+    # Original: YYMMDD-hhmmss-slug-name.md -> YYMMDD-hhmmss-CANCELED-slug-name.md
+    local base_name=$(basename "$ticket_file")
+    local canceled_name
+    if [[ "$base_name" =~ ^([0-9]{6}-[0-9]{6})-(.*)$ ]]; then
+        canceled_name="${BASH_REMATCH[1]}-CANCELED-${BASH_REMATCH[2]}"
+    else
+        canceled_name="CANCELED-${base_name}"
+    fi
+
+    # Checkout the ticket file from the feature branch and move it
+    run_git_command "git checkout $current_branch -- $ticket_file" || {
+        echo "Error: Failed to retrieve ticket file from feature branch" >&2
+        return 1
+    }
+
+    local new_ticket_path="${done_dir}/${canceled_name}"
+    mv "$ticket_file" "$new_ticket_path"
+
+    # Also move note file if it exists on the feature branch
+    local note_file="${tickets_dir}/${ticket_name}-note.md"
+    if git show "${current_branch}:${note_file}" >/dev/null 2>&1; then
+        run_git_command "git checkout $current_branch -- $note_file" || true
+        if [[ -f "$note_file" ]]; then
+            local note_base=$(basename "$note_file")
+            local canceled_note_name
+            if [[ "$note_base" =~ ^([0-9]{6}-[0-9]{6})-(.*)$ ]]; then
+                canceled_note_name="${BASH_REMATCH[1]}-CANCELED-${BASH_REMATCH[2]}"
+            else
+                canceled_note_name="CANCELED-${note_base}"
+            fi
+            mv "$note_file" "${done_dir}/${canceled_note_name}"
+        fi
+    fi
+
+    # Commit the canceled ticket in done folder
+    run_git_command "git add ${done_dir}/" || {
+        echo "Error: Failed to stage canceled ticket" >&2
+        return 1
+    }
+
+    local commit_msg="[${ticket_name}] Ticket canceled"
+    run_git_command "git commit -m \"$commit_msg\"" || {
+        echo "Error: Failed to commit canceled ticket" >&2
+        return 1
+    }
+
+    # Remove current ticket and note links
+    rm -f "$CURRENT_TICKET_LINK"
+    rm -f "$CURRENT_NOTE_LINK"
+
+    echo "Ticket canceled: $ticket_name"
+    echo "Moved to: $new_ticket_path"
+    echo "Feature branch '$current_branch' has been kept (not deleted)"
+}
+
 # Command: version
 # Display version information
 cmd_version() {
@@ -1784,6 +2030,10 @@ main() {
         close)
             shift
             cmd_close "$@"
+            ;;
+        cancel)
+            shift
+            cmd_cancel "$@"
             ;;
         selfupdate)
             cmd_selfupdate

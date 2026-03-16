@@ -80,6 +80,7 @@ The main script uses a case statement to route commands:
 - `list`: List tickets with filters and options
 - `start`: Start work on ticket
 - `close`: Complete ticket
+- `cancel`: Cancel ticket without merging
 - `restore`: Restore current-ticket.md symlink
 - `check`: Diagnose current state and provide guidance
 - `version`: Display version information
@@ -122,6 +123,13 @@ The main script uses a case statement to route commands:
 - Squash merges to target branch (ticket's `merge_to` field if set, otherwise config's `default_branch`)
 - Moves ticket and note files to `done/` folder
 - Optional remote branch cleanup
+
+#### `cancel_ticket()`
+- Sets `canceled_at` timestamp and adds `[CANCELED]` prefix to description
+- Renames ticket file with `-CANCELED-` prefix before slug
+- Moves ticket to `done/` folder
+- Switches to default branch without merging (keeps feature branch)
+- Removes current-ticket.md and current-note.md symlinks
 
 ## Testing
 

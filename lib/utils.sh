@@ -162,8 +162,11 @@ is_null_or_empty() {
 get_ticket_status() {
     local started_at="$1"
     local closed_at="$2"
-    
-    if is_null_or_empty "$closed_at"; then
+    local canceled_at="${3:-null}"
+
+    if ! is_null_or_empty "$canceled_at"; then
+        echo "canceled"
+    elif is_null_or_empty "$closed_at"; then
         if is_null_or_empty "$started_at"; then
             echo "todo"
         else

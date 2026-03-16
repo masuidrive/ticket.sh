@@ -3,7 +3,7 @@
 A lightweight, robust ticket management system that uses Git branches and markdown files. Perfect for solo developers, small teams, and AI pair programming.
 
 ## Key Features
-- 🎯 **Simple workflow**: Create, start, work, close
+- 🎯 **Simple workflow**: Create, start, work, close (or cancel)
 - 📝 **Markdown tickets**: Rich formatting with YAML frontmatter
 - 🌿 **Git integration**: Automatic branch management per ticket
 - 📁 **Smart organization**: Auto-organized done folder, timezone-aware timestamps
@@ -52,6 +52,10 @@ Close the ticket
 ```
 
 ```
+Cancel the ticket, it's no longer needed
+```
+
+```
 What tickets are remaining?
 ```
 
@@ -68,6 +72,9 @@ What tickets are remaining?
 
 # Complete work
 ./ticket.sh close
+
+# Or cancel if no longer needed
+./ticket.sh cancel
 ```
 
 ## Installation
@@ -91,7 +98,7 @@ cp ticket.sh /usr/local/bin/
 1. **Initialize**: `./ticket.sh init`
 2. **Create ticket**: `./ticket.sh new feature-name`
 3. **Start work**: `./ticket.sh start <ticket-name>`
-4. **Close ticket**: `./ticket.sh close`
+4. **Close ticket**: `./ticket.sh close` (or `./ticket.sh cancel` to abandon)
 
 ## Usage Examples
 
@@ -106,6 +113,9 @@ cp ticket.sh /usr/local/bin/
 
 # Force close without prompts
 ./ticket.sh close --force
+
+# Cancel a ticket without merging
+./ticket.sh cancel
 
 # Update to latest version
 ./ticket.sh selfupdate
@@ -125,9 +135,10 @@ cp ticket.sh /usr/local/bin/
 ### Core Commands
 - `init` - Initialize ticket system (idempotent, safe to re-run)
 - `new <slug>` - Create new ticket
-- `list [--status todo|doing|done] [--count N]` - List tickets
+- `list [--status todo|doing|done|canceled] [--count N]` - List tickets
 - `start <ticket> [--no-push]` - Start working on ticket
 - `close [--no-push] [--force] [--no-delete-remote]` - Complete ticket
+- `cancel [--force|-f]` - Cancel ticket without merging
 - `restore` - Restore current-ticket.md symlink
 
 ### Utility Commands
@@ -136,7 +147,7 @@ cp ticket.sh /usr/local/bin/
 - `selfupdate` - Update to latest release from GitHub
 
 ### List Command Features
-- **Status filtering**: `--status todo|doing|done` to filter by ticket status
+- **Status filtering**: `--status todo|doing|done|canceled` to filter by ticket status
 - **Count limiting**: `--count N` to limit number of results displayed
 - **Done tickets**: Sorted by completion date (newest first)
 - **Timezone display**: Completion times shown in local timezone
