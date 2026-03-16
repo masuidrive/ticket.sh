@@ -46,6 +46,7 @@
 #### 最小YAML構成
 ```yaml
 priority: 2
+merge_to: default  # マージ先ブランチを上書き（default: configのdefault_branchを使用）
 description: ""
 started_at: null  # Do not modify manually
 closed_at: null   # Do not modify manually
@@ -231,6 +232,7 @@ YYMMDD-hhmmss-<slug>.md
 ```yaml
 ---
 priority: 2
+merge_to: default  # マージ先ブランチを上書き（default: configのdefault_branchを使用）
 description: ""
 created_at: "2025-06-28 15:32:45 UTC"
 started_at: null
@@ -346,6 +348,7 @@ closed_at: null
 ```yaml
 ---
 priority: 2
+merge_to: default  # マージ先ブランチを上書き（default: configのdefault_branchを使用）
 description: ""  # single line
 created_at: "2025-06-28T15:32:45Z"
 started_at: null  # Do not modify manually
@@ -555,7 +558,7 @@ Permission denied creating symlink. Please:
 2. **チケット更新**: current-ticket.md の参照先チケットの `closed_at` に現在時刻を設定
 3. **コミット**: `"Close ticket"` メッセージでコミット
 4. **Push (条件付き)**: `auto_push: true` かつ `--no-push` 未指定時のみ featureブランチをpush
-5. **Squash Merge**: featureブランチを `{default_branch}` にsquash merge
+5. **Squash Merge**: featureブランチをターゲットブランチにsquash merge（チケットの `merge_to` フィールドが設定されていればそちらを優先、なければ `{default_branch}`）
 6. **Push (条件付き)**: `auto_push: true` かつ `--no-push` 未指定時のみ `{default_branch}` をpush
 7. 実行したGitコマンドと出力を詳細表示
 
@@ -737,6 +740,7 @@ Note: Changes not pushed to remote. Use 'git push origin develop' and 'git push 
 
 ---
 priority: 2
+merge_to: default
 description: "User authentication POST handler"
 created_at: "2025-06-28T15:32:45Z"
 started_at: "2025-06-28T16:15:30Z"

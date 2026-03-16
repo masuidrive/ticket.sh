@@ -625,6 +625,7 @@ EOF
     if ! cat > "$ticket_file" << EOF
 ---
 priority: 2
+merge_to: default  # Override merge target branch (default: use default_branch from config)
 description: ""
 created_at: "$timestamp"
 started_at: null  # Do not modify manually
@@ -1417,7 +1418,20 @@ EOF
     local started_at=$(yaml_get "started_at" || echo "null")
     local closed_at=$(yaml_get "closed_at" || echo "null")
     local description=$(yaml_get "description" || echo "")
+    local merge_to=$(yaml_get "merge_to" || echo "default")
     rm -f /tmp/ticket_yaml.yml
+
+    # Override default_branch if merge_to is specified in ticket
+    local merge_to_lower=$(echo "$merge_to" | tr '[:upper:]' '[:lower:]')
+    if ! is_null_or_empty "$merge_to" && [[ "$merge_to_lower" != "default" ]]; then
+        # Verify merge_to branch exists
+        if ! git rev-parse --verify "$merge_to" >/dev/null 2>&1; then
+            echo "Error: merge_to branch '$merge_to' does not exist" >&2
+            echo "Please create the branch first or update the merge_to field in the ticket" >&2
+            return 1
+        fi
+        default_branch="$merge_to"
+    fi
     
     if is_null_or_empty "$started_at"; then
         cat >&2 << EOF

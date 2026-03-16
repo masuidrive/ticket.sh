@@ -33,11 +33,26 @@ is_gnu() {
 # sed compatibility
 # =============================================================================
 
+# Check if GNU sed is available
+is_gnu_sed() {
+    if command -v gsed >/dev/null 2>&1; then
+        return 0
+    elif sed --version 2>/dev/null | grep -q "GNU"; then
+        return 0
+    else
+        return 1
+    fi
+}
+
 # Portable sed in-place editing
 # Usage: sed_i 's/old/new/' file
 sed_i() {
-    if is_gnu; then
-        sed -i "$@"
+    if is_gnu_sed; then
+        if command -v gsed >/dev/null 2>&1; then
+            gsed -i "$@"
+        else
+            sed -i "$@"
+        fi
     else
         # BSD sed requires backup extension, use .bak and delete it
         local last_arg="${@: -1}"
@@ -253,6 +268,6 @@ cpu_count() {
 #    - head -n -1 (not portable, use sed instead)
 
 # Export all functions
-export -f detect_os is_gnu sed_i sed_i_perl date_fmt days_ago
+export -f detect_os is_gnu is_gnu_sed sed_i sed_i_perl date_fmt days_ago
 export -f mktemp_portable mktemp_dir grep_e grep_p find_regex
 export -f readlink_f stat_mtime stat_size join_by has_command cpu_count
