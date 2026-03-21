@@ -12,7 +12,7 @@ fi
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20260316.215706
+# Version: 20260321.061830
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -1030,7 +1030,7 @@ if [ -z "${BASH_VERSION:-}" ]; then
 fi
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20260316.215706
+# Version: 20260321.061830
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -1122,7 +1122,7 @@ SCRIPT_COMMAND=$(get_script_command)
 
 
 # Global variables
-VERSION="20260316.215706"  # This will be replaced during build
+VERSION="20260321.061830"  # This will be replaced during build
 CONFIG_FILE=""  # Will be set dynamically by get_config_file()
 CURRENT_TICKET_LINK="current-ticket.md"
 CURRENT_NOTE_LINK="current-note.md"
@@ -1221,7 +1221,7 @@ Each ticket is a single Markdown file with YAML frontmatter metadata.
 
 ## YAML Frontmatter Fields
 
-- \`merge_to\`: Override merge target branch per ticket (default: use default_branch from config)
+- \`base_branch\`: Override base branch for start/close per ticket (default: use default_branch from config)
 
 ## Configuration
 
@@ -1637,7 +1637,7 @@ EOF
     if ! cat > "$ticket_file" << EOF
 ---
 priority: 2
-merge_to: default  # Override merge target branch (default: use default_branch from config)
+base_branch: default  # Override base branch for start/close (default: use default_branch from config)
 description: ""
 created_at: "$timestamp"
 started_at: null  # Do not modify manually
@@ -2031,8 +2031,13 @@ EOF
     echo "$yaml_content" >| /tmp/ticket_yaml.yml
     yaml_parse /tmp/ticket_yaml.yml
     local started_at=$(yaml_get "started_at" || echo "null")
+    local base_branch=$(yaml_get "base_branch" || echo "")
+    # Backward compatibility: fall back to merge_to if base_branch is not set
+    if is_null_or_empty "$base_branch" || [[ "$(echo "$base_branch" | tr '[:upper:]' '[:lower:]')" == "default" ]]; then
+        base_branch=$(yaml_get "merge_to" || echo "default")
+    fi
     rm -f /tmp/ticket_yaml.yml
-    
+
     if ! is_null_or_empty "$started_at"; then
         cat >&2 << EOF
 Error: Ticket already started but branch is missing
@@ -2043,13 +2048,39 @@ Ticket has been started (started_at is set) but the branch doesn't exist. Please
 EOF
         return 1
     fi
-    
-    # Update ticket started_at
+
+    # Determine base branch for new feature branch
+    local start_from="$default_branch"
+    local base_branch_lower=$(echo "$base_branch" | tr '[:upper:]' '[:lower:]')
+    if ! is_null_or_empty "$base_branch" && [[ "$base_branch_lower" != "default" ]]; then
+        if ! git rev-parse --verify "$base_branch" >/dev/null 2>&1; then
+            echo "Error: base_branch '$base_branch' does not exist" >&2
+            echo "Please create the branch first or update the base_branch field in the ticket" >&2
+            return 1
+        fi
+        start_from="$base_branch"
+    fi
+
+    # Create and checkout new branch from base branch
+    local prev_branch=$(get_current_branch)
+    run_git_command "git checkout -b $branch_name $start_from" || return 1
+
+    # If base_branch differs from where ticket was created, bring ticket files over
+    if [[ "$start_from" != "$prev_branch" ]]; then
+        run_git_command "git checkout $prev_branch -- $ticket_file" || {
+            echo "Error: Failed to retrieve ticket file from $prev_branch" >&2
+            return 1
+        }
+        # Also bring note file if it exists
+        local note_file="${tickets_dir}/${ticket_name}-note.md"
+        git checkout "$prev_branch" -- "$note_file" 2>/dev/null || true
+        # Ensure tickets directory structure
+        run_git_command "git checkout $prev_branch -- ${tickets_dir}/README.md" 2>/dev/null || true
+    fi
+
+    # Update ticket started_at (after branch creation to avoid uncommitted changes blocking checkout)
     local timestamp=$(get_utc_timestamp)
     update_yaml_frontmatter_field "$ticket_file" "started_at" "$timestamp"
-    
-    # Create and checkout new branch
-    run_git_command "git checkout -b $branch_name" || return 1
     
     # Create symlink
     rm -f "$CURRENT_TICKET_LINK"
@@ -2440,19 +2471,23 @@ EOF
     local started_at=$(yaml_get "started_at" || echo "null")
     local closed_at=$(yaml_get "closed_at" || echo "null")
     local description=$(yaml_get "description" || echo "")
-    local merge_to=$(yaml_get "merge_to" || echo "default")
+    local base_branch=$(yaml_get "base_branch" || echo "")
+    # Backward compatibility: fall back to merge_to if base_branch is not set
+    if is_null_or_empty "$base_branch" || [[ "$(echo "$base_branch" | tr '[:upper:]' '[:lower:]')" == "default" ]]; then
+        base_branch=$(yaml_get "merge_to" || echo "default")
+    fi
     rm -f /tmp/ticket_yaml.yml
 
-    # Override default_branch if merge_to is specified in ticket
-    local merge_to_lower=$(echo "$merge_to" | tr '[:upper:]' '[:lower:]')
-    if ! is_null_or_empty "$merge_to" && [[ "$merge_to_lower" != "default" ]]; then
-        # Verify merge_to branch exists
-        if ! git rev-parse --verify "$merge_to" >/dev/null 2>&1; then
-            echo "Error: merge_to branch '$merge_to' does not exist" >&2
-            echo "Please create the branch first or update the merge_to field in the ticket" >&2
+    # Override default_branch if base_branch is specified in ticket
+    local base_branch_lower=$(echo "$base_branch" | tr '[:upper:]' '[:lower:]')
+    if ! is_null_or_empty "$base_branch" && [[ "$base_branch_lower" != "default" ]]; then
+        # Verify base_branch exists
+        if ! git rev-parse --verify "$base_branch" >/dev/null 2>&1; then
+            echo "Error: base_branch '$base_branch' does not exist" >&2
+            echo "Please create the branch first or update the base_branch field in the ticket" >&2
             return 1
         fi
-        default_branch="$merge_to"
+        default_branch="$base_branch"
     fi
     
     if is_null_or_empty "$started_at"; then
@@ -2742,7 +2777,22 @@ EOF
     local closed_at=$(yaml_get "closed_at" || echo "null")
     local canceled_at=$(yaml_get "canceled_at" || echo "null")
     local description=$(yaml_get "description" || echo "")
+    local base_branch=$(yaml_get "base_branch" || echo "")
+    # Backward compatibility: fall back to merge_to if base_branch is not set
+    if is_null_or_empty "$base_branch" || [[ "$(echo "$base_branch" | tr '[:upper:]' '[:lower:]')" == "default" ]]; then
+        base_branch=$(yaml_get "merge_to" || echo "default")
+    fi
     rm -f /tmp/ticket_yaml.yml
+
+    # Override default_branch if base_branch is specified
+    local base_branch_lower=$(echo "$base_branch" | tr '[:upper:]' '[:lower:]')
+    if ! is_null_or_empty "$base_branch" && [[ "$base_branch_lower" != "default" ]]; then
+        if ! git rev-parse --verify "$base_branch" >/dev/null 2>&1; then
+            echo "Error: base_branch '$base_branch' does not exist" >&2
+            return 1
+        fi
+        default_branch="$base_branch"
+    fi
 
     if ! is_null_or_empty "$closed_at"; then
         echo "Error: Ticket already completed (closed_at is set)" >&2

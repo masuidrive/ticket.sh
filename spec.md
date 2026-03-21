@@ -46,7 +46,7 @@ A self-contained ticket management system using a single shell script + files + 
 #### Minimal YAML Configuration
 ```yaml
 priority: 2
-merge_to: default  # Override merge target branch (default: use default_branch from config)
+base_branch: default  # Override base branch for start/close (default: use default_branch from config)
 description: ""
 started_at: null  # Do not modify manually
 closed_at: null   # Do not modify manually
@@ -247,7 +247,7 @@ Example: 240628-153245-create-post-handler.md
 ```yaml
 ---
 priority: 2
-merge_to: default  # Override merge target branch (default: use default_branch from config)
+base_branch: default  # Override base branch for start/close (default: use default_branch from config)
 description: ""
 created_at: "2025-06-28 15:32:45 UTC"
 started_at: null
@@ -365,7 +365,7 @@ Creates a new ticket:
 ```yaml
 ---
 priority: 2
-merge_to: default  # Override merge target branch (default: use default_branch from config)
+base_branch: default  # Override base branch for start/close (default: use default_branch from config)
 description: ""  # single line
 created_at: "2025-06-28T15:32:45Z"
 started_at: null  # Do not modify manually
@@ -577,7 +577,7 @@ Completes ticket and merge process:
 2. **Update ticket**: Sets current time to `closed_at` of ticket referenced by current-ticket.md
 3. **Commit**: Commits with `"Close ticket"` message
 4. **Push (conditional)**: Pushes feature branch only when `auto_push: true` and `--no-push` not specified
-5. **Squash Merge**: Squash merges feature branch to target branch (ticket's `merge_to` field if set, otherwise `{default_branch}`)
+5. **Squash Merge**: Squash merges feature branch to target branch (ticket's `base_branch` field if set, otherwise `{default_branch}`)
 6. **Push (conditional)**: Pushes `{default_branch}` only when `auto_push: true` and `--no-push` not specified
 7. **Move to done folder**: Moves ticket file to `tickets/done/` directory
 8. **Commit move**: Commits the file move with `"Move completed ticket to done folder"` message
@@ -790,7 +790,7 @@ Switched to branch 'develop'
 
 ---
 priority: 2
-merge_to: default
+base_branch: default
 description: "User authentication POST handler"
 created_at: "2025-06-28T15:32:45Z"
 started_at: "2025-06-28T16:15:30Z"

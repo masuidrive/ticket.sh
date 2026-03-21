@@ -120,7 +120,7 @@ The main script uses a case statement to route commands:
 #### `close_ticket()`
 - Updates `closed_at` timestamp
 - Removes current-ticket.md and current-note.md from git history
-- Squash merges to target branch (ticket's `merge_to` field if set, otherwise config's `default_branch`)
+- Squash merges to target branch (ticket's `base_branch` field if set, otherwise config's `default_branch`)
 - Moves ticket and note files to `done/` folder
 - Optional remote branch cleanup
 
