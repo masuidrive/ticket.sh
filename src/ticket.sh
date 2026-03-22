@@ -876,11 +876,36 @@ cmd_start() {
     local repository=$(yaml_get "repository" || echo "$DEFAULT_REPOSITORY")
     local auto_push=$(yaml_get "auto_push" || echo "$DEFAULT_AUTO_PUSH")
     local start_success_message=$(yaml_get "start_success_message" || echo "$DEFAULT_START_SUCCESS_MESSAGE")
-    
+
+    # Get ticket file path early to determine base_branch before switching branches
+    local ticket_name=$(extract_ticket_name "$ticket_input")
+    local ticket_file=$(get_ticket_file "$ticket_name" "$tickets_dir")
+
+    # Determine effective base branch (base_branch from ticket, or default_branch)
+    local effective_base="$default_branch"
+    if [[ -f "$ticket_file" ]]; then
+        local _yaml_content=$(extract_yaml_frontmatter "$ticket_file")
+        echo "$_yaml_content" >| /tmp/ticket_yaml_early.yml
+        yaml_parse /tmp/ticket_yaml_early.yml
+        local _base_branch=$(yaml_get "base_branch" || echo "")
+        # Backward compatibility: fall back to merge_to if base_branch is not set
+        if is_null_or_empty "$_base_branch" || [[ "$(echo "$_base_branch" | tr '[:upper:]' '[:lower:]')" == "default" ]]; then
+            _base_branch=$(yaml_get "merge_to" || echo "default")
+        fi
+        rm -f /tmp/ticket_yaml_early.yml
+
+        local _base_lower=$(echo "$_base_branch" | tr '[:upper:]' '[:lower:]')
+        if ! is_null_or_empty "$_base_branch" && [[ "$_base_lower" != "default" ]]; then
+            if git rev-parse --verify "$_base_branch" >/dev/null 2>&1; then
+                effective_base="$_base_branch"
+            fi
+        fi
+    fi
+
     # Check current branch
     local current_branch=$(get_current_branch)
-    if [[ "$current_branch" != "$default_branch" ]]; then
-        # We're on a feature branch - handle different scenarios
+    if [[ "$current_branch" != "$effective_base" ]]; then
+        # We're not on the effective base branch - handle different scenarios
         local git_status_output
         if ! git_status_output=$(git status --porcelain 2>&1); then
             echo "Error: Failed to check git status" >&2
@@ -888,7 +913,7 @@ cmd_start() {
             return 1
         fi
         if [[ -n "$git_status_output" ]]; then
-            # Feature branch with uncommitted changes - prompt for commit and exit
+            # Branch with uncommitted changes - prompt for commit and exit
             cat >&2 << EOF
 Error: Uncommitted changes on feature branch
 You are on feature branch '$current_branch' with uncommitted changes. Please:
@@ -898,17 +923,17 @@ You are on feature branch '$current_branch' with uncommitted changes. Please:
 EOF
             return 1
         else
-            # Feature branch with no changes - offer to create new branch from default
-            echo "Warning: Currently on feature branch '$current_branch' with no uncommitted changes."
-            echo "Creating new feature branch from '$default_branch' branch instead."
-            
-            # Switch to default branch first
-            echo "Switching to '$default_branch' branch..."
-            run_git_command "git checkout $default_branch" || return 1
-            
-            # Check if default branch has differences with the feature branch we were on
+            # No uncommitted changes - switch to effective base branch
+            echo "Warning: Currently on branch '$current_branch' with no uncommitted changes."
+            echo "Creating new feature branch from '$effective_base' branch instead."
+
+            # Switch to effective base branch first
+            echo "Switching to '$effective_base' branch..."
+            run_git_command "git checkout $effective_base" || return 1
+
+            # Check if effective base branch has differences with the branch we were on
             local diff_count
-            if ! diff_count=$(git rev-list --count "$current_branch..$default_branch" 2>&1); then
+            if ! diff_count=$(git rev-list --count "$current_branch..$effective_base" 2>&1); then
                 echo "Warning: Cannot compare branches - using git log instead" >&2
                 # Fallback to simpler check if rev-list fails
                 diff_count="0"
@@ -916,26 +941,22 @@ EOF
             if [[ "$diff_count" -gt 0 ]]; then
                 cat << EOF
 
-Note: The default branch '$default_branch' has $diff_count new commit(s) compared to feature branch '$current_branch'.
+Note: The branch '$effective_base' has $diff_count new commit(s) compared to branch '$current_branch'.
 Consider merging or rebasing '$current_branch' to incorporate these changes:
   git checkout $current_branch
-  git merge $default_branch
+  git merge $effective_base
   # or
-  git rebase $default_branch
+  git rebase $effective_base
 
 EOF
             fi
         fi
     else
-        # We're on the default branch - check for clean working directory
+        # We're on the effective base branch - check for clean working directory
         check_clean_working_dir || return 1
     fi
-    
-    # Get ticket file
-    local ticket_name=$(extract_ticket_name "$ticket_input")
-    local ticket_file=$(get_ticket_file "$ticket_name" "$tickets_dir")
-    
-    # Check if ticket exists
+
+    # Check if ticket exists (after potential branch switch)
     if [[ ! -f "$ticket_file" ]]; then
         cat >&2 << EOF
 Error: Ticket not found
@@ -959,31 +980,31 @@ EOF
         # Checkout existing branch
         run_git_command "git checkout $branch_name" || return 1
         
-        # Check if there are differences between this feature branch and the default branch
+        # Check if there are differences between this feature branch and the effective base branch
         local ahead_count behind_count
-        if ! ahead_count=$(git rev-list --count "$default_branch..$branch_name" 2>&1); then
-            echo "Warning: Cannot determine if feature branch is ahead of default branch" >&2
+        if ! ahead_count=$(git rev-list --count "$effective_base..$branch_name" 2>&1); then
+            echo "Warning: Cannot determine if feature branch is ahead of base branch" >&2
             ahead_count="0"
         fi
-        if ! behind_count=$(git rev-list --count "$branch_name..$default_branch" 2>&1); then
-            echo "Warning: Cannot determine if feature branch is behind default branch" >&2
+        if ! behind_count=$(git rev-list --count "$branch_name..$effective_base" 2>&1); then
+            echo "Warning: Cannot determine if feature branch is behind base branch" >&2
             behind_count="0"
         fi
-        
+
         if [[ "$behind_count" -gt 0 ]]; then
             cat << EOF
 
-Warning: Feature branch '$branch_name' is $behind_count commit(s) behind '$default_branch'.
+Warning: Feature branch '$branch_name' is $behind_count commit(s) behind '$effective_base'.
 Consider updating your feature branch to incorporate recent changes:
-  git merge $default_branch
+  git merge $effective_base
   # or
-  git rebase $default_branch
+  git rebase $effective_base
 
 EOF
         fi
-        
+
         if [[ "$ahead_count" -gt 0 ]]; then
-            echo "Feature branch '$branch_name' is $ahead_count commit(s) ahead of '$default_branch'."
+            echo "Feature branch '$branch_name' is $ahead_count commit(s) ahead of '$effective_base'."
         fi
         
         # Create symlink (restore functionality)
@@ -1025,11 +1046,6 @@ EOF
     echo "$yaml_content" >| /tmp/ticket_yaml.yml
     yaml_parse /tmp/ticket_yaml.yml
     local started_at=$(yaml_get "started_at" || echo "null")
-    local base_branch=$(yaml_get "base_branch" || echo "")
-    # Backward compatibility: fall back to merge_to if base_branch is not set
-    if is_null_or_empty "$base_branch" || [[ "$(echo "$base_branch" | tr '[:upper:]' '[:lower:]')" == "default" ]]; then
-        base_branch=$(yaml_get "merge_to" || echo "default")
-    fi
     rm -f /tmp/ticket_yaml.yml
 
     if ! is_null_or_empty "$started_at"; then
@@ -1043,17 +1059,8 @@ EOF
         return 1
     fi
 
-    # Determine base branch for new feature branch
-    local start_from="$default_branch"
-    local base_branch_lower=$(echo "$base_branch" | tr '[:upper:]' '[:lower:]')
-    if ! is_null_or_empty "$base_branch" && [[ "$base_branch_lower" != "default" ]]; then
-        if ! git rev-parse --verify "$base_branch" >/dev/null 2>&1; then
-            echo "Error: base_branch '$base_branch' does not exist" >&2
-            echo "Please create the branch first or update the base_branch field in the ticket" >&2
-            return 1
-        fi
-        start_from="$base_branch"
-    fi
+    # Use effective_base (already determined above from ticket's base_branch)
+    local start_from="$effective_base"
 
     # Create and checkout new branch from base branch
     local prev_branch=$(get_current_branch)

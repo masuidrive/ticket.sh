@@ -3,8 +3,8 @@ priority: 2
 base_branch: default  # Override base branch for start/close (default: use default_branch from config)
 description: "Fix start command to read base_branch before switching branches"
 created_at: "2026-03-22T13:34:00Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2026-03-22T13:34:33Z # Do not modify manually
+closed_at: 2026-03-22T15:06:15Z # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
 
@@ -18,11 +18,11 @@ Read the ticket file and its `base_branch` field early (before the branch-switch
 
 ## Tasks
 
-- [ ] Read ticket file and base_branch before branch-switching logic in cmd_start
-- [ ] Use base_branch (if set) as the target branch for initial check instead of default_branch
-- [ ] Handle case where current branch is the base_branch (treat same as being on default_branch)
-- [ ] Run tests before closing and pass all tests (No exceptions)
-- [ ] Run `bash build.sh` to build the project
+- [x] Read ticket file and base_branch before branch-switching logic in cmd_start
+- [x] Use base_branch (if set) as the target branch for initial check instead of default_branch
+- [x] Handle case where current branch is the base_branch (treat same as being on default_branch)
+- [x] Run tests before closing and pass all tests (No exceptions)
+- [x] Run `bash build.sh` to build the project
 - [ ] Update documentation if necessary
   - [ ] Update README.*.md
   - [ ] Update spec.*.md
