@@ -23,11 +23,11 @@ Please record any notes related to this ticket, such as debugging information, r
 
 ## Tasks
 
-- [ ] git worktreeの基本動作を理解・検証
-- [ ] ticket.shのブランチ・パス管理コードを読み、worktreeとの互換性を確認
-- [ ] worktree環境でticket.shを実際に動かして問題点を洗い出す
-- [ ] 課題と対応方針をまとめる
-- [ ] 必要であればticket.shにworktreeサポートの修正を実施
+- [x] git worktreeの基本動作を理解・検証
+- [x] ticket.shのブランチ・パス管理コードを読み、worktreeとの互換性を確認
+- [x] worktree環境でticket.shを実際に動かして問題点を洗い出す
+- [x] 課題と対応方針をまとめる
+- [x] ticket.shにworktreeサポートの修正を実施（lib/utils.sh: check_git_repo()の1行修正）
 - [ ] Run tests before closing and pass all tests (No exceptions)
 - [ ] Run `bash build.sh` to build the project
 - [ ] Update documentation if necessary

@@ -4,7 +4,7 @@
 
 # Check if we're in a git repository
 check_git_repo() {
-    if [[ ! -d .git ]]; then
+    if [[ ! -d .git && ! -f .git ]]; then
         cat >&2 << EOF
 Error: Not in a git repository
 This directory is not a git repository. Please:
