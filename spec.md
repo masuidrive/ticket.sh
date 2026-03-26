@@ -84,11 +84,15 @@ Creates empty ticket file, then edit to add title, description, and details
 ```bash
 # Execute from default_branch
 ./ticket.sh start <ticket-file>
+
+# With worktree (creates separate directory)
+./ticket.sh start --worktree <ticket-file>
 ```
-- Switches to corresponding feature branch
+- Switches to corresponding feature branch (or creates worktree with `--worktree`)
 - Creates symlink to current-ticket.md
 - Creates symlink to current-note.md (when note file exists)
 - Reference current-ticket.md and current-note.md while developing
+- With `--worktree`: creates a separate working directory, main repo stays on default branch
 
 ### Restore Link
 ```bash
@@ -132,6 +136,7 @@ Displays ticket status list (default: todo+doing, excludes canceled)
   priority: 1
   created_at: 2025-06-28T15:32:45Z
   started_at: 2025-06-28T16:15:30Z
+  worktree: /path/to/project.worktrees/240628-153245-implement-auth  # shown when using worktree
 
 - status: todo
   ticket_path: tickets/240628-162130-add-tests.md
@@ -185,6 +190,10 @@ branch_prefix: "feature/"
 repository: "origin"
 auto_push: true
 
+# Worktree mode (optional)
+# worktree_mode: false    # When true, 'start' always creates a worktree
+# worktree_dir: ""        # Custom worktree base directory
+
 # Ticket template
 default_content: |
   # Ticket Overview
@@ -227,7 +236,7 @@ default_content: |
 ./ticket.sh init                          # Initialize
 ./ticket.sh new <slug>                    # Create ticket (slug: lowercase, numbers, hyphens only)
 ./ticket.sh list [--status todo|doing|done] [--count N]  # List tickets
-./ticket.sh start <ticket-name> [--no-push]  # Start ticket/create branch
+./ticket.sh start [--worktree] <ticket-name>  # Start ticket/create branch (--worktree for separate directory)
 ./ticket.sh restore                       # Restore current-ticket link
 ./ticket.sh close [--no-push] [--force|-f]  # Complete ticket/merge process
 ./ticket.sh cancel [--force|-f]           # Cancel ticket without merging
@@ -438,14 +447,21 @@ Displays ticket list:
   2. Or omit --count to use default (20)
   ```
 
-### `start <ticket-name> [--no-push]`
+### `start [--worktree] <ticket-name>`
 Starts ticket work:
 
 1. Sets current time to specified ticket's `started_at`
 2. Creates Git branch as `{branch_prefix}<basename>`
 3. Creates symlink to `current-ticket.md` and optionally `current-note.md`
-4. **Push control**: Executes `git push -u {repository} <branch>` only when `auto_push: true` and `--no-push` not specified
-5. Displays executed Git commands and output in detail
+4. Displays executed Git commands and output in detail
+
+**Options:**
+- `--worktree`: Creates a separate git worktree instead of switching branches. The main repository stays on the default branch. Worktree is created at `../<project>.worktrees/<ticket-name>/` (or custom `worktree_dir` if configured)
+
+**Worktree Mode:**
+- Can be enabled permanently via `worktree_mode: true` in config
+- When using worktree mode, `close` and `cancel` commands automatically detect and remove the worktree
+- `list` command shows worktree path for active tickets
 
 **File Specification Flexibility:**
 ```bash

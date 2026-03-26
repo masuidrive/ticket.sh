@@ -2,9 +2,9 @@
 
 # Utility functions for ticket.sh
 
-# Check if we're in a git repository
+# Check if we're in a git repository (supports worktrees where .git is a file)
 check_git_repo() {
-    if [[ ! -d .git ]]; then
+    if [[ ! -d .git ]] && [[ ! -f .git ]]; then
         cat >&2 << EOF
 Error: Not in a git repository
 This directory is not a git repository. Please:
@@ -14,6 +14,20 @@ EOF
         return 1
     fi
     return 0
+}
+
+# Check if current directory is a git worktree (not the main working tree)
+is_git_worktree() {
+    [[ -f .git ]] && grep -q "^gitdir:" .git 2>/dev/null
+}
+
+# Get the main repository path from a worktree
+get_main_repo_from_worktree() {
+    if is_git_worktree; then
+        git rev-parse --path-format=absolute --git-common-dir 2>/dev/null | sed 's|/\.git$||'
+    else
+        git rev-parse --show-toplevel 2>/dev/null
+    fi
 }
 
 # Check if config file exists

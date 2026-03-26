@@ -136,7 +136,7 @@ cp ticket.sh /usr/local/bin/
 - `init` - Initialize ticket system (idempotent, safe to re-run)
 - `new <slug>` - Create new ticket
 - `list [--status todo|doing|done|canceled] [--count N]` - List tickets
-- `start <ticket> [--no-push]` - Start working on ticket
+- `start [--worktree] <ticket>` - Start working on ticket (--worktree creates a separate worktree)
 - `close [--no-push] [--force] [--no-delete-remote]` - Complete ticket
 - `cancel [--force|-f]` - Cancel ticket without merging
 - `restore` - Restore current-ticket.md symlink
@@ -175,6 +175,11 @@ auto_push: true
 # Automatically delete remote feature branch after closing ticket
 # Set to false if you want to keep remote branches for history
 delete_remote_on_close: true
+
+# Worktree mode: create a separate git worktree for each ticket
+# When true, 'start' always creates a worktree (same as --worktree flag)
+# worktree_mode: false
+# worktree_dir: ""  # Custom worktree base directory (default: ../<project>.worktrees/)
 
 # Success messages (leave empty to disable)
 # Message displayed after starting work on a ticket
@@ -286,6 +291,13 @@ default_content: |
 - **Automatic management**: Note files are created, moved, and linked automatically
 - **Backward compatible**: Only enabled when `note_content` is defined in config
 - **Git history**: Prevents accidental commits of `current-ticket.md`
+
+### Worktree Support (Optional)
+- **Parallel work**: Use `--worktree` flag with `start` to create a separate git worktree per ticket
+- **Independent directories**: Each ticket gets its own working directory, no need to stash/commit when switching
+- **Automatic cleanup**: `close` and `cancel` commands automatically remove the worktree
+- **Config mode**: Set `worktree_mode: true` in config to always use worktrees
+- **Custom directory**: Set `worktree_dir` in config to customize worktree location (default: `../<project>.worktrees/`)
 
 ### Error Recovery
 - **Check command**: Diagnose issues and get guidance on next steps

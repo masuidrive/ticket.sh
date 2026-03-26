@@ -136,7 +136,7 @@ cp ticket.sh /usr/local/bin/
 - `init` - チケットシステムを初期化（冪等性、再実行安全）
 - `new <slug>` - 新しいチケットを作成
 - `list [--status todo|doing|done|canceled] [--count N]` - チケット一覧
-- `start <ticket> [--no-push]` - チケットの作業を開始
+- `start [--worktree] <ticket>` - チケットの作業を開始（--worktreeで別ディレクトリにworktreeを作成）
 - `close [--no-push] [--force] [--no-delete-remote]` - チケットを完了
 - `cancel [--force|-f]` - マージせずにチケットをキャンセル
 - `restore` - current-ticket.mdシンボリックリンクを復元
@@ -175,6 +175,11 @@ auto_push: true
 # Automatically delete remote feature branch after closing ticket
 # Set to false if you want to keep remote branches for history
 delete_remote_on_close: true
+
+# Worktree mode: create a separate git worktree for each ticket
+# When true, 'start' always creates a worktree (same as --worktree flag)
+# worktree_mode: false
+# worktree_dir: ""  # Custom worktree base directory (default: ../<project>.worktrees/)
 
 # Success messages (leave empty to disable)
 # Message displayed after starting work on a ticket
@@ -286,6 +291,13 @@ default_content: |
 - **クリーンなチケット**: メインのチケットファイルは要件に集中し簡潔に
 - **自動管理**: ノートファイルの作成、移動、リンクを自動化
 - **後方互換性**: configで `note_content` が定義された場合のみ有効
+
+### Worktreeサポート（オプション）
+- **並行作業**: `start`に`--worktree`フラグを付けてチケット毎に別のgit worktreeを作成
+- **独立ディレクトリ**: 各チケットが独自の作業ディレクトリを持ち、切り替え時のstash/commit不要
+- **自動クリーンアップ**: `close`と`cancel`コマンドがworktreeを自動削除
+- **設定モード**: configで`worktree_mode: true`を設定すると常にworktreeを使用
+- **カスタムディレクトリ**: configで`worktree_dir`を設定してworktreeの場所をカスタマイズ（デフォルト: `../<プロジェクト名>.worktrees/`）
 
 ### エラー回復
 - **checkコマンド**: 問題を診断して次のステップのガイダンス提供

@@ -97,6 +97,7 @@ The main script uses a case statement to route commands:
 - File manipulation and validation
 - Cross-platform compatibility
 - Dynamic command name detection
+- Git worktree detection and main repo resolution
 
 ### Key Functions
 
@@ -112,23 +113,28 @@ The main script uses a case statement to route commands:
 - Creates optional note file when `note_content` is configured
 
 #### `start_ticket()`
-- Creates feature branch
+- Creates feature branch (or git worktree with `--worktree` flag)
 - Updates `started_at` timestamp
-- Creates `current-ticket.md` symlink
+- Creates `current-ticket.md` symlink (in worktree directory if using worktree mode)
 - Creates `current-note.md` symlink when note file exists
+- Worktree mode: creates directory at `../<project>.worktrees/<ticket-name>/`
 
 #### `close_ticket()`
 - Updates `closed_at` timestamp
 - Removes current-ticket.md and current-note.md from git history
+- Detects worktree mode and switches to main repo for merge
 - Squash merges to target branch (ticket's `base_branch` field if set, otherwise config's `default_branch`)
 - Moves ticket and note files to `done/` folder
+- Removes worktree if running from one
 - Optional remote branch cleanup
 
 #### `cancel_ticket()`
 - Sets `canceled_at` timestamp and adds `[CANCELED]` prefix to description
 - Renames ticket file with `-CANCELED-` prefix before slug
 - Moves ticket to `done/` folder
+- Detects worktree mode and switches to main repo
 - Switches to default branch without merging (keeps feature branch)
+- Removes worktree if running from one
 - Removes current-ticket.md and current-note.md symlinks
 
 ## Testing
@@ -143,6 +149,7 @@ See `test/README.md` for detailed test documentation. Key points:
 - **Compatibility tests**: Test on different platforms and environments
 - **UTF-8 tests**: Test Unicode support and international characters
 - **Timezone tests**: Test date/time conversion functionality
+- **Worktree tests**: Test worktree creation, close, cancel, resume, and config mode
 
 ### Running Tests
 
@@ -297,6 +304,7 @@ Documentation updates should be part of the same PR as code changes.
 - **Done folder organization**: Automatic organization of completed tickets
 - **Git history protection**: Prevents accidental commits of working files
 - **Work notes separation**: Optional separate note files for debugging and investigation logs
+- **Worktree support**: Optional git worktree mode for parallel ticket work without branch switching
 
 ## Troubleshooting
 

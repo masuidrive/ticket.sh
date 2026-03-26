@@ -132,6 +132,8 @@ DEFAULT_NEW_SUCCESS_MESSAGE=""
 DEFAULT_START_SUCCESS_MESSAGE="Please review the ticket content in \`current-ticket.md\` and make any necessary adjustments before beginning work."
 DEFAULT_RESTORE_SUCCESS_MESSAGE=""
 DEFAULT_CLOSE_SUCCESS_MESSAGE=""
+DEFAULT_WORKTREE_MODE="false"
+DEFAULT_WORKTREE_DIR=""  # Empty means auto: ../<project-name>.worktrees
 DEFAULT_CONTENT='# Ticket Overview
 
 Write the overview and tasks for this ticket here.
@@ -191,7 +193,7 @@ Each ticket is a single Markdown file with YAML frontmatter metadata.
 - \`$SCRIPT_COMMAND init\` - Initialize system (create config, directories, .gitignore)
 - \`$SCRIPT_COMMAND new <slug>\` - Create new ticket file (slug: lowercase, numbers, hyphens only)
 - \`$SCRIPT_COMMAND list [--status STATUS] [--count N]\` - List tickets (default: todo + doing, count: 20)
-- \`$SCRIPT_COMMAND start <ticket-name>\` - Start working on ticket (creates or switches to feature branch)
+- \`$SCRIPT_COMMAND start [--worktree] <ticket-name>\` - Start working on ticket (creates or switches to feature branch, --worktree creates a separate worktree)
 - \`$SCRIPT_COMMAND restore\` - Restore current-ticket.md symlink from branch name
 - \`$SCRIPT_COMMAND check\` - Check current directory and ticket/branch synchronization status
 - \`$SCRIPT_COMMAND close [--no-push] [--force|-f] [--no-delete-remote]\` - Complete current ticket (squash merge to default branch)
@@ -319,6 +321,11 @@ auto_push: $DEFAULT_AUTO_PUSH
 # Automatically delete remote feature branch after closing ticket
 # Set to false if you want to keep remote branches for history
 delete_remote_on_close: $DEFAULT_DELETE_REMOTE_ON_CLOSE
+
+# Worktree mode: create a separate git worktree for each ticket
+# When true, 'start' always creates a worktree (same as --worktree flag)
+# worktree_mode: false
+# worktree_dir: ""  # Custom worktree directory (default: ../<project>.worktrees/)
 
 # Success messages (leave empty to disable)
 # Message displayed after creating a new ticket
@@ -838,6 +845,17 @@ EOF
         [[ "$status" != "todo" ]] && echo "  started_at: $started_at_local"
         [[ "$status" == "done" ]] && [[ "$closed_at" != "null" ]] && echo "  closed_at: $closed_at_local"
         [[ "$status" == "canceled" ]] && [[ "$canceled_at" != "null" ]] && echo "  canceled_at: $canceled_at_local"
+
+        # Show worktree info for doing tickets
+        if [[ "$status" == "doing" ]]; then
+            local _ticket_basename=$(basename "$ticket_path" .md)
+            local _branch_prefix=$(yaml_get "branch_prefix" || echo "$DEFAULT_BRANCH_PREFIX")
+            local _branch="${_branch_prefix}${_ticket_basename}"
+            local _wt_path=$(git worktree list --porcelain 2>/dev/null | awk -v branch="branch refs/heads/$_branch" '/^worktree /{wt=$0} $0==branch{print wt}' | sed 's/^worktree //')
+            if [[ -n "$_wt_path" ]]; then
+                echo "  worktree: $_wt_path"
+            fi
+        fi
         echo
         
         ((displayed++))
@@ -858,12 +876,39 @@ EOF
 
 # Start working on a ticket
 cmd_start() {
-    local ticket_input="$1"
-    
+    local use_worktree=false
+    local ticket_input=""
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --worktree)
+                use_worktree=true
+                shift
+                ;;
+            -*)
+                # Ignore unknown flags for backward compatibility
+                shift
+                ;;
+            *)
+                if [[ -z "$ticket_input" ]]; then
+                    ticket_input="$1"
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    if [[ -z "$ticket_input" ]]; then
+        echo "Error: ticket name required" >&2
+        echo "Usage: $SCRIPT_COMMAND start [--worktree] <ticket-name>" >&2
+        return 1
+    fi
+
     # Check prerequisites
     check_git_repo || return 1
     check_config || return 1
-    
+
     # Load configuration
     if ! yaml_parse "$CONFIG_FILE"; then
         echo "Error: Cannot parse configuration file: $CONFIG_FILE" >&2
@@ -876,6 +921,13 @@ cmd_start() {
     local repository=$(yaml_get "repository" || echo "$DEFAULT_REPOSITORY")
     local auto_push=$(yaml_get "auto_push" || echo "$DEFAULT_AUTO_PUSH")
     local start_success_message=$(yaml_get "start_success_message" || echo "$DEFAULT_START_SUCCESS_MESSAGE")
+
+    # Check if worktree mode is enabled by config
+    local worktree_mode=$(yaml_get "worktree_mode" || echo "$DEFAULT_WORKTREE_MODE")
+    if [[ "$worktree_mode" == "true" ]]; then
+        use_worktree=true
+    fi
+    local worktree_dir=$(yaml_get "worktree_dir" || echo "$DEFAULT_WORKTREE_DIR")
 
     # Get ticket file path early to determine base_branch before switching branches
     local ticket_name=$(extract_ticket_name "$ticket_input")
@@ -970,16 +1022,47 @@ EOF
     
     # Create branch name
     local branch_name="${branch_prefix}${ticket_name}"
-    
+
+    # Determine worktree path if using worktree mode
+    local wt_path=""
+    if [[ "$use_worktree" == "true" ]]; then
+        local project_root=$(git rev-parse --show-toplevel)
+        local project_name=$(basename "$project_root")
+        if [[ -n "$worktree_dir" ]]; then
+            wt_path="${worktree_dir}/${ticket_name}"
+        else
+            wt_path="${project_root}/../${project_name}.worktrees/${ticket_name}"
+        fi
+        # Normalize path
+        wt_path=$(cd "$(dirname "$wt_path")" 2>/dev/null && echo "$(pwd)/$(basename "$wt_path")" || echo "$wt_path")
+    fi
+
     # Check if branch already exists
     local branch_exists_check
     if branch_exists_check=$(git show-ref --verify "refs/heads/$branch_name" 2>&1); then
-        # Branch exists - checkout and restore
+        # Branch exists - resume work
         echo "Branch '$branch_name' already exists. Resuming work on existing ticket..."
-        
-        # Checkout existing branch
-        run_git_command "git checkout $branch_name" || return 1
-        
+
+        if [[ "$use_worktree" == "true" ]]; then
+            # Check if worktree already exists for this branch
+            local existing_wt=$(git worktree list --porcelain | awk -v branch="branch refs/heads/$branch_name" '/^worktree /{wt=$0} $0==branch{print wt}' | sed 's/^worktree //')
+            if [[ -n "$existing_wt" ]]; then
+                echo "Worktree already exists at: $existing_wt"
+                wt_path="$existing_wt"
+            else
+                # Create worktree for existing branch
+                if [[ -d "$wt_path" ]]; then
+                    echo "Error: Directory '$wt_path' already exists but is not a worktree for this branch" >&2
+                    return 1
+                fi
+                mkdir -p "$(dirname "$wt_path")"
+                run_git_command "git worktree add $wt_path $branch_name" || return 1
+            fi
+        else
+            # Checkout existing branch (original behavior)
+            run_git_command "git checkout $branch_name" || return 1
+        fi
+
         # Check if there are differences between this feature branch and the effective base branch
         local ahead_count behind_count
         if ! ahead_count=$(git rev-list --count "$effective_base..$branch_name" 2>&1); then
@@ -1006,33 +1089,43 @@ EOF
         if [[ "$ahead_count" -gt 0 ]]; then
             echo "Feature branch '$branch_name' is $ahead_count commit(s) ahead of '$effective_base'."
         fi
-        
+
+        # Determine target directory for symlinks
+        local link_dir="."
+        if [[ "$use_worktree" == "true" ]]; then
+            link_dir="$wt_path"
+        fi
+
         # Create symlink (restore functionality)
-        rm -f "$CURRENT_TICKET_LINK"
-        if ! ln -s "$ticket_file" "$CURRENT_TICKET_LINK"; then
+        rm -f "${link_dir}/$CURRENT_TICKET_LINK"
+        if ! ln -s "$ticket_file" "${link_dir}/$CURRENT_TICKET_LINK"; then
             echo "Error: Cannot create symlink $CURRENT_TICKET_LINK" >&2
             echo "Permission denied or filesystem issue" >&2
             return 1
         fi
-        
+
         # Create note symlink if note file exists
         local note_file="${tickets_dir}/${ticket_name}-note.md"
-        if [[ -f "$note_file" ]]; then
-            rm -f "$CURRENT_NOTE_LINK"
-            if ! ln -s "$note_file" "$CURRENT_NOTE_LINK"; then
+        if [[ -f "${link_dir}/${note_file}" ]]; then
+            rm -f "${link_dir}/$CURRENT_NOTE_LINK"
+            if ! ln -s "$note_file" "${link_dir}/$CURRENT_NOTE_LINK"; then
                 echo "Warning: Cannot create note symlink $CURRENT_NOTE_LINK" >&2
-                # Continue execution - note link is not critical
             fi
             echo "Resumed ticket: $ticket_name"
             echo "Current ticket linked: $CURRENT_TICKET_LINK -> $ticket_file"
             echo "Current note linked: $CURRENT_NOTE_LINK -> $note_file"
         else
-            rm -f "$CURRENT_NOTE_LINK"  # Clean up any old note link
+            rm -f "${link_dir}/$CURRENT_NOTE_LINK"
             echo "Resumed ticket: $ticket_name"
             echo "Current ticket linked: $CURRENT_TICKET_LINK -> $ticket_file"
         fi
         echo "Continuing work on existing feature branch."
-        
+
+        if [[ "$use_worktree" == "true" ]]; then
+            echo "Worktree: $wt_path"
+            echo "WORKTREE:${wt_path}"
+        fi
+
         # Display success message if configured
         if [[ -n "$start_success_message" ]]; then
             echo ""
@@ -1040,7 +1133,7 @@ EOF
         fi
         return 0
     fi
-    
+
     # Branch doesn't exist - check if ticket is already started
     local yaml_content=$(extract_yaml_frontmatter "$ticket_file")
     echo "$yaml_content" >| /tmp/ticket_yaml.yml
@@ -1062,53 +1155,95 @@ EOF
     # Use effective_base (already determined above from ticket's base_branch)
     local start_from="$effective_base"
 
-    # Create and checkout new branch from base branch
-    local prev_branch=$(get_current_branch)
-    run_git_command "git checkout -b $branch_name $start_from" || return 1
+    if [[ "$use_worktree" == "true" ]]; then
+        # Create worktree with new branch
+        mkdir -p "$(dirname "$wt_path")"
+        run_git_command "git worktree add -b $branch_name $wt_path $start_from" || return 1
 
-    # If base_branch differs from where ticket was created, bring ticket files over
-    if [[ "$start_from" != "$prev_branch" ]]; then
-        run_git_command "git checkout $prev_branch -- $ticket_file" || {
-            echo "Error: Failed to retrieve ticket file from $prev_branch" >&2
-            return 1
-        }
-        # Also bring note file if it exists
-        local note_file="${tickets_dir}/${ticket_name}-note.md"
-        git checkout "$prev_branch" -- "$note_file" 2>/dev/null || true
-        # Ensure tickets directory structure
-        run_git_command "git checkout $prev_branch -- ${tickets_dir}/README.md" 2>/dev/null || true
-    fi
-
-    # Update ticket started_at (after branch creation to avoid uncommitted changes blocking checkout)
-    local timestamp=$(get_utc_timestamp)
-    update_yaml_frontmatter_field "$ticket_file" "started_at" "$timestamp"
-    
-    # Create symlink
-    rm -f "$CURRENT_TICKET_LINK"
-    if ! ln -s "$ticket_file" "$CURRENT_TICKET_LINK"; then
-        echo "Error: Cannot create symlink $CURRENT_TICKET_LINK" >&2
-        echo "Permission denied or filesystem issue" >&2
-        return 1
-    fi
-    
-    # Create note symlink if note file exists
-    local note_file="${tickets_dir}/${ticket_name}-note.md"
-    if [[ -f "$note_file" ]]; then
-        rm -f "$CURRENT_NOTE_LINK"
-        if ! ln -s "$note_file" "$CURRENT_NOTE_LINK"; then
-            echo "Warning: Cannot create note symlink $CURRENT_NOTE_LINK" >&2
-            # Continue execution - note link is not critical
+        # If base_branch differs from where ticket was created, bring ticket files over
+        local prev_branch=$(get_current_branch)
+        if [[ "$start_from" != "$prev_branch" ]]; then
+            # In worktree context, use git show to copy files
+            git -C "$wt_path" checkout "$prev_branch" -- "$ticket_file" 2>/dev/null || true
+            local note_file="${tickets_dir}/${ticket_name}-note.md"
+            git -C "$wt_path" checkout "$prev_branch" -- "$note_file" 2>/dev/null || true
+            git -C "$wt_path" checkout "$prev_branch" -- "${tickets_dir}/README.md" 2>/dev/null || true
         fi
-        echo "Started ticket: $ticket_name"
-        echo "Current ticket linked: $CURRENT_TICKET_LINK -> $ticket_file"
-        echo "Current note linked: $CURRENT_NOTE_LINK -> $note_file"
+
+        # Update ticket started_at in worktree
+        local timestamp=$(get_utc_timestamp)
+        update_yaml_frontmatter_field "${wt_path}/${ticket_file}" "started_at" "$timestamp"
+
+        # Create symlinks in worktree directory
+        rm -f "${wt_path}/$CURRENT_TICKET_LINK"
+        if ! ln -s "$ticket_file" "${wt_path}/$CURRENT_TICKET_LINK"; then
+            echo "Error: Cannot create symlink $CURRENT_TICKET_LINK" >&2
+            return 1
+        fi
+
+        local note_file="${tickets_dir}/${ticket_name}-note.md"
+        if [[ -f "${wt_path}/${note_file}" ]]; then
+            rm -f "${wt_path}/$CURRENT_NOTE_LINK"
+            if ! ln -s "$note_file" "${wt_path}/$CURRENT_NOTE_LINK"; then
+                echo "Warning: Cannot create note symlink $CURRENT_NOTE_LINK" >&2
+            fi
+            echo "Started ticket: $ticket_name"
+            echo "Current ticket linked: $CURRENT_TICKET_LINK -> $ticket_file"
+            echo "Current note linked: $CURRENT_NOTE_LINK -> $note_file"
+        else
+            rm -f "${wt_path}/$CURRENT_NOTE_LINK"
+            echo "Started ticket: $ticket_name"
+            echo "Current ticket linked: $CURRENT_TICKET_LINK -> $ticket_file"
+        fi
+        echo "Worktree created: $wt_path"
+        echo "WORKTREE:${wt_path}"
+        echo "Note: Branch created locally. Use 'git push -u $repository $branch_name' when ready to share."
     else
-        rm -f "$CURRENT_NOTE_LINK"  # Clean up any old note link
-        echo "Started ticket: $ticket_name"
-        echo "Current ticket linked: $CURRENT_TICKET_LINK -> $ticket_file"
+        # Create and checkout new branch from base branch (original behavior)
+        local prev_branch=$(get_current_branch)
+        run_git_command "git checkout -b $branch_name $start_from" || return 1
+
+        # If base_branch differs from where ticket was created, bring ticket files over
+        if [[ "$start_from" != "$prev_branch" ]]; then
+            run_git_command "git checkout $prev_branch -- $ticket_file" || {
+                echo "Error: Failed to retrieve ticket file from $prev_branch" >&2
+                return 1
+            }
+            local note_file="${tickets_dir}/${ticket_name}-note.md"
+            git checkout "$prev_branch" -- "$note_file" 2>/dev/null || true
+            run_git_command "git checkout $prev_branch -- ${tickets_dir}/README.md" 2>/dev/null || true
+        fi
+
+        # Update ticket started_at
+        local timestamp=$(get_utc_timestamp)
+        update_yaml_frontmatter_field "$ticket_file" "started_at" "$timestamp"
+
+        # Create symlink
+        rm -f "$CURRENT_TICKET_LINK"
+        if ! ln -s "$ticket_file" "$CURRENT_TICKET_LINK"; then
+            echo "Error: Cannot create symlink $CURRENT_TICKET_LINK" >&2
+            echo "Permission denied or filesystem issue" >&2
+            return 1
+        fi
+
+        # Create note symlink if note file exists
+        local note_file="${tickets_dir}/${ticket_name}-note.md"
+        if [[ -f "$note_file" ]]; then
+            rm -f "$CURRENT_NOTE_LINK"
+            if ! ln -s "$note_file" "$CURRENT_NOTE_LINK"; then
+                echo "Warning: Cannot create note symlink $CURRENT_NOTE_LINK" >&2
+            fi
+            echo "Started ticket: $ticket_name"
+            echo "Current ticket linked: $CURRENT_TICKET_LINK -> $ticket_file"
+            echo "Current note linked: $CURRENT_NOTE_LINK -> $note_file"
+        else
+            rm -f "$CURRENT_NOTE_LINK"
+            echo "Started ticket: $ticket_name"
+            echo "Current ticket linked: $CURRENT_TICKET_LINK -> $ticket_file"
+        fi
+        echo "Note: Branch created locally. Use 'git push -u $repository $branch_name' when ready to share."
     fi
-    echo "Note: Branch created locally. Use 'git push -u $repository $branch_name' when ready to share."
-    
+
     # Display success message if configured
     if [[ -n "$start_success_message" ]]; then
         echo ""
@@ -1566,28 +1701,56 @@ EOF
     local ticket_name=$(basename "$ticket_file" .md)
     local ticket_content=$(cat "$ticket_file")
     
+    # Detect if we're in a worktree
+    local in_worktree=false
+    local worktree_path=""
+    local main_repo=""
+    if is_git_worktree; then
+        in_worktree=true
+        worktree_path=$(pwd)
+        main_repo=$(get_main_repo_from_worktree)
+    fi
+
     # Push feature branch if auto_push
     if [[ "$auto_push" == "true" ]] && [[ "$no_push" == "false" ]]; then
         run_git_command "git push $repository $current_branch" || {
             echo "Warning: Failed to push feature branch" >&2
         }
     fi
-    
-    # Switch to default branch
-    run_git_command "git checkout $default_branch" || {
-        echo "Error: Failed to switch to default branch '$default_branch'" >&2
-        echo "Your changes have been committed on feature branch '$current_branch'" >&2
-        echo "Please manually switch to '$default_branch' and run close again" >&2
-        return 1
-    }
-    
+
+    if [[ "$in_worktree" == "true" ]]; then
+        # Worktree mode: perform merge from main repo
+        echo "Closing ticket from worktree..."
+
+        # Switch to main repo to perform merge
+        cd "$main_repo" || {
+            echo "Error: Failed to switch to main repository '$main_repo'" >&2
+            return 1
+        }
+
+        # Checkout default branch in main repo
+        run_git_command "git checkout $default_branch" || {
+            echo "Error: Failed to switch to default branch '$default_branch'" >&2
+            echo "Your changes have been committed on feature branch '$current_branch'" >&2
+            return 1
+        }
+    else
+        # Switch to default branch (original behavior)
+        run_git_command "git checkout $default_branch" || {
+            echo "Error: Failed to switch to default branch '$default_branch'" >&2
+            echo "Your changes have been committed on feature branch '$current_branch'" >&2
+            echo "Please manually switch to '$default_branch' and run close again" >&2
+            return 1
+        }
+    fi
+
     # Create commit message
     local commit_msg="[${ticket_name}] ${description}"
     if [[ -z "$description" ]]; then
         commit_msg="[${ticket_name}] Ticket completed"
     fi
     commit_msg="${commit_msg}\n\n${ticket_content}"
-    
+
     # Squash merge
     run_git_command "git merge --squash $current_branch" || {
         echo "Error: Failed to squash merge feature branch" >&2
@@ -1596,11 +1759,11 @@ EOF
         echo "Please resolve merge conflicts manually or run 'git merge --abort'" >&2
         return 1
     }
-    
+
     # Move ticket to done folder before committing
     local tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
     local done_dir="${tickets_dir}/done"
-    
+
     # Create done directory if it doesn't exist
     if [[ ! -d "$done_dir" ]]; then
         if ! mkdir -p "$done_dir"; then
@@ -1609,7 +1772,7 @@ EOF
             return 1
         fi
     fi
-    
+
     # Move the ticket file to done folder
     if [[ -d "$done_dir" ]]; then
         local new_ticket_path="${done_dir}/$(basename "$ticket_file")"
@@ -1618,7 +1781,7 @@ EOF
             echo "Check if done directory exists and has proper permissions" >&2
             return 1
         }
-        
+
         # Move note file if it exists
         local note_file="${tickets_dir}/${ticket_name}-note.md"
         if [[ -f "$note_file" ]]; then
@@ -1630,7 +1793,7 @@ EOF
             }
         fi
     fi
-    
+
     # Commit with ticket content and done folder move together
     echo -e "$commit_msg" | run_git_command "git commit -F -" || {
         echo "Error: Failed to commit final merge" >&2
@@ -1639,7 +1802,7 @@ EOF
         echo "Or abort with: git reset --hard HEAD" >&2
         return 1
     }
-    
+
     # Push to remote if auto_push
     if [[ "$auto_push" == "true" ]] && [[ "$no_push" == "false" ]]; then
         run_git_command "git push $repository $default_branch" || {
@@ -1649,7 +1812,7 @@ EOF
             echo "" >&2
         }
     fi
-    
+
     # Delete remote branch if configured
     if [[ "$delete_remote_on_close" == "true" ]] && [[ "$no_delete_remote" == "false" ]]; then
         if [[ "$auto_push" == "true" ]] || [[ "$no_push" == "false" ]]; then
@@ -1663,21 +1826,30 @@ EOF
             fi
         fi
     fi
-    
+
     # At this point, all critical operations have succeeded
     # Now proceed with cleanup operations
-    
+
+    # Remove worktree if we were in one
+    if [[ "$in_worktree" == "true" ]]; then
+        run_git_command "git worktree remove $worktree_path" || {
+            echo "Warning: Failed to remove worktree at '$worktree_path'" >&2
+            echo "You can manually remove it with: git worktree remove $worktree_path" >&2
+        }
+        echo "Worktree removed: $worktree_path"
+    fi
+
     # Remove current ticket and note links - core workflow is complete, safe to remove
     rm -f "$CURRENT_TICKET_LINK"
     rm -f "$CURRENT_NOTE_LINK"
-    
+
     echo "Ticket completed: $ticket_name"
     echo "Merged to $default_branch branch"
-    
+
     if [[ "$auto_push" == "false" ]] || [[ "$no_push" == "true" ]]; then
         echo "Note: Changes not pushed to remote. Use 'git push $repository $default_branch' and 'git push $repository $current_branch' when ready."
     fi
-    
+
     # Display success message if configured
     if [[ -n "$close_success_message" ]]; then
         echo ""
@@ -1856,12 +2028,35 @@ EOF
     # Get ticket name BEFORE switching branches
     local ticket_name=$(basename "$ticket_file" .md)
 
-    # Switch to default branch (no merge)
-    run_git_command "git checkout $default_branch" || {
-        echo "Error: Failed to switch to default branch '$default_branch'" >&2
-        echo "Your changes have been committed on feature branch '$current_branch'" >&2
-        return 1
-    }
+    # Detect if we're in a worktree
+    local in_worktree=false
+    local worktree_path=""
+    local main_repo=""
+    if is_git_worktree; then
+        in_worktree=true
+        worktree_path=$(pwd)
+        main_repo=$(get_main_repo_from_worktree)
+    fi
+
+    if [[ "$in_worktree" == "true" ]]; then
+        # Worktree mode: switch to main repo
+        echo "Canceling ticket from worktree..."
+        cd "$main_repo" || {
+            echo "Error: Failed to switch to main repository '$main_repo'" >&2
+            return 1
+        }
+        run_git_command "git checkout $default_branch" || {
+            echo "Error: Failed to switch to default branch '$default_branch'" >&2
+            return 1
+        }
+    else
+        # Switch to default branch (no merge)
+        run_git_command "git checkout $default_branch" || {
+            echo "Error: Failed to switch to default branch '$default_branch'" >&2
+            echo "Your changes have been committed on feature branch '$current_branch'" >&2
+            return 1
+        }
+    fi
 
     # Move ticket to done folder with CANCELED prefix in filename
     local tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
@@ -1920,6 +2115,15 @@ EOF
         echo "Error: Failed to commit canceled ticket" >&2
         return 1
     }
+
+    # Remove worktree if we were in one
+    if [[ "$in_worktree" == "true" ]]; then
+        run_git_command "git worktree remove $worktree_path" || {
+            echo "Warning: Failed to remove worktree at '$worktree_path'" >&2
+            echo "You can manually remove it with: git worktree remove $worktree_path" >&2
+        }
+        echo "Worktree removed: $worktree_path"
+    fi
 
     # Remove current ticket and note links
     rm -f "$CURRENT_TICKET_LINK"
@@ -2071,12 +2275,8 @@ main() {
             cmd_list "$@"
             ;;
         start)
-            if [[ -z "${2:-}" ]]; then
-                echo "Error: ticket name required" >&2
-                echo "Usage: $SCRIPT_COMMAND start <ticket-name>" >&2
-                exit 1
-            fi
-            cmd_start "$2"
+            shift
+            cmd_start "$@"
             ;;
         restore)
             cmd_restore
