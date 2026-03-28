@@ -3,8 +3,8 @@ priority: 2
 base_branch: default  # Override base branch for start/close (default: use default_branch from config)
 description: "Guard against checkout of branches already used by worktrees"
 created_at: "2026-03-28T00:53:18Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2026-03-28T00:53:45Z # Do not modify manually
+closed_at: 2026-03-28T01:05:19Z # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
 
@@ -24,9 +24,9 @@ When `ticket.sh start` is run and the target branch is already checked out in an
 
 ## Tasks
 
-- [ ] Add worktree-in-use detection before checkout in cmd_start (both new branch and existing branch paths)
-- [ ] Add tests for the guard
-- [ ] Run all tests
+- [x] Add worktree-in-use detection before checkout in cmd_start (both new branch and existing branch paths)
+- [x] Add tests for the guard (test 10 in test-worktree.sh - 2 assertions)
+- [x] Run all tests (137/137 local, 129/129 Docker)
 - [ ] Run tests before closing and pass all tests (No exceptions)
 - [ ] Run `bash build.sh` to build the project
 - [ ] Update documentation if necessary

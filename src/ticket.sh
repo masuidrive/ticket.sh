@@ -1037,6 +1037,36 @@ EOF
         wt_path=$(cd "$(dirname "$wt_path")" 2>/dev/null && echo "$(pwd)/$(basename "$wt_path")" || echo "$wt_path")
     fi
 
+    # Check if branch is already checked out in another worktree
+    # This prevents worktree metadata corruption, especially in Docker/devcontainer environments
+    local worktree_using_branch=$(git worktree list --porcelain 2>/dev/null | awk -v branch="branch refs/heads/$branch_name" '/^worktree /{wt=$0} $0==branch{print wt}' | sed 's/^worktree //')
+    if [[ -n "$worktree_using_branch" ]]; then
+        local current_toplevel=$(git rev-parse --show-toplevel 2>/dev/null)
+        # It's OK if the current directory IS the worktree that has this branch
+        if [[ "$worktree_using_branch" != "$current_toplevel" ]]; then
+            if [[ "$use_worktree" == "true" ]]; then
+                # Worktree mode: reuse the existing worktree
+                echo "Branch '$branch_name' is already checked out in worktree: $worktree_using_branch"
+                wt_path="$worktree_using_branch"
+            else
+                cat >&2 << EOF
+Error: Branch already checked out in worktree
+Branch '$branch_name' is already checked out in another worktree at:
+  $worktree_using_branch
+
+You cannot checkout this branch here. Please either:
+1. Work in the existing worktree: cd $worktree_using_branch
+2. Use worktree mode: $SCRIPT_COMMAND start --worktree $ticket_input
+3. Remove the worktree first: git worktree remove $worktree_using_branch
+
+WARNING: Do NOT run 'git worktree prune' - it may destroy worktree metadata
+and break all active worktrees.
+EOF
+                return 1
+            fi
+        fi
+    fi
+
     # Check if branch already exists
     local branch_exists_check
     if branch_exists_check=$(git show-ref --verify "refs/heads/$branch_name" 2>&1); then
@@ -1044,8 +1074,8 @@ EOF
         echo "Branch '$branch_name' already exists. Resuming work on existing ticket..."
 
         if [[ "$use_worktree" == "true" ]]; then
-            # Check if worktree already exists for this branch
-            local existing_wt=$(git worktree list --porcelain | awk -v branch="branch refs/heads/$branch_name" '/^worktree /{wt=$0} $0==branch{print wt}' | sed 's/^worktree //')
+            # Check if worktree already exists for this branch (may already be set above)
+            local existing_wt=$(git worktree list --porcelain 2>/dev/null | awk -v branch="branch refs/heads/$branch_name" '/^worktree /{wt=$0} $0==branch{print wt}' | sed 's/^worktree //')
             if [[ -n "$existing_wt" ]]; then
                 echo "Worktree already exists at: $existing_wt"
                 wt_path="$existing_wt"

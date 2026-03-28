@@ -233,6 +233,39 @@ sed -i.bak '/worktree_mode/d' .ticket-config.yaml
 rm -f .ticket-config.yaml.bak
 
 echo
+echo "10. Testing checkout guard when branch is in another worktree..."
+timeout 5 ./ticket.sh new test-wt-guard >/dev/null 2>&1
+TICKET5=$(ls tickets/*.md 2>/dev/null | grep -v note | grep guard | head -1)
+TICKET5_NAME=$(basename "$TICKET5" .md)
+git add . && git commit -q -m "Add guard ticket"
+
+# Start with worktree first
+OUTPUT=$(timeout 10 ./ticket.sh start --worktree "$TICKET5_NAME" 2>&1)
+WT_PATH5=$(echo "$OUTPUT" | grep "^WORKTREE:" | head -1 | cut -d: -f2-)
+
+# Now try to start the same ticket WITHOUT worktree (should fail with guard error)
+OUTPUT2=$(timeout 10 ./ticket.sh start "$TICKET5_NAME" 2>&1) && GUARD_EXIT=0 || GUARD_EXIT=$?
+if echo "$OUTPUT2" | grep -q "already checked out in.*worktree"; then
+    pass "Guard prevents checkout of branch used by worktree"
+else
+    fail "Guard did not prevent checkout of worktree branch"
+    echo "  Exit: $GUARD_EXIT"
+    echo "  Output: $OUTPUT2"
+fi
+
+# Try with --worktree flag - should succeed and reuse existing worktree
+OUTPUT3=$(timeout 10 ./ticket.sh start --worktree "$TICKET5_NAME" 2>&1)
+if echo "$OUTPUT3" | grep -q "already checked out in worktree"; then
+    pass "Worktree mode reuses existing worktree for branch in use"
+else
+    fail "Worktree mode did not handle branch in existing worktree"
+    echo "  Output: $OUTPUT3"
+fi
+
+# Cleanup
+git worktree remove "$WT_PATH5" --force 2>/dev/null || true
+
+echo
 echo "=== Worktree Test Results ==="
 echo "  Passed: $PASSED, Failed: $FAILED"
 echo
