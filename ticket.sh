@@ -12,7 +12,7 @@ fi
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20260328.010441
+# Version: 20260330.071629
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -1044,7 +1044,7 @@ if [ -z "${BASH_VERSION:-}" ]; then
 fi
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20260328.010441
+# Version: 20260330.071629
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -1136,7 +1136,7 @@ SCRIPT_COMMAND=$(get_script_command)
 
 
 # Global variables
-VERSION="20260328.010441"  # This will be replaced during build
+VERSION="20260330.071629"  # This will be replaced during build
 CONFIG_FILE=""  # Will be set dynamically by get_config_file()
 CURRENT_TICKET_LINK="current-ticket.md"
 CURRENT_NOTE_LINK="current-note.md"
@@ -2887,6 +2887,10 @@ EOF
             echo "You can manually remove it with: git worktree remove $worktree_path" >&2
         }
         echo "Worktree removed: $worktree_path"
+        echo ""
+        echo "Your shell is still in the removed worktree directory."
+        echo "Run the following command to return to the main repository:"
+        echo "  cd $main_repo"
     fi
 
     # Remove current ticket and note links - core workflow is complete, safe to remove
@@ -3173,6 +3177,10 @@ EOF
             echo "You can manually remove it with: git worktree remove $worktree_path" >&2
         }
         echo "Worktree removed: $worktree_path"
+        echo ""
+        echo "Your shell is still in the removed worktree directory."
+        echo "Run the following command to return to the main repository:"
+        echo "  cd $main_repo"
     fi
 
     # Remove current ticket and note links

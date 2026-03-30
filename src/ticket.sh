@@ -1867,6 +1867,10 @@ EOF
             echo "You can manually remove it with: git worktree remove $worktree_path" >&2
         }
         echo "Worktree removed: $worktree_path"
+        echo ""
+        echo "Your shell is still in the removed worktree directory."
+        echo "Run the following command to return to the main repository:"
+        echo "  cd $main_repo"
     fi
 
     # Remove current ticket and note links - core workflow is complete, safe to remove
@@ -2153,6 +2157,10 @@ EOF
             echo "You can manually remove it with: git worktree remove $worktree_path" >&2
         }
         echo "Worktree removed: $worktree_path"
+        echo ""
+        echo "Your shell is still in the removed worktree directory."
+        echo "Run the following command to return to the main repository:"
+        echo "  cd $main_repo"
     fi
 
     # Remove current ticket and note links

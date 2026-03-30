@@ -3,8 +3,8 @@ priority: 2
 base_branch: default  # Override base branch for start/close (default: use default_branch from config)
 description: "Show cd hint to main repo after close/cancel from worktree"
 created_at: "2026-03-30T07:13:14Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2026-03-30T07:13:47Z # Do not modify manually
+closed_at: 2026-03-30T07:16:51Z # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
 

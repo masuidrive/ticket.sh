@@ -152,6 +152,14 @@ else
     fail "Ticket not in done folder"
 fi
 
+# Check cd hint was shown
+if echo "$OUTPUT" | grep -q "cd "; then
+    pass "Close shows cd hint to main repo"
+else
+    fail "Close does not show cd hint"
+    echo "  Output: $OUTPUT"
+fi
+
 echo
 echo "7. Testing start --worktree and cancel..."
 timeout 5 ./ticket.sh new test-wt-cancel >/dev/null 2>&1
@@ -175,6 +183,14 @@ if [[ ! -d "$WT_PATH2" ]] || ! git worktree list 2>/dev/null | grep -q "$WT_PATH
     pass "Worktree removed after cancel"
 else
     fail "Worktree still exists after cancel"
+fi
+
+# Check cd hint was shown for cancel
+if echo "$OUTPUT" | grep -q "cd "; then
+    pass "Cancel shows cd hint to main repo"
+else
+    fail "Cancel does not show cd hint"
+    echo "  Output: $OUTPUT"
 fi
 
 # Check canceled ticket in done folder
