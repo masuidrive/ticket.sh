@@ -12,7 +12,7 @@ fi
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20260330.071629
+# Version: 20260408.154422
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -877,9 +877,38 @@ get_current_branch() {
 }
 
 # Check if git working directory is clean
+# Usage: check_clean_working_dir [tickets_dir]
 check_clean_working_dir() {
-    if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
-        cat >&2 << EOF
+    local tickets_dir="${1:-tickets}"
+    local porcelain_output
+    porcelain_output="$(git status --porcelain 2>/dev/null)"
+
+    if [[ -n "$porcelain_output" ]]; then
+        # Check if all uncommitted files are under tickets_dir/
+        local has_non_ticket_files=false
+        while IFS= read -r line; do
+            # git status --porcelain format: XY filename (or XY orig -> renamed)
+            local file_path="${line:3}"
+            # Handle renames: "R  old -> new"
+            if [[ "$file_path" == *" -> "* ]]; then
+                file_path="${file_path##* -> }"
+            fi
+            if [[ "$file_path" != "${tickets_dir}/"* ]]; then
+                has_non_ticket_files=true
+                break
+            fi
+        done <<< "$porcelain_output"
+
+        if [[ "$has_non_ticket_files" == "false" ]]; then
+            cat >&2 << EOF
+Error: Uncommitted changes (ticket files only)
+Only ticket files under '${tickets_dir}/' are uncommitted.
+Please commit them and retry:
+  git add ${tickets_dir}/ && git commit -m "Add ticket files"
+Then re-run the ticket command.
+EOF
+        else
+            cat >&2 << EOF
 Error: Uncommitted changes
 Working directory has uncommitted changes. Please:
 1. Commit your changes: git add . && git commit -m "message"
@@ -891,6 +920,7 @@ Remember to update current-ticket.md with your progress before committing.
 IMPORTANT: Never use 'git restore' or 'rm' to discard file changes without
 explicit user permission. User's work must be preserved.
 EOF
+        fi
         return 1
     fi
     return 0
@@ -1044,7 +1074,7 @@ if [ -z "${BASH_VERSION:-}" ]; then
 fi
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20260330.071629
+# Version: 20260408.154422
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -1136,7 +1166,7 @@ SCRIPT_COMMAND=$(get_script_command)
 
 
 # Global variables
-VERSION="20260330.071629"  # This will be replaced during build
+VERSION="20260408.154422"  # This will be replaced during build
 CONFIG_FILE=""  # Will be set dynamically by get_config_file()
 CURRENT_TICKET_LINK="current-ticket.md"
 CURRENT_NOTE_LINK="current-note.md"
@@ -2025,7 +2055,7 @@ EOF
         fi
     else
         # We're on the effective base branch - check for clean working directory
-        check_clean_working_dir || return 1
+        check_clean_working_dir "$tickets_dir" || return 1
     fi
 
     # Check if ticket exists (after potential branch switch)
@@ -2578,27 +2608,24 @@ cmd_close() {
     # Check prerequisites
     check_git_repo || return 1
     check_config || return 1
-    
+
     # Check clean working directory unless --force is used
     if [[ "$force" == "false" ]]; then
-        if ! check_clean_working_dir; then
+        # Parse config to get tickets_dir for smarter error messages
+        local _close_tickets_dir="$DEFAULT_TICKETS_DIR"
+        if yaml_parse "$CONFIG_FILE" 2>/dev/null; then
+            _close_tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
+        fi
+        if ! check_clean_working_dir "$_close_tickets_dir"; then
             cat >&2 << EOF
 
 To ignore uncommitted changes and force close, use:
   $SCRIPT_COMMAND close --force (or -f)
-
-Or handle the changes:
-  1. Commit your changes: git add . && git commit -m "message"
-  2. Stash changes: git stash
-
-Remember to update current-ticket.md with your progress before committing.
-
-IMPORTANT: Never discard changes without explicit user permission.
 EOF
             return 1
         fi
     fi
-    
+
     # Check current ticket link
     if [[ ! -L "$CURRENT_TICKET_LINK" ]]; then
         cat >&2 << EOF
@@ -2937,17 +2964,16 @@ cmd_cancel() {
 
     # Check clean working directory unless --force is used
     if [[ "$force" == "false" ]]; then
-        if ! check_clean_working_dir; then
+        # Parse config to get tickets_dir for smarter error messages
+        local _cancel_tickets_dir="$DEFAULT_TICKETS_DIR"
+        if yaml_parse "$CONFIG_FILE" 2>/dev/null; then
+            _cancel_tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
+        fi
+        if ! check_clean_working_dir "$_cancel_tickets_dir"; then
             cat >&2 << EOF
 
 To ignore uncommitted changes and force cancel, use:
   $SCRIPT_COMMAND cancel --force (or -f)
-
-Or handle the changes:
-  1. Commit your changes: git add . && git commit -m "message"
-  2. Stash changes: git stash
-
-IMPORTANT: Never discard changes without explicit user permission.
 EOF
             return 1
         fi

@@ -3,8 +3,8 @@ priority: 2
 base_branch: default  # Override base branch for start/close (default: use default_branch from config)
 description: "check_clean_working_dir() のエラーメッセージを改善し、未コミットファイルがtickets/のみの場合とそれ以外の場合で異なるガイダンスを表示する"
 created_at: "2026-04-08T15:30:50Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2026-04-08T15:32:41Z # Do not modify manually
+closed_at: 2026-04-08T15:53:08Z # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
 
@@ -27,12 +27,12 @@ Please record any notes related to this ticket, such as debugging information, r
 
 ## Tasks
 
-- [ ] `lib/utils.sh` の `check_clean_working_dir()` を修正: git status --porcelain の結果を解析し、tickets/ 配下のみかどうかで分岐
-- [ ] tickets/ のみの場合: コミットして再実行を促すメッセージを表示
-- [ ] それ以外の場合: 従来のメッセージに加え、ユーザに確認を促す内容を表示
-- [ ] `build.sh` でビルドして `ticket.sh` に反映
-- [ ] Run tests before closing and pass all tests (No exceptions)
-- [ ] Run `bash build.sh` to build the project
+- [x] `lib/utils.sh` の `check_clean_working_dir()` を修正: git status --porcelain の結果を解析し、tickets/ 配下のみかどうかで分岐
+- [x] tickets/ のみの場合: コミットして再実行を促すメッセージを表示
+- [x] それ以外の場合: 従来のメッセージに加え、ユーザに確認を促す内容を表示
+- [x] `build.sh` でビルドして `ticket.sh` に反映
+- [x] Run tests before closing and pass all tests (No exceptions)
+- [x] Run `bash build.sh` to build the project
 - [ ] Update documentation if necessary
   - [ ] Update README.*.md
   - [ ] Update spec.*.md

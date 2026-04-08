@@ -89,9 +89,38 @@ get_current_branch() {
 }
 
 # Check if git working directory is clean
+# Usage: check_clean_working_dir [tickets_dir]
 check_clean_working_dir() {
-    if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
-        cat >&2 << EOF
+    local tickets_dir="${1:-tickets}"
+    local porcelain_output
+    porcelain_output="$(git status --porcelain 2>/dev/null)"
+
+    if [[ -n "$porcelain_output" ]]; then
+        # Check if all uncommitted files are under tickets_dir/
+        local has_non_ticket_files=false
+        while IFS= read -r line; do
+            # git status --porcelain format: XY filename (or XY orig -> renamed)
+            local file_path="${line:3}"
+            # Handle renames: "R  old -> new"
+            if [[ "$file_path" == *" -> "* ]]; then
+                file_path="${file_path##* -> }"
+            fi
+            if [[ "$file_path" != "${tickets_dir}/"* ]]; then
+                has_non_ticket_files=true
+                break
+            fi
+        done <<< "$porcelain_output"
+
+        if [[ "$has_non_ticket_files" == "false" ]]; then
+            cat >&2 << EOF
+Error: Uncommitted changes (ticket files only)
+Only ticket files under '${tickets_dir}/' are uncommitted.
+Please commit them and retry:
+  git add ${tickets_dir}/ && git commit -m "Add ticket files"
+Then re-run the ticket command.
+EOF
+        else
+            cat >&2 << EOF
 Error: Uncommitted changes
 Working directory has uncommitted changes. Please:
 1. Commit your changes: git add . && git commit -m "message"
@@ -103,6 +132,7 @@ Remember to update current-ticket.md with your progress before committing.
 IMPORTANT: Never use 'git restore' or 'rm' to discard file changes without
 explicit user permission. User's work must be preserved.
 EOF
+        fi
         return 1
     fi
     return 0

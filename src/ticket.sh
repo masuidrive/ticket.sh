@@ -1005,7 +1005,7 @@ EOF
         fi
     else
         # We're on the effective base branch - check for clean working directory
-        check_clean_working_dir || return 1
+        check_clean_working_dir "$tickets_dir" || return 1
     fi
 
     # Check if ticket exists (after potential branch switch)
@@ -1558,27 +1558,24 @@ cmd_close() {
     # Check prerequisites
     check_git_repo || return 1
     check_config || return 1
-    
+
     # Check clean working directory unless --force is used
     if [[ "$force" == "false" ]]; then
-        if ! check_clean_working_dir; then
+        # Parse config to get tickets_dir for smarter error messages
+        local _close_tickets_dir="$DEFAULT_TICKETS_DIR"
+        if yaml_parse "$CONFIG_FILE" 2>/dev/null; then
+            _close_tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
+        fi
+        if ! check_clean_working_dir "$_close_tickets_dir"; then
             cat >&2 << EOF
 
 To ignore uncommitted changes and force close, use:
   $SCRIPT_COMMAND close --force (or -f)
-
-Or handle the changes:
-  1. Commit your changes: git add . && git commit -m "message"
-  2. Stash changes: git stash
-
-Remember to update current-ticket.md with your progress before committing.
-
-IMPORTANT: Never discard changes without explicit user permission.
 EOF
             return 1
         fi
     fi
-    
+
     # Check current ticket link
     if [[ ! -L "$CURRENT_TICKET_LINK" ]]; then
         cat >&2 << EOF
@@ -1917,17 +1914,16 @@ cmd_cancel() {
 
     # Check clean working directory unless --force is used
     if [[ "$force" == "false" ]]; then
-        if ! check_clean_working_dir; then
+        # Parse config to get tickets_dir for smarter error messages
+        local _cancel_tickets_dir="$DEFAULT_TICKETS_DIR"
+        if yaml_parse "$CONFIG_FILE" 2>/dev/null; then
+            _cancel_tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
+        fi
+        if ! check_clean_working_dir "$_cancel_tickets_dir"; then
             cat >&2 << EOF
 
 To ignore uncommitted changes and force cancel, use:
   $SCRIPT_COMMAND cancel --force (or -f)
-
-Or handle the changes:
-  1. Commit your changes: git add . && git commit -m "message"
-  2. Stash changes: git stash
-
-IMPORTANT: Never discard changes without explicit user permission.
 EOF
             return 1
         fi
