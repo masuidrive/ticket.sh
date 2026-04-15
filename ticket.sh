@@ -12,7 +12,7 @@ fi
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20260408.154422
+# Version: 20260415.100232
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -1074,7 +1074,7 @@ if [ -z "${BASH_VERSION:-}" ]; then
 fi
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20260408.154422
+# Version: 20260415.100232
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -1166,7 +1166,7 @@ SCRIPT_COMMAND=$(get_script_command)
 
 
 # Global variables
-VERSION="20260408.154422"  # This will be replaced during build
+VERSION="20260415.100232"  # This will be replaced during build
 CONFIG_FILE=""  # Will be set dynamically by get_config_file()
 CURRENT_TICKET_LINK="current-ticket.md"
 CURRENT_NOTE_LINK="current-note.md"
@@ -1244,6 +1244,7 @@ Each ticket is a single Markdown file with YAML frontmatter metadata.
 - \`$SCRIPT_COMMAND new <slug>\` - Create new ticket file (slug: lowercase, numbers, hyphens only)
 - \`$SCRIPT_COMMAND list [--status STATUS] [--count N]\` - List tickets (default: todo + doing, count: 20)
 - \`$SCRIPT_COMMAND start [--worktree] <ticket-name>\` - Start working on ticket (creates or switches to feature branch, --worktree creates a separate worktree)
+  - With \`--worktree\`: **cd to the worktree directory after start; cd back to the main repo after close.** In environments where cwd resets each command (e.g. LLM agents), cd must be re-run every time.
 - \`$SCRIPT_COMMAND restore\` - Restore current-ticket.md symlink from branch name
 - \`$SCRIPT_COMMAND check\` - Check current directory and ticket/branch synchronization status
 - \`$SCRIPT_COMMAND close [--no-push] [--force|-f] [--no-delete-remote]\` - Complete current ticket (squash merge to default branch)
@@ -2204,6 +2205,12 @@ EOF
         if [[ "$use_worktree" == "true" ]]; then
             echo "Worktree: $wt_path"
             echo "WORKTREE:${wt_path}"
+            echo ""
+            echo "CAUTION: All subsequent commands must run in the worktree directory."
+            echo "  cd $wt_path"
+            echo ""
+            echo "When opening sub-shells, sub-agents, or new terminals, cd to the same path first."
+            echo "Working in the main repo will miss current-ticket.md and may cause context confusion."
         fi
 
         # Display success message if configured
@@ -2278,6 +2285,12 @@ EOF
         echo "Worktree created: $wt_path"
         echo "WORKTREE:${wt_path}"
         echo "Note: Branch created locally. Use 'git push -u $repository $branch_name' when ready to share."
+        echo ""
+        echo "CAUTION: All subsequent commands must run in the worktree directory."
+        echo "  cd $wt_path"
+        echo ""
+        echo "When opening sub-shells, sub-agents, or new terminals, cd to the same path first."
+        echo "Working in the main repo will miss current-ticket.md and may cause context confusion."
     else
         # Create and checkout new branch from base branch (original behavior)
         local prev_branch=$(get_current_branch)
@@ -2915,9 +2928,11 @@ EOF
         }
         echo "Worktree removed: $worktree_path"
         echo ""
-        echo "Your shell is still in the removed worktree directory."
-        echo "Run the following command to return to the main repository:"
+        echo ""
+        echo "CAUTION: The worktree has been removed. Return to the main repository."
         echo "  cd $main_repo"
+        echo ""
+        echo "Your shell is still in the removed worktree directory; subsequent commands will fail until you cd."
     fi
 
     # Remove current ticket and note links - core workflow is complete, safe to remove
@@ -3204,9 +3219,11 @@ EOF
         }
         echo "Worktree removed: $worktree_path"
         echo ""
-        echo "Your shell is still in the removed worktree directory."
-        echo "Run the following command to return to the main repository:"
+        echo ""
+        echo "CAUTION: The worktree has been removed. Return to the main repository."
         echo "  cd $main_repo"
+        echo ""
+        echo "Your shell is still in the removed worktree directory; subsequent commands will fail until you cd."
     fi
 
     # Remove current ticket and note links

@@ -3,8 +3,8 @@ priority: 2
 base_branch: default  # Override base branch for start/close (default: use default_branch from config)
 description: "worktree 使用時に cwd 取り違え事故を防ぐため、start/close/help に CAUTION メッセージを追加する"
 created_at: "2026-04-15T09:49:14Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2026-04-15T09:51:17Z # Do not modify manually
+closed_at: 2026-04-15T11:45:29Z # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
 
@@ -60,11 +60,12 @@ Please record any notes related to this ticket, such as debugging information, r
 
 ## Tasks
 
-- [ ] `src/ticket.sh` の worktree 作成部分（cmd_start）で終了時メッセージに CAUTION を追加
-- [ ] `src/ticket.sh` の close/cancel 時の worktree 削除後メッセージを CAUTION 形式に更新
-- [ ] `src/ticket.sh` の help 出力の `--worktree` 説明に注意書きを追加
-- [ ] `bash build.sh` でビルド
-- [ ] `test/run-all.sh` / `test/run-all-on-docker.sh` を実行してパス
+- [x] `src/ticket.sh` の worktree 作成部分（cmd_start）で終了時メッセージに CAUTION を追加
+- [x] `src/ticket.sh` の close/cancel 時の worktree 削除後メッセージを CAUTION 形式に更新
+- [x] `src/ticket.sh` の help 出力の `--worktree` 説明に注意書きを追加
+- [x] `bash build.sh` でビルド
+- [x] `test/run-all.sh` を実行してパス (137/137)
+- [x] `test/run-all-on-docker.sh` を実行してパス (129/129)
 - [ ] Run tests before closing and pass all tests (No exceptions)
 - [ ] Run `bash build.sh` to build the project
 - [ ] Update documentation if necessary
