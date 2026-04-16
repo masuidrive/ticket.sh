@@ -12,7 +12,7 @@ fi
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20260415.100232
+# Version: 20260416.153124
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -957,6 +957,68 @@ get_ticket_file() {
     echo "${tickets_dir}/${ticket_name}.md"
 }
 
+# Check if main repo is in a safe state to perform merge operations.
+# In parallel multi-worktree workflows, another worker may have checked out
+# a different branch or left uncommitted changes in the main repo. Blindly
+# switching HEAD would disrupt them, so this guard halts with a clear error
+# unless the caller explicitly opted into the legacy behavior.
+#
+# Usage: check_main_repo_ready <main_repo> <default_branch> [force]
+#   force="true" downgrades errors to warnings and proceeds anyway.
+check_main_repo_ready() {
+    local main_repo="$1"
+    local default_branch="$2"
+    local force="${3:-false}"
+
+    local main_branch
+    main_branch=$(git -C "$main_repo" symbolic-ref --short HEAD 2>/dev/null)
+    if [[ -z "$main_branch" ]]; then
+        echo "Error: Cannot determine main repo HEAD at '$main_repo' (detached or invalid)" >&2
+        return 1
+    fi
+
+    if [[ "$main_branch" != "$default_branch" ]]; then
+        if [[ "$force" == "true" ]]; then
+            echo "Warning: Main repo is on '$main_branch' instead of '$default_branch'. Forcing switch." >&2
+        else
+            cat >&2 << EOF
+Error: Main repo HEAD is not on '$default_branch'
+Main repository at '$main_repo' is currently on branch '$main_branch',
+but ticket.sh needs '$default_branch' to perform the merge.
+
+This commonly happens in parallel multi-worktree workflows where another
+worker has checked out a different branch in the main repo. Switching HEAD
+silently would disrupt that worker.
+
+Please either:
+  1. Switch main repo to '$default_branch' manually:
+       git -C $main_repo checkout $default_branch
+  2. Use --force-main-switch to override (may affect concurrent workers).
+EOF
+            return 1
+        fi
+    fi
+
+    if [[ -n "$(git -C "$main_repo" status --porcelain 2>/dev/null)" ]]; then
+        if [[ "$force" == "true" ]]; then
+            echo "Warning: Main repo has uncommitted changes. Forcing merge anyway." >&2
+        else
+            cat >&2 << EOF
+Error: Main repo has uncommitted changes
+Main repository at '$main_repo' has uncommitted changes that could conflict
+with the merge. Another worker may be editing files there.
+
+Please either:
+  1. Commit or stash the changes in main repo manually
+  2. Use --force-main-switch to override (at your own risk).
+EOF
+            return 1
+        fi
+    fi
+
+    return 0
+}
+
 # Run git command and show output
 run_git_command() {
     local cmd="$1"
@@ -1074,7 +1136,7 @@ if [ -z "${BASH_VERSION:-}" ]; then
 fi
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20260415.100232
+# Version: 20260416.153124
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -1166,7 +1228,7 @@ SCRIPT_COMMAND=$(get_script_command)
 
 
 # Global variables
-VERSION="20260415.100232"  # This will be replaced during build
+VERSION="20260416.153124"  # This will be replaced during build
 CONFIG_FILE=""  # Will be set dynamically by get_config_file()
 CURRENT_TICKET_LINK="current-ticket.md"
 CURRENT_NOTE_LINK="current-note.md"
@@ -1247,8 +1309,9 @@ Each ticket is a single Markdown file with YAML frontmatter metadata.
   - With \`--worktree\`: **cd to the worktree directory after start; cd back to the main repo after close.** In environments where cwd resets each command (e.g. LLM agents), cd must be re-run every time.
 - \`$SCRIPT_COMMAND restore\` - Restore current-ticket.md symlink from branch name
 - \`$SCRIPT_COMMAND check\` - Check current directory and ticket/branch synchronization status
-- \`$SCRIPT_COMMAND close [--no-push] [--force|-f] [--no-delete-remote]\` - Complete current ticket (squash merge to default branch)
-- \`$SCRIPT_COMMAND cancel [--force|-f]\` - Cancel current ticket (no merge, moves to done/ with CANCELED marker)
+- \`$SCRIPT_COMMAND close [--no-push] [--force|-f] [--no-delete-remote] [--force-main-switch]\` - Complete current ticket (squash merge to default branch)
+  - From a worktree, close refuses to merge if the main repo is on a non-default branch or has uncommitted changes (protects parallel workers). Use \`--force-main-switch\` to override.
+- \`$SCRIPT_COMMAND cancel [--force|-f] [--force-main-switch]\` - Cancel current ticket (no merge, moves to done/ with CANCELED marker)
 - \`$SCRIPT_COMMAND selfupdate\` - Update ticket.sh to the latest version from GitHub
 - \`$SCRIPT_COMMAND version\` - Display version information
 - \`$SCRIPT_COMMAND prompt\` - Display prompt instructions for AI coding assistants
@@ -2594,7 +2657,8 @@ cmd_close() {
     local no_push=false
     local force=false
     local no_delete_remote=false
-    
+    local force_main_switch=false
+
     # Parse arguments
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -2610,9 +2674,13 @@ cmd_close() {
                 no_delete_remote=true
                 shift
                 ;;
+            --force-main-switch)
+                force_main_switch=true
+                shift
+                ;;
             *)
                 echo "Error: Unknown option: $1" >&2
-                echo "Usage: $SCRIPT_COMMAND close [--no-push] [--force|-f] [--no-delete-remote]" >&2
+                echo "Usage: $SCRIPT_COMMAND close [--no-push] [--force|-f] [--no-delete-remote] [--force-main-switch]" >&2
                 return 1
                 ;;
         esac
@@ -2736,7 +2804,24 @@ Ticket is already closed (closed_at is set). Please:
 EOF
         return 1
     fi
-    
+
+    # Detect worktree mode and validate main repo state early, before we mutate
+    # any ticket files. If another worker has checked out a different branch in
+    # the main repo, we must abort here so nothing gets half-applied.
+    local in_worktree=false
+    local worktree_path=""
+    local main_repo=""
+    if is_git_worktree; then
+        in_worktree=true
+        worktree_path=$(pwd)
+        main_repo=$(get_main_repo_from_worktree)
+        check_main_repo_ready "$main_repo" "$default_branch" "$force_main_switch" || {
+            echo "Aborting close to protect main repo state." >&2
+            echo "Your feature branch '$current_branch' is untouched." >&2
+            return 1
+        }
+    fi
+
     # Store original ticket state for rollback
     local original_ticket_content=$(cat "$ticket_file")
     local original_branch=$(get_current_branch)
@@ -2790,16 +2875,6 @@ EOF
     # This ensures we capture the updated content from the feature branch
     local ticket_name=$(basename "$ticket_file" .md)
     local ticket_content=$(cat "$ticket_file")
-    
-    # Detect if we're in a worktree
-    local in_worktree=false
-    local worktree_path=""
-    local main_repo=""
-    if is_git_worktree; then
-        in_worktree=true
-        worktree_path=$(pwd)
-        main_repo=$(get_main_repo_from_worktree)
-    fi
 
     # Push feature branch if auto_push
     if [[ "$auto_push" == "true" ]] && [[ "$no_push" == "false" ]]; then
@@ -2808,19 +2883,21 @@ EOF
         }
     fi
 
+    # git_work carries "-C <main_repo>" in worktree mode so all the merge
+    # operations below run against the main repo without cd'ing into it.
+    # Keeping the process cwd in the worktree prevents parallel workers from
+    # observing a mid-flight HEAD change in the main repo.
+    local git_work=""
     if [[ "$in_worktree" == "true" ]]; then
-        # Worktree mode: perform merge from main repo
+        # Worktree mode: perform merge against main repo without changing cwd.
+        # check_main_repo_ready was already invoked earlier, before any
+        # ticket-file mutation, so it is safe to proceed here.
         echo "Closing ticket from worktree..."
+        git_work="-C $main_repo"
 
-        # Switch to main repo to perform merge
-        cd "$main_repo" || {
-            echo "Error: Failed to switch to main repository '$main_repo'" >&2
-            return 1
-        }
-
-        # Checkout default branch in main repo
-        run_git_command "git checkout $default_branch" || {
-            echo "Error: Failed to switch to default branch '$default_branch'" >&2
+        # Checkout default branch in main repo (no-op if already there)
+        run_git_command "git $git_work checkout $default_branch" || {
+            echo "Error: Failed to switch to default branch '$default_branch' in main repo" >&2
             echo "Your changes have been committed on feature branch '$current_branch'" >&2
             return 1
         }
@@ -2842,9 +2919,9 @@ EOF
     commit_msg="${commit_msg}\n\n${ticket_content}"
 
     # Squash merge
-    run_git_command "git merge --squash $current_branch" || {
+    run_git_command "git $git_work merge --squash $current_branch" || {
         echo "Error: Failed to squash merge feature branch" >&2
-        echo "You are now on '$default_branch' branch" >&2
+        echo "Main repo is on '$default_branch'" >&2
         echo "Feature branch '$current_branch' still exists with your changes" >&2
         echo "Please resolve merge conflicts manually or run 'git merge --abort'" >&2
         return 1
@@ -2854,19 +2931,23 @@ EOF
     local tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
     local done_dir="${tickets_dir}/done"
 
-    # Create done directory if it doesn't exist
-    if [[ ! -d "$done_dir" ]]; then
-        if ! mkdir -p "$done_dir"; then
-            echo "Error: Failed to create done directory: $done_dir" >&2
+    # Create done directory (inside main repo when running from a worktree)
+    local done_dir_fs_base="."
+    if [[ "$in_worktree" == "true" ]]; then
+        done_dir_fs_base="$main_repo"
+    fi
+    if [[ ! -d "${done_dir_fs_base}/${done_dir}" ]]; then
+        if ! mkdir -p "${done_dir_fs_base}/${done_dir}"; then
+            echo "Error: Failed to create done directory: ${done_dir_fs_base}/${done_dir}" >&2
             echo "Permission denied or filesystem issue" >&2
             return 1
         fi
     fi
 
     # Move the ticket file to done folder
-    if [[ -d "$done_dir" ]]; then
+    if [[ -d "${done_dir_fs_base}/${done_dir}" ]]; then
         local new_ticket_path="${done_dir}/$(basename "$ticket_file")"
-        run_git_command "git mv \"$ticket_file\" \"$new_ticket_path\"" || {
+        run_git_command "git $git_work mv \"$ticket_file\" \"$new_ticket_path\"" || {
             echo "Error: Failed to move ticket to done folder" >&2
             echo "Check if done directory exists and has proper permissions" >&2
             return 1
@@ -2874,9 +2955,10 @@ EOF
 
         # Move note file if it exists
         local note_file="${tickets_dir}/${ticket_name}-note.md"
-        if [[ -f "$note_file" ]]; then
+        local note_file_fs="${done_dir_fs_base}/${note_file}"
+        if [[ -f "$note_file_fs" ]]; then
             local new_note_path="${done_dir}/$(basename "$note_file")"
-            run_git_command "git mv \"$note_file\" \"$new_note_path\"" || {
+            run_git_command "git $git_work mv \"$note_file\" \"$new_note_path\"" || {
                 echo "Error: Failed to move note file to done folder" >&2
                 echo "Check if done directory exists and has proper permissions" >&2
                 return 1
@@ -2885,7 +2967,7 @@ EOF
     fi
 
     # Commit with ticket content and done folder move together
-    echo -e "$commit_msg" | run_git_command "git commit -F -" || {
+    echo -e "$commit_msg" | run_git_command "git $git_work commit -F -" || {
         echo "Error: Failed to commit final merge" >&2
         echo "Squash merge is staged but not committed" >&2
         echo "You can commit manually with: git commit" >&2
@@ -2895,7 +2977,7 @@ EOF
 
     # Push to remote if auto_push
     if [[ "$auto_push" == "true" ]] && [[ "$no_push" == "false" ]]; then
-        run_git_command "git push $repository $default_branch" || {
+        run_git_command "git $git_work push $repository $default_branch" || {
             echo "Warning: Failed to push to remote repository" >&2
             echo "Local ticket closing completed. Please push manually later:" >&2
             echo "  git push $repository $default_branch" >&2
@@ -2907,8 +2989,8 @@ EOF
     if [[ "$delete_remote_on_close" == "true" ]] && [[ "$no_delete_remote" == "false" ]]; then
         if [[ "$auto_push" == "true" ]] || [[ "$no_push" == "false" ]]; then
             # Check if remote branch exists
-            if git ls-remote --heads "$repository" "$current_branch" | grep -q "$current_branch"; then
-                run_git_command "git push $repository --delete $current_branch" || {
+            if git $git_work ls-remote --heads "$repository" "$current_branch" | grep -q "$current_branch"; then
+                run_git_command "git $git_work push $repository --delete $current_branch" || {
                     echo "Warning: Failed to delete remote branch '$current_branch'" >&2
                 }
             else
@@ -2922,7 +3004,7 @@ EOF
 
     # Remove worktree if we were in one
     if [[ "$in_worktree" == "true" ]]; then
-        run_git_command "git worktree remove $worktree_path" || {
+        run_git_command "git $git_work worktree remove $worktree_path" || {
             echo "Warning: Failed to remove worktree at '$worktree_path'" >&2
             echo "You can manually remove it with: git worktree remove $worktree_path" >&2
         }
@@ -2957,6 +3039,7 @@ EOF
 # Cancel the current ticket without merging
 cmd_cancel() {
     local force=false
+    local force_main_switch=false
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
@@ -2965,9 +3048,13 @@ cmd_cancel() {
                 force=true
                 shift
                 ;;
+            --force-main-switch)
+                force_main_switch=true
+                shift
+                ;;
             *)
                 echo "Error: Unknown option: $1" >&2
-                echo "Usage: $SCRIPT_COMMAND cancel [--force|-f]" >&2
+                echo "Usage: $SCRIPT_COMMAND cancel [--force|-f] [--force-main-switch]" >&2
                 return 1
                 ;;
         esac
@@ -3072,6 +3159,21 @@ EOF
         return 1
     fi
 
+    # Detect worktree mode and validate main repo state early, before we mutate
+    # any ticket files. See cmd_close for rationale.
+    local in_worktree=false
+    local worktree_path=""
+    local main_repo=""
+    if is_git_worktree; then
+        in_worktree=true
+        worktree_path=$(pwd)
+        main_repo=$(get_main_repo_from_worktree)
+        check_main_repo_ready "$main_repo" "$default_branch" "$force_main_switch" || {
+            echo "Aborting cancel to protect main repo state." >&2
+            return 1
+        }
+    fi
+
     # Store original ticket state for rollback
     local original_ticket_content=$(cat "$ticket_file")
 
@@ -3123,25 +3225,21 @@ EOF
     # Get ticket name BEFORE switching branches
     local ticket_name=$(basename "$ticket_file" .md)
 
-    # Detect if we're in a worktree
-    local in_worktree=false
-    local worktree_path=""
-    local main_repo=""
-    if is_git_worktree; then
-        in_worktree=true
-        worktree_path=$(pwd)
-        main_repo=$(get_main_repo_from_worktree)
-    fi
-
+    # git_work routes subsequent git commands to the main repo via -C
+    # instead of changing this process's cwd. This keeps parallel workers
+    # from seeing the main repo HEAD flip in the middle of their own work.
+    local git_work=""
+    local done_dir_fs_base="."
     if [[ "$in_worktree" == "true" ]]; then
-        # Worktree mode: switch to main repo
+        # Worktree mode: operate on main repo without changing cwd.
+        # check_main_repo_ready was already invoked earlier, before any
+        # ticket-file mutation.
         echo "Canceling ticket from worktree..."
-        cd "$main_repo" || {
-            echo "Error: Failed to switch to main repository '$main_repo'" >&2
-            return 1
-        }
-        run_git_command "git checkout $default_branch" || {
-            echo "Error: Failed to switch to default branch '$default_branch'" >&2
+        git_work="-C $main_repo"
+        done_dir_fs_base="$main_repo"
+
+        run_git_command "git $git_work checkout $default_branch" || {
+            echo "Error: Failed to switch to default branch '$default_branch' in main repo" >&2
             return 1
         }
     else
@@ -3157,9 +3255,9 @@ EOF
     local tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
     local done_dir="${tickets_dir}/done"
 
-    if [[ ! -d "$done_dir" ]]; then
-        if ! mkdir -p "$done_dir"; then
-            echo "Error: Failed to create done directory: $done_dir" >&2
+    if [[ ! -d "${done_dir_fs_base}/${done_dir}" ]]; then
+        if ! mkdir -p "${done_dir_fs_base}/${done_dir}"; then
+            echo "Error: Failed to create done directory: ${done_dir_fs_base}/${done_dir}" >&2
             return 1
         fi
     fi
@@ -3174,20 +3272,20 @@ EOF
         canceled_name="CANCELED-${base_name}"
     fi
 
-    # Checkout the ticket file from the feature branch and move it
-    run_git_command "git checkout $current_branch -- $ticket_file" || {
+    # Checkout the ticket file from the feature branch and move it (main repo FS)
+    run_git_command "git $git_work checkout $current_branch -- $ticket_file" || {
         echo "Error: Failed to retrieve ticket file from feature branch" >&2
         return 1
     }
 
     local new_ticket_path="${done_dir}/${canceled_name}"
-    mv "$ticket_file" "$new_ticket_path"
+    mv "${done_dir_fs_base}/${ticket_file}" "${done_dir_fs_base}/${new_ticket_path}"
 
     # Also move note file if it exists on the feature branch
     local note_file="${tickets_dir}/${ticket_name}-note.md"
-    if git show "${current_branch}:${note_file}" >/dev/null 2>&1; then
-        run_git_command "git checkout $current_branch -- $note_file" || true
-        if [[ -f "$note_file" ]]; then
+    if git $git_work show "${current_branch}:${note_file}" >/dev/null 2>&1; then
+        run_git_command "git $git_work checkout $current_branch -- $note_file" || true
+        if [[ -f "${done_dir_fs_base}/${note_file}" ]]; then
             local note_base=$(basename "$note_file")
             local canceled_note_name
             if [[ "$note_base" =~ ^([0-9]{6}-[0-9]{6})-(.*)$ ]]; then
@@ -3195,25 +3293,25 @@ EOF
             else
                 canceled_note_name="CANCELED-${note_base}"
             fi
-            mv "$note_file" "${done_dir}/${canceled_note_name}"
+            mv "${done_dir_fs_base}/${note_file}" "${done_dir_fs_base}/${done_dir}/${canceled_note_name}"
         fi
     fi
 
     # Commit the canceled ticket in done folder
-    run_git_command "git add ${done_dir}/" || {
+    run_git_command "git $git_work add ${done_dir}/" || {
         echo "Error: Failed to stage canceled ticket" >&2
         return 1
     }
 
     local commit_msg="[${ticket_name}] Ticket canceled"
-    run_git_command "git commit -m \"$commit_msg\"" || {
+    run_git_command "git $git_work commit -m \"$commit_msg\"" || {
         echo "Error: Failed to commit canceled ticket" >&2
         return 1
     }
 
     # Remove worktree if we were in one
     if [[ "$in_worktree" == "true" ]]; then
-        run_git_command "git worktree remove $worktree_path" || {
+        run_git_command "git $git_work worktree remove $worktree_path" || {
             echo "Warning: Failed to remove worktree at '$worktree_path'" >&2
             echo "You can manually remove it with: git worktree remove $worktree_path" >&2
         }

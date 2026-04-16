@@ -282,6 +282,101 @@ fi
 git worktree remove "$WT_PATH5" --force 2>/dev/null || true
 
 echo
+echo "11. Testing parallel scenario: close refuses when main repo is on non-default branch..."
+timeout 5 ./ticket.sh new test-wt-parallel-safe >/dev/null 2>&1
+TICKET_P=$(ls tickets/*.md 2>/dev/null | grep -v note | grep parallel-safe | head -1)
+TICKET_P_NAME=$(basename "$TICKET_P" .md)
+git add . && git commit -q -m "Add parallel-safe ticket"
+
+OUTPUT=$(timeout 10 ./ticket.sh start --worktree "$TICKET_P_NAME" 2>&1)
+WT_PATH_P=$(echo "$OUTPUT" | grep "^WORKTREE:" | head -1 | cut -d: -f2-)
+
+# Simulate another worker holding the main repo on a different branch
+git -C "$MAIN_REPO" checkout -q -b wt-parallel-other
+
+# Make a trivial change on the feature branch so there is something to merge
+echo "parallel work" > "$WT_PATH_P/parallel.txt"
+git -C "$WT_PATH_P" add .
+git -C "$WT_PATH_P" commit -q -m "Parallel work"
+
+# Close from worktree - should refuse instead of silently switching HEAD
+cd "$WT_PATH_P"
+OUTPUT=$(timeout 10 ./ticket.sh close --no-push 2>&1) && CLOSE_EXIT=0 || CLOSE_EXIT=$?
+cd "$MAIN_REPO"
+
+if [[ "$CLOSE_EXIT" -ne 0 ]] && echo "$OUTPUT" | grep -q "Main repo HEAD is not on"; then
+    pass "Close refuses when main repo is on non-default branch"
+else
+    fail "Close did not protect main repo (exit: $CLOSE_EXIT)"
+    echo "  Output: $OUTPUT"
+fi
+
+MAIN_BRANCH=$(git -C "$MAIN_REPO" rev-parse --abbrev-ref HEAD)
+if [[ "$MAIN_BRANCH" == "wt-parallel-other" ]]; then
+    pass "Main repo HEAD preserved (still on wt-parallel-other)"
+else
+    fail "Main repo HEAD changed to: $MAIN_BRANCH"
+fi
+
+if [[ -d "$WT_PATH_P" ]]; then
+    pass "Worktree preserved after aborted close"
+else
+    fail "Worktree removed despite close failure"
+fi
+
+echo
+echo "12. Testing close succeeds after main repo returns to default branch..."
+git -C "$MAIN_REPO" checkout -q main
+git -C "$MAIN_REPO" branch -D wt-parallel-other 2>/dev/null || true
+
+cd "$WT_PATH_P"
+OUTPUT=$(timeout 10 ./ticket.sh close --no-push 2>&1) && CLOSE_EXIT=0 || CLOSE_EXIT=$?
+cd "$MAIN_REPO"
+
+if [[ "$CLOSE_EXIT" -eq 0 ]]; then
+    pass "Close succeeds after returning main repo to default branch"
+else
+    fail "Close failed even after main repo restored (exit: $CLOSE_EXIT)"
+    echo "  Output: $OUTPUT"
+fi
+
+echo
+echo "13. Testing --force-main-switch bypasses the guard..."
+timeout 5 ./ticket.sh new test-wt-force-switch >/dev/null 2>&1
+TICKET_F=$(ls tickets/*.md 2>/dev/null | grep -v note | grep force-switch | head -1)
+TICKET_F_NAME=$(basename "$TICKET_F" .md)
+git add . && git commit -q -m "Add force-switch ticket"
+
+OUTPUT=$(timeout 10 ./ticket.sh start --worktree "$TICKET_F_NAME" 2>&1)
+WT_PATH_F=$(echo "$OUTPUT" | grep "^WORKTREE:" | head -1 | cut -d: -f2-)
+
+echo "force work" > "$WT_PATH_F/force.txt"
+git -C "$WT_PATH_F" add .
+git -C "$WT_PATH_F" commit -q -m "Force work"
+
+git -C "$MAIN_REPO" checkout -q -b wt-force-other
+
+cd "$WT_PATH_F"
+OUTPUT=$(timeout 10 ./ticket.sh close --no-push --force-main-switch 2>&1) && CLOSE_EXIT=0 || CLOSE_EXIT=$?
+cd "$MAIN_REPO"
+
+if [[ "$CLOSE_EXIT" -eq 0 ]]; then
+    pass "Close proceeds with --force-main-switch"
+else
+    fail "Close failed with --force-main-switch (exit: $CLOSE_EXIT)"
+    echo "  Output: $OUTPUT"
+fi
+
+MAIN_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+if [[ "$MAIN_BRANCH" == "main" ]]; then
+    pass "Force switch moved main repo to default branch"
+else
+    fail "Main repo on unexpected branch after force: $MAIN_BRANCH"
+fi
+
+git branch -D wt-force-other 2>/dev/null || true
+
+echo
 echo "=== Worktree Test Results ==="
 echo "  Passed: $PASSED, Failed: $FAILED"
 echo

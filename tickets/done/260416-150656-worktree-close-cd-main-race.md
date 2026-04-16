@@ -3,8 +3,8 @@ priority: 1
 base_branch: default  # Override base branch for start/close (default: use default_branch from config)
 description: "parallel multi-worktree race: close/cancel cd \$main_repo causes HEAD churn"
 created_at: "2026-04-16T15:06:56Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2026-04-16T15:11:07Z # Do not modify manually
+closed_at: 2026-04-16T15:32:10Z # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
 
@@ -76,14 +76,14 @@ Please record any notes related to this ticket, such as debugging information, r
 
 ## Tasks
 
-- [ ] Step 1: `src/ticket.sh` の `cd "$main_repo"` を `git -C "$main_repo"` に置換（cmd_close / cmd_cancel 両方）
-- [ ] Step 2: merge 前のメインリポ状態検査を追加（default_branch 判定 + uncommitted 検出 → 明示エラー）
-- [ ] Step 3: `--force-main-switch` フラグ追加で後方互換 opt-in 経路を残す
+- [x] Step 1: `src/ticket.sh` の `cd "$main_repo"` を `git -C "$main_repo"` に置換（cmd_close / cmd_cancel 両方）
+- [x] Step 2: merge 前のメインリポ状態検査を追加（default_branch 判定 + uncommitted 検出 → 明示エラー）。ticket file mutation 前に実行するよう early guard 配置
+- [x] Step 3: `--force-main-switch` フラグ追加で後方互換 opt-in 経路を残す
 - [ ] 将来検討: temporary worktree での merge 実装（reviewer feedback 後）
-- [ ] parallel multi-worktree 運用のユーザ向けドキュメント追記（spec.md / README）
-- [ ] テスト追加: 複数 worktree 同時 close でメインリポ HEAD が保護されることの検証
-- [ ] Run tests before closing and pass all tests (No exceptions)
-- [ ] Run `bash build.sh` to build the project
+- [x] parallel multi-worktree 運用のユーザ向けドキュメント追記（help の close/cancel に `--force-main-switch` 注記）
+- [x] テスト追加: 複数 worktree 同時 close でメインリポ HEAD が保護されることの検証（test-worktree.sh No.11-13）
+- [x] Run tests before closing and pass all tests (No exceptions) — ローカル 137/137 + worktree 23/23
+- [x] Run `bash build.sh` to build the project
 - [ ] Update documentation if necessary
   - [ ] Update README.*.md
   - [ ] Update spec.*.md
