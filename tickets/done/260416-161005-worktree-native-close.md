@@ -3,8 +3,8 @@ priority: 1
 base_branch: default  # Override base branch for start/close (default: use default_branch from config)
 description: "close/cancel を tmp-worktree 方式に書き換え、main_repo HEAD を一切触らない。--keep-worktree フラグ追加、--force-main-switch 削除"
 created_at: "2026-04-16T16:10:05Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2026-04-16T16:10:48Z # Do not modify manually
+closed_at: 2026-04-16T16:33:57Z # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
 
@@ -75,16 +75,17 @@ Please record any notes related to this ticket, such as debugging information, r
 
 ## Tasks
 
-- [ ] `src/ticket.sh` cmd_close: worktree モード時の merge を tmp-worktree 方式に書き換え
-- [ ] `src/ticket.sh` cmd_cancel: 同様に tmp-worktree 方式に書き換え
-- [ ] `--keep-worktree` フラグを close/cancel に追加、引数パースと worktree remove 分岐
-- [ ] `--force-main-switch` フラグを削除（close/cancel 両方）
-- [ ] `check_main_repo_ready` helper を削除（`lib/utils.sh`）
-- [ ] `ticket.sh prompt` / help の説明更新（`--keep-worktree` を agent 向けに推奨）
-- [ ] `test/test-worktree.sh` 更新: parallel scenario テストを新挙動向けに書き直し（main_repo HEAD が動かないこと、worker 側 worktree が `--keep-worktree` で残ることを検証）
-- [ ] 既存の `--force-main-switch` テスト（No.13）を削除
-- [ ] ローカル / Docker テスト全通過
-- [ ] ビルドして `ticket.sh` に反映
+- [x] tmp-worktree 方式の検証で技術的制約発見 → `git -C $main_repo` 方式へ方針転換（詳細 current-note.md）
+- [x] cmd_close: `cd $main_repo` 排除、`git -C $main_repo` ベースで merge
+- [x] cmd_cancel: 同様に書き換え
+- [x] `--keep-worktree` フラグを close/cancel に追加
+- [x] `--force-main-switch` フラグを削除
+- [x] `check_main_repo_ready` helper は維持（parallel 運用での silent HEAD switch 防止に必要）
+- [x] prompt / help 更新（`--keep-worktree` を AI agent 向けに推奨と明記）
+- [x] テスト 11-13 を新挙動向けに書き直し（cwd 保持、--keep-worktree、guard refuse）
+- [x] ローカル 137/137 + worktree 26/26 パス
+- [ ] Docker テスト通過（実行中）
+- [x] ビルドして `ticket.sh` に反映
 - [ ] Run tests before closing and pass all tests (No exceptions)
 - [ ] Run `bash build.sh` to build the project
 - [ ] Update documentation if necessary

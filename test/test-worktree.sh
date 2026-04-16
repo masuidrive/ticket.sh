@@ -282,99 +282,135 @@ fi
 git worktree remove "$WT_PATH5" --force 2>/dev/null || true
 
 echo
-echo "11. Testing parallel scenario: close refuses when main repo is on non-default branch..."
-timeout 5 ./ticket.sh new test-wt-parallel-safe >/dev/null 2>&1
-TICKET_P=$(ls tickets/*.md 2>/dev/null | grep -v note | grep parallel-safe | head -1)
+echo "11. Testing close keeps process cwd in the worker's worktree..."
+timeout 5 ./ticket.sh new test-wt-cwd-preserved >/dev/null 2>&1
+TICKET_P=$(ls tickets/*.md 2>/dev/null | grep -v note | grep cwd-preserved | head -1)
 TICKET_P_NAME=$(basename "$TICKET_P" .md)
-git add . && git commit -q -m "Add parallel-safe ticket"
+git add . && git commit -q -m "Add cwd-preserved ticket"
 
 OUTPUT=$(timeout 10 ./ticket.sh start --worktree "$TICKET_P_NAME" 2>&1)
 WT_PATH_P=$(echo "$OUTPUT" | grep "^WORKTREE:" | head -1 | cut -d: -f2-)
 
-# Simulate another worker holding the main repo on a different branch
-git -C "$MAIN_REPO" checkout -q -b wt-parallel-other
-
-# Make a trivial change on the feature branch so there is something to merge
-echo "parallel work" > "$WT_PATH_P/parallel.txt"
+echo "cwd work" > "$WT_PATH_P/work.txt"
 git -C "$WT_PATH_P" add .
-git -C "$WT_PATH_P" commit -q -m "Parallel work"
+git -C "$WT_PATH_P" commit -q -m "Work"
 
-# Close from worktree - should refuse instead of silently switching HEAD
+# Close with --keep-worktree and verify we can still cd/pwd in the worktree
 cd "$WT_PATH_P"
-OUTPUT=$(timeout 10 ./ticket.sh close --no-push 2>&1) && CLOSE_EXIT=0 || CLOSE_EXIT=$?
+OUTPUT=$(timeout 15 ./ticket.sh close --no-push --keep-worktree 2>&1) && CLOSE_EXIT=0 || CLOSE_EXIT=$?
+POST_CLOSE_PWD=$(pwd)
 cd "$MAIN_REPO"
 
-if [[ "$CLOSE_EXIT" -ne 0 ]] && echo "$OUTPUT" | grep -q "Main repo HEAD is not on"; then
-    pass "Close refuses when main repo is on non-default branch"
+if [[ "$CLOSE_EXIT" -eq 0 ]]; then
+    pass "Close succeeds with --keep-worktree"
 else
-    fail "Close did not protect main repo (exit: $CLOSE_EXIT)"
+    fail "Close failed (exit: $CLOSE_EXIT)"
     echo "  Output: $OUTPUT"
 fi
 
-MAIN_BRANCH=$(git -C "$MAIN_REPO" rev-parse --abbrev-ref HEAD)
-if [[ "$MAIN_BRANCH" == "wt-parallel-other" ]]; then
-    pass "Main repo HEAD preserved (still on wt-parallel-other)"
+if [[ "$POST_CLOSE_PWD" == "$WT_PATH_P" ]]; then
+    pass "Process cwd preserved in the worker worktree after close"
 else
-    fail "Main repo HEAD changed to: $MAIN_BRANCH"
+    fail "cwd drifted to: $POST_CLOSE_PWD (expected $WT_PATH_P)"
 fi
 
-if [[ -d "$WT_PATH_P" ]]; then
+if [[ -d "$WT_PATH_P" ]] && git -C "$MAIN_REPO" worktree list 2>/dev/null | grep -q "$WT_PATH_P"; then
+    pass "Worktree preserved by --keep-worktree"
+else
+    fail "Worktree was removed despite --keep-worktree"
+fi
+
+if echo "$OUTPUT" | grep -q "Worker worktree preserved"; then
+    pass "Close output announces preserved worktree"
+else
+    fail "Close did not announce preserved worktree"
+fi
+
+# Clean up the preserved worktree manually
+git -C "$MAIN_REPO" worktree remove --force "$WT_PATH_P" 2>/dev/null || true
+
+echo
+echo "12. Testing cancel --keep-worktree preserves the worker's worktree..."
+timeout 5 ./ticket.sh new test-wt-cancel-keep >/dev/null 2>&1
+TICKET_K=$(ls tickets/*.md 2>/dev/null | grep -v note | grep cancel-keep | head -1)
+TICKET_K_NAME=$(basename "$TICKET_K" .md)
+git add . && git commit -q -m "Add cancel-keep ticket"
+
+OUTPUT=$(timeout 10 ./ticket.sh start --worktree "$TICKET_K_NAME" 2>&1)
+WT_PATH_K=$(echo "$OUTPUT" | grep "^WORKTREE:" | head -1 | cut -d: -f2-)
+
+echo "cancel keep work" > "$WT_PATH_K/work.txt"
+git -C "$WT_PATH_K" add .
+git -C "$WT_PATH_K" commit -q -m "Work before cancel"
+
+cd "$WT_PATH_K"
+OUTPUT=$(timeout 15 ./ticket.sh cancel --keep-worktree 2>&1) && CANCEL_EXIT=0 || CANCEL_EXIT=$?
+cd "$MAIN_REPO"
+
+if [[ "$CANCEL_EXIT" -eq 0 ]]; then
+    pass "Cancel succeeds with --keep-worktree"
+else
+    fail "Cancel failed (exit: $CANCEL_EXIT)"
+    echo "  Output: $OUTPUT"
+fi
+
+if [[ -d "$WT_PATH_K" ]] && git -C "$MAIN_REPO" worktree list 2>/dev/null | grep -q "$WT_PATH_K"; then
+    pass "Worktree preserved by cancel --keep-worktree"
+else
+    fail "Worktree was removed despite --keep-worktree"
+fi
+
+# Clean up the preserved worktree manually
+git -C "$MAIN_REPO" worktree remove --force "$WT_PATH_K" 2>/dev/null || true
+
+echo
+echo "13. Testing close refuses when main_repo is off default_branch..."
+timeout 5 ./ticket.sh new test-wt-main-off >/dev/null 2>&1
+TICKET_O=$(ls tickets/*.md 2>/dev/null | grep -v note | grep main-off | head -1)
+TICKET_O_NAME=$(basename "$TICKET_O" .md)
+git add . && git commit -q -m "Add main-off ticket"
+
+OUTPUT=$(timeout 10 ./ticket.sh start --worktree "$TICKET_O_NAME" 2>&1)
+WT_PATH_O=$(echo "$OUTPUT" | grep "^WORKTREE:" | head -1 | cut -d: -f2-)
+
+echo "work" > "$WT_PATH_O/work.txt"
+git -C "$WT_PATH_O" add .
+git -C "$WT_PATH_O" commit -q -m "Work"
+
+# Move main_repo off the default_branch to simulate a parallel worker
+git -C "$MAIN_REPO" checkout -q -b wt-main-detour
+
+cd "$WT_PATH_O"
+OUTPUT=$(timeout 15 ./ticket.sh close --no-push 2>&1) && CLOSE_EXIT=0 || CLOSE_EXIT=$?
+cd "$MAIN_REPO"
+
+if [[ "$CLOSE_EXIT" -ne 0 ]] && echo "$OUTPUT" | grep -q "Main repo HEAD is not on"; then
+    pass "Close refuses when main_repo is off default_branch"
+else
+    fail "Close did not refuse (exit: $CLOSE_EXIT)"
+    echo "  Output: $OUTPUT"
+fi
+
+# main_repo HEAD should NOT have been switched back to main by ticket.sh
+MAIN_BRANCH=$(git -C "$MAIN_REPO" rev-parse --abbrev-ref HEAD)
+if [[ "$MAIN_BRANCH" == "wt-main-detour" ]]; then
+    pass "main_repo HEAD untouched (still on wt-main-detour)"
+else
+    fail "main_repo HEAD drifted to: $MAIN_BRANCH"
+fi
+
+# The worker's worktree should still exist (close was aborted)
+if [[ -d "$WT_PATH_O" ]] && git -C "$MAIN_REPO" worktree list 2>/dev/null | grep -q "$WT_PATH_O"; then
     pass "Worktree preserved after aborted close"
 else
     fail "Worktree removed despite close failure"
 fi
 
-echo
-echo "12. Testing close succeeds after main repo returns to default branch..."
+# Cleanup: restore main_repo and the worker worktree
 git -C "$MAIN_REPO" checkout -q main
-git -C "$MAIN_REPO" branch -D wt-parallel-other 2>/dev/null || true
-
-cd "$WT_PATH_P"
-OUTPUT=$(timeout 10 ./ticket.sh close --no-push 2>&1) && CLOSE_EXIT=0 || CLOSE_EXIT=$?
-cd "$MAIN_REPO"
-
-if [[ "$CLOSE_EXIT" -eq 0 ]]; then
-    pass "Close succeeds after returning main repo to default branch"
-else
-    fail "Close failed even after main repo restored (exit: $CLOSE_EXIT)"
-    echo "  Output: $OUTPUT"
-fi
-
-echo
-echo "13. Testing --force-main-switch bypasses the guard..."
-timeout 5 ./ticket.sh new test-wt-force-switch >/dev/null 2>&1
-TICKET_F=$(ls tickets/*.md 2>/dev/null | grep -v note | grep force-switch | head -1)
-TICKET_F_NAME=$(basename "$TICKET_F" .md)
-git add . && git commit -q -m "Add force-switch ticket"
-
-OUTPUT=$(timeout 10 ./ticket.sh start --worktree "$TICKET_F_NAME" 2>&1)
-WT_PATH_F=$(echo "$OUTPUT" | grep "^WORKTREE:" | head -1 | cut -d: -f2-)
-
-echo "force work" > "$WT_PATH_F/force.txt"
-git -C "$WT_PATH_F" add .
-git -C "$WT_PATH_F" commit -q -m "Force work"
-
-git -C "$MAIN_REPO" checkout -q -b wt-force-other
-
-cd "$WT_PATH_F"
-OUTPUT=$(timeout 10 ./ticket.sh close --no-push --force-main-switch 2>&1) && CLOSE_EXIT=0 || CLOSE_EXIT=$?
-cd "$MAIN_REPO"
-
-if [[ "$CLOSE_EXIT" -eq 0 ]]; then
-    pass "Close proceeds with --force-main-switch"
-else
-    fail "Close failed with --force-main-switch (exit: $CLOSE_EXIT)"
-    echo "  Output: $OUTPUT"
-fi
-
-MAIN_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-if [[ "$MAIN_BRANCH" == "main" ]]; then
-    pass "Force switch moved main repo to default branch"
-else
-    fail "Main repo on unexpected branch after force: $MAIN_BRANCH"
-fi
-
-git branch -D wt-force-other 2>/dev/null || true
+git -C "$MAIN_REPO" branch -D wt-main-detour 2>/dev/null || true
+git -C "$MAIN_REPO" worktree remove --force "$WT_PATH_O" 2>/dev/null || true
+git -C "$MAIN_REPO" branch -D "feature/${TICKET_O_NAME}" 2>/dev/null || true
 
 echo
 echo "=== Worktree Test Results ==="

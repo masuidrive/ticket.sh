@@ -172,15 +172,13 @@ get_ticket_file() {
 # Check if main repo is in a safe state to perform merge operations.
 # In parallel multi-worktree workflows, another worker may have checked out
 # a different branch or left uncommitted changes in the main repo. Blindly
-# switching HEAD would disrupt them, so this guard halts with a clear error
-# unless the caller explicitly opted into the legacy behavior.
+# merging into the current branch would disrupt them, so this guard halts
+# with a clear error.
 #
-# Usage: check_main_repo_ready <main_repo> <default_branch> [force]
-#   force="true" downgrades errors to warnings and proceeds anyway.
+# Usage: check_main_repo_ready <main_repo> <default_branch>
 check_main_repo_ready() {
     local main_repo="$1"
     local default_branch="$2"
-    local force="${3:-false}"
 
     local main_branch
     main_branch=$(git -C "$main_repo" symbolic-ref --short HEAD 2>/dev/null)
@@ -190,42 +188,31 @@ check_main_repo_ready() {
     fi
 
     if [[ "$main_branch" != "$default_branch" ]]; then
-        if [[ "$force" == "true" ]]; then
-            echo "Warning: Main repo is on '$main_branch' instead of '$default_branch'. Forcing switch." >&2
-        else
-            cat >&2 << EOF
+        cat >&2 << EOF
 Error: Main repo HEAD is not on '$default_branch'
 Main repository at '$main_repo' is currently on branch '$main_branch',
 but ticket.sh needs '$default_branch' to perform the merge.
 
 This commonly happens in parallel multi-worktree workflows where another
-worker has checked out a different branch in the main repo. Switching HEAD
-silently would disrupt that worker.
+worker has checked out a different branch in the main repo. Merging into
+'$main_branch' silently would disrupt that worker.
 
-Please either:
-  1. Switch main repo to '$default_branch' manually:
-       git -C $main_repo checkout $default_branch
-  2. Use --force-main-switch to override (may affect concurrent workers).
+Please switch main repo back to '$default_branch':
+  git -C $main_repo checkout $default_branch
+Then retry the close.
 EOF
-            return 1
-        fi
+        return 1
     fi
 
     if [[ -n "$(git -C "$main_repo" status --porcelain 2>/dev/null)" ]]; then
-        if [[ "$force" == "true" ]]; then
-            echo "Warning: Main repo has uncommitted changes. Forcing merge anyway." >&2
-        else
-            cat >&2 << EOF
+        cat >&2 << EOF
 Error: Main repo has uncommitted changes
 Main repository at '$main_repo' has uncommitted changes that could conflict
 with the merge. Another worker may be editing files there.
 
-Please either:
-  1. Commit or stash the changes in main repo manually
-  2. Use --force-main-switch to override (at your own risk).
+Please commit or stash the changes in the main repo manually, then retry.
 EOF
-            return 1
-        fi
+        return 1
     fi
 
     return 0
