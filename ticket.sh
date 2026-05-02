@@ -12,7 +12,7 @@ fi
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20260416.163255
+# Version: 20260502.081610
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -1123,7 +1123,7 @@ if [ -z "${BASH_VERSION:-}" ]; then
 fi
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20260416.163255
+# Version: 20260502.081610
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -1215,7 +1215,7 @@ SCRIPT_COMMAND=$(get_script_command)
 
 
 # Global variables
-VERSION="20260416.163255"  # This will be replaced during build
+VERSION="20260502.081610"  # This will be replaced during build
 CONFIG_FILE=""  # Will be set dynamically by get_config_file()
 CURRENT_TICKET_LINK="current-ticket.md"
 CURRENT_NOTE_LINK="current-note.md"
@@ -1296,7 +1296,8 @@ Each ticket is a single Markdown file with YAML frontmatter metadata.
   - With \`--worktree\`: **cd to the worktree directory after start; cd back to the main repo after close.** In environments where cwd resets each command (e.g. LLM agents), cd must be re-run every time.
 - \`$SCRIPT_COMMAND restore\` - Restore current-ticket.md symlink from branch name
 - \`$SCRIPT_COMMAND check\` - Check current directory and ticket/branch synchronization status
-- \`$SCRIPT_COMMAND close [--no-push] [--force|-f] [--no-delete-remote] [--keep-worktree]\` - Complete current ticket (squash merge to default branch)
+- \`$SCRIPT_COMMAND close [--no-push] [--force|-f] [--no-delete-remote] [--keep-worktree] [--dry-run|-n]\` - Complete current ticket (squash merge to default branch)
+  - \`--dry-run\` (\`-n\`) runs all preflight checks (clean working dir, branch, ticket state, base_branch existence, worktree main repo state) and exits before any commit/merge. Useful for catching format mistakes or stale state before the real close. Note: pre-commit hooks are NOT executed by --dry-run.
   - From a worktree, close refuses to merge if the main repo is on a non-default branch or has uncommitted changes (protects parallel workers).
   - **Coding agents (Claude Code / Codex / etc.) must pass \`--keep-worktree\`**: without it, the worker's worktree is deleted and the agent's shell cwd points to a removed directory → every subsequent Bash tool call fails.
 - \`$SCRIPT_COMMAND cancel [--force|-f] [--keep-worktree]\` - Cancel current ticket (no merge, moves to done/ with CANCELED marker)
@@ -2673,6 +2674,7 @@ cmd_close() {
     local force=false
     local no_delete_remote=false
     local keep_worktree=false
+    local dry_run=false
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
@@ -2693,9 +2695,13 @@ cmd_close() {
                 keep_worktree=true
                 shift
                 ;;
+            --dry-run|-n)
+                dry_run=true
+                shift
+                ;;
             *)
                 echo "Error: Unknown option: $1" >&2
-                echo "Usage: $SCRIPT_COMMAND close [--no-push] [--force|-f] [--no-delete-remote] [--keep-worktree]" >&2
+                echo "Usage: $SCRIPT_COMMAND close [--no-push] [--force|-f] [--no-delete-remote] [--keep-worktree] [--dry-run|-n]" >&2
                 return 1
                 ;;
         esac
@@ -2837,10 +2843,29 @@ EOF
         }
     fi
 
+    # --dry-run: all preflight checks passed; exit before any mutation.
+    if [[ "$dry_run" == "true" ]]; then
+        echo "Dry-run: all preflight checks passed."
+        echo "  ticket file:    $ticket_file"
+        echo "  feature branch: $current_branch"
+        echo "  base branch:    $default_branch"
+        if [[ "$in_worktree" == "true" ]]; then
+            echo "  mode:           worktree"
+            echo "  main repo:      $main_repo"
+            echo "  worktree path:  $worktree_path"
+        else
+            echo "  mode:           in-place"
+        fi
+        echo ""
+        echo "No changes were made. Re-run without --dry-run to close the ticket."
+        echo "Note: pre-commit hooks are NOT executed by --dry-run."
+        return 0
+    fi
+
     # Store original ticket state for rollback
     local original_ticket_content=$(cat "$ticket_file")
     local original_branch=$(get_current_branch)
-    
+
     # Update closed_at
     local timestamp=$(get_utc_timestamp)
     update_yaml_frontmatter_field "$ticket_file" "closed_at" "$timestamp" || {
