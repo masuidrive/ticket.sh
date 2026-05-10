@@ -68,4 +68,19 @@ run_docker_tests "ubuntu:22.04" "Ubuntu 22.04"
 # Test on Alpine Linux
 run_docker_tests "alpine:latest" "Alpine Linux"
 
+# Restore working-tree file modes to match the git index. On macOS Docker
+# Desktop, bind mounts can leave host files with mode bits that diverge from
+# what git tracks (most often losing +x on *.sh). This sync is mode-only and
+# never touches file contents.
+echo "Restoring working-tree file modes to match git index..."
+(
+  cd "$ROOT_DIR" || exit 0
+  git ls-files --stage | while read -r mode hash stage path; do
+    case "$mode" in
+      100755) [ -x "$path" ] || chmod +x "$path" 2>/dev/null ;;
+      100644) [ ! -x "$path" ] || chmod -x "$path" 2>/dev/null ;;
+    esac
+  done
+)
+
 echo "=== All Docker tests completed ==="
