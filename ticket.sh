@@ -12,7 +12,7 @@ fi
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20260510.023854
+# Version: 20260510.033340
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -1123,7 +1123,7 @@ if [ -z "${BASH_VERSION:-}" ]; then
 fi
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20260510.023854
+# Version: 20260510.033340
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -1215,7 +1215,7 @@ SCRIPT_COMMAND=$(get_script_command)
 
 
 # Global variables
-VERSION="20260510.023854"  # This will be replaced during build
+VERSION="20260510.033340"  # This will be replaced during build
 CONFIG_FILE=""  # Will be set dynamically by get_config_file()
 CURRENT_TICKET_LINK="current-ticket.md"
 CURRENT_NOTE_LINK="current-note.md"
@@ -3618,7 +3618,9 @@ json_escape() {
 }
 
 # Read a single field from raw YAML frontmatter content (no $file required).
-# Strips surrounding quotes and inline `# comment` tail.
+# Strips surrounding quotes and inline `# comment` tail. Always returns 0
+# (emits empty string when the field is absent) so callers using
+# `var=$(get_yaml_field ...)` under `set -e` are not terminated.
 # Usage: get_yaml_field <yaml_content> <field>
 get_yaml_field() {
     local content="$1"
@@ -3646,7 +3648,7 @@ get_yaml_field() {
             return 0
         fi
     done <<< "$content"
-    return 1
+    return 0
 }
 
 # Resolve an epic slug to its source. Search order:

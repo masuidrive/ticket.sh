@@ -195,6 +195,37 @@ if echo "$SHOW" | grep -q '"branch":"epic/echo-epic"'; then ok "show --json bran
 echo
 
 # ------------------------------------------------------------------
+# Test 6: regression — `epic show --json` with non-empty linked_tickets
+# parses as valid JSON (was truncating mid-array under set -e because
+# get_yaml_field returned 1 inside var=$(...); see gist comment #6142039).
+# ------------------------------------------------------------------
+echo "Test 6: epic show --json with linked tickets is valid JSON"
+start_test "show-json-linked"
+
+./ticket.sh epic new gamma >/dev/null 2>&1
+git switch main 2>/dev/null
+./ticket.sh new linked-feat --epic gamma >/dev/null 2>&1
+git add tickets && git commit -q -m "add ticket"
+
+./ticket.sh epic show gamma --json > /tmp/_epic_show.json 2>/dev/null
+if command -v python3 >/dev/null 2>&1; then
+    if python3 -c "import json; d=json.load(open('/tmp/_epic_show.json')); assert isinstance(d['linked_tickets'], list); assert len(d['linked_tickets']) == 1" 2>/dev/null; then
+        ok "JSON parses with non-empty linked_tickets"
+    else
+        fail "JSON parse failed (truncated or malformed)"
+    fi
+else
+    # Fallback: at least the closing brace must be present at EOF.
+    if tail -c 5 /tmp/_epic_show.json | grep -q '}}'; then
+        ok "JSON looks complete (no python3 for full parse)"
+    else
+        fail "JSON appears truncated"
+    fi
+fi
+rm -f /tmp/_epic_show.json
+echo
+
+# ------------------------------------------------------------------
 # Summary
 # ------------------------------------------------------------------
 echo "=== Summary ==="

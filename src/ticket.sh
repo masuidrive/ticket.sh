@@ -2520,7 +2520,9 @@ json_escape() {
 }
 
 # Read a single field from raw YAML frontmatter content (no $file required).
-# Strips surrounding quotes and inline `# comment` tail.
+# Strips surrounding quotes and inline `# comment` tail. Always returns 0
+# (emits empty string when the field is absent) so callers using
+# `var=$(get_yaml_field ...)` under `set -e` are not terminated.
 # Usage: get_yaml_field <yaml_content> <field>
 get_yaml_field() {
     local content="$1"
@@ -2548,7 +2550,7 @@ get_yaml_field() {
             return 0
         fi
     done <<< "$content"
-    return 1
+    return 0
 }
 
 # Resolve an epic slug to its source. Search order:
