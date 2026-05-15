@@ -137,14 +137,14 @@ cp ticket.sh /usr/local/bin/
 - `new <slug>` - Create new ticket
 - `list [--status todo|doing|done|canceled] [--count N]` - List tickets
 - `start [--worktree] <ticket>` - Start working on ticket (--worktree creates a separate worktree)
-- `close [--no-push] [--force] [--no-delete-remote]` - Complete ticket
-- `cancel [--force|-f]` - Cancel ticket without merging
+- `close [--no-push] [--force] [--no-delete-remote] [--dry-run|-n] [--keep-worktree]` - Complete ticket
+- `cancel [--force|-f] [--keep-worktree]` - Cancel ticket without merging
 - `restore` - Restore current-ticket.md symlink
 
 ### Utility Commands
-- `check` - Diagnose current state and provide guidance
+- `check` - Diagnose current state and provide guidance (checks git repo, config, tickets dir, current-ticket.md, worktree state)
 - `version` / `--version` - Show version information
-- `selfupdate` - Update to latest release from GitHub
+- `selfupdate` - Update to latest release from GitHub (checks GitHub releases, downloads new version, preserves config, fixes CRLF line endings)
 
 ### List Command Features
 - **Status filtering**: `--status todo|doing|done|canceled` to filter by ticket status
@@ -152,6 +152,71 @@ cp ticket.sh /usr/local/bin/
 - **Done tickets**: Sorted by completion date (newest first)
 - **Timezone display**: Completion times shown in local timezone
 - **Done folder**: Completed tickets automatically organized in `tickets/done/`
+
+### List Command Output Format
+
+```
+Ticket Name                    Status   Created              Started              Closed
+------------------------------ -------- -------------------- -------------------- --------------------
+241229-123456-implement-auth   todo     2024-12-29 12:34:56  -                    -
+241228-091530-fix-login-bug    doing    2024-12-28 09:15:30  2024-12-29 10:00:00  -
+241227-183022-add-user-profile done     2024-12-27 18:30:22  2024-12-28 09:00:00  2024-12-29 14:30:00
+```
+
+### Close Command Options
+
+| Option | Description |
+|--------|-------------|
+| `--no-push` | Skip pushing changes to remote repository |
+| `--force` | Close without prompts (useful for CI/CD) |
+| `--no-delete-remote` | Keep remote feature branch after closing |
+| `--dry-run` \| `-n` | Show what would be done without making changes |
+| `--keep-worktree` | Preserve worktree after closing (for --worktree mode) |
+
+## Ticket File Format
+
+Each ticket is a Markdown file with YAML frontmatter containing metadata:
+
+```yaml
+---
+# Priority level (1-5, higher = more urgent)
+priority: 2
+
+# Base branch for creating feature branch
+base_branch: "default"
+
+# Human-readable description
+description: ""
+
+# Timestamps (UTC)
+created_at: "2025-06-28T15:32:45Z"
+started_at: null
+closed_at: null
+canceled_at: null
+---
+# Markdown body content starts here
+# Describe the ticket details, tasks, acceptance criteria, etc.
+```
+
+### Frontmatter Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `priority` | integer | Priority level (1-5, higher = more urgent) |
+| `base_branch` | string | Base branch for creating the feature branch (`default` uses config default) |
+| `description` | string | Human-readable description of the ticket |
+| `created_at` | timestamp | ISO 8601 UTC timestamp when ticket was created |
+| `started_at` | timestamp | ISO 8601 UTC timestamp when work started (null until started) |
+| `closed_at` | timestamp | ISO 8601 UTC timestamp when ticket was closed (null until closed) |
+| `canceled_at` | timestamp | ISO 8601 UTC timestamp when ticket was canceled (null unless canceled) |
+
+### Ticket Status
+
+Tickets transition through these states:
+- **todo**: `started_at` is null (not yet started)
+- **doing**: `started_at` is set, `closed_at` and `canceled_at` are null (in progress)
+- **done**: `closed_at` is set (completed successfully)
+- **canceled**: `canceled_at` is set (abandoned without merging)
 
 ## Configuration
 
@@ -299,6 +364,20 @@ default_content: |
 - **Config mode**: Set `worktree_mode: true` in config to always use worktrees
 - **Custom directory**: Set `worktree_dir` in config to customize worktree location (default: `../<project>.worktrees/`)
 
+### Check Command Diagnostics
+
+The `check` command verifies the following:
+
+| Check | Description |
+|-------|-------------|
+| Git repository | Verifies current directory is a Git repository |
+| Config file | Checks for `.ticket-config.yaml` or `.ticket-config.yml` |
+| Tickets directory | Ensures `tickets/` directory exists |
+| Current ticket | Validates `current-ticket.md` symlink |
+| Working directory | Reports uncommitted changes |
+| Worktree state | Shows active worktree if in use |
+| Branch alignment | Verifies current branch matches expected state |
+
 ### Error Recovery
 - **Check command**: Diagnose issues and get guidance on next steps
 - **Restore command**: Rebuild symlinks and recover from interrupted operations  
@@ -315,6 +394,23 @@ default_content: |
 - Bash 3.2+
 - Git
 - Basic Unix tools
+
+### Selfupdate Command
+
+The `selfupdate` command:
+- Fetches the latest release from GitHub
+- Downloads the new `ticket.sh` file
+- Preserves your existing configuration
+- Automatically fixes CRLF line ending issues
+- Maintains executable permissions
+
+```
+# Check for updates
+./ticket.sh selfupdate
+
+# With verbose output
+./ticket.sh selfupdate --verbose
+```
 
 ## For Developers
 
