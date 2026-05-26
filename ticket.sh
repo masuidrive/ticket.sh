@@ -12,7 +12,7 @@ fi
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20260515.140642
+# Version: 20260526.142444
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -1123,7 +1123,7 @@ if [ -z "${BASH_VERSION:-}" ]; then
 fi
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20260515.140642
+# Version: 20260526.142444
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -1215,7 +1215,7 @@ SCRIPT_COMMAND=$(get_script_command)
 
 
 # Global variables
-VERSION="20260515.140642"  # This will be replaced during build
+VERSION="20260526.142444"  # This will be replaced during build
 CONFIG_FILE=""  # Will be set dynamically by get_config_file()
 CURRENT_TICKET_LINK="current-ticket.md"
 CURRENT_NOTE_LINK="current-note.md"
@@ -2135,9 +2135,39 @@ cmd_start() {
         fi
     fi
 
+    # Resolve main repo path (works in both main repo and worktrees).
+    # Needed for worktree mode operations and for verifying branches without
+    # depending on cwd HEAD.
+    local main_repo
+    if is_git_worktree; then
+        main_repo=$(get_main_repo_from_worktree)
+    else
+        main_repo=$(git rev-parse --show-toplevel)
+    fi
+
     # Check current branch
     local current_branch=$(get_current_branch)
-    if [[ "$current_branch" != "$effective_base" ]]; then
+    if [[ "$use_worktree" == "true" ]]; then
+        # Worktree mode: do NOT touch cwd HEAD. Worktree is created directly
+        # from the base branch via 'git -C <main_repo> worktree add', so we
+        # don't need to checkout effective_base in cwd. This avoids:
+        #   - clobbering the user's current feature branch
+        #   - 'fatal: <branch> is already used by worktree at ...' errors when
+        #     cwd is inside another worktree and effective_base is held by the
+        #     main repo (or another sibling worktree)
+        # Just verify the base branch exists in the main repo.
+        if ! git -C "$main_repo" rev-parse --verify "$effective_base" >/dev/null 2>&1; then
+            cat >&2 << EOF
+Error: Base branch not found
+Base branch '$effective_base' does not exist in the main repository at:
+  $main_repo
+Please:
+1. Check the ticket's base_branch in YAML frontmatter, or
+2. Create the branch in the main repo: git -C $main_repo branch $effective_base
+EOF
+            return 1
+        fi
+    elif [[ "$current_branch" != "$effective_base" ]]; then
         # We're not on the effective base branch - handle different scenarios
         local git_status_output
         if ! git_status_output=$(git status --porcelain 2>&1); then
@@ -2189,25 +2219,38 @@ EOF
         check_clean_working_dir "$tickets_dir" || return 1
     fi
 
-    # Check if ticket exists (after potential branch switch)
+    # Check if ticket exists.
+    # In worktree mode we don't switch cwd HEAD, so the ticket may not be in
+    # cwd's working tree if cwd is on a different branch / worktree. Also
+    # accept the case where the ticket exists in the base branch on main repo.
     if [[ ! -f "$ticket_file" ]]; then
-        cat >&2 << EOF
+        local ticket_in_base=false
+        if [[ "$use_worktree" == "true" ]]; then
+            if git -C "$main_repo" cat-file -e "${effective_base}:${ticket_file}" 2>/dev/null; then
+                ticket_in_base=true
+            fi
+        fi
+        if [[ "$ticket_in_base" != "true" ]]; then
+            cat >&2 << EOF
 Error: Ticket not found
 Ticket '$ticket_file' does not exist. Please:
 1. Check the ticket name spelling
 2. Run '$SCRIPT_COMMAND list' to see available tickets
 3. Use '$SCRIPT_COMMAND new <slug>' to create a new ticket
 EOF
-        return 1
+            return 1
+        fi
     fi
     
     # Create branch name
     local branch_name="${branch_prefix}${ticket_name}"
 
-    # Determine worktree path if using worktree mode
+    # Determine worktree path if using worktree mode.
+    # Anchor the worktree path on main_repo (not cwd's toplevel) so callers
+    # inside other worktrees still produce the canonical path.
     local wt_path=""
     if [[ "$use_worktree" == "true" ]]; then
-        local project_root=$(git rev-parse --show-toplevel)
+        local project_root="$main_repo"
         local project_name=$(basename "$project_root")
         if [[ -n "$worktree_dir" ]]; then
             wt_path="${worktree_dir}/${ticket_name}"
@@ -2218,9 +2261,9 @@ EOF
         wt_path=$(cd "$(dirname "$wt_path")" 2>/dev/null && echo "$(pwd)/$(basename "$wt_path")" || echo "$wt_path")
     fi
 
-    # Check if branch is already checked out in another worktree
-    # This prevents worktree metadata corruption, especially in Docker/devcontainer environments
-    local worktree_using_branch=$(git worktree list --porcelain 2>/dev/null | awk -v branch="branch refs/heads/$branch_name" '/^worktree /{wt=$0} $0==branch{print wt}' | sed 's/^worktree //')
+    # Check if branch is already checked out in another worktree.
+    # Query main repo directly so we get a consistent view regardless of cwd.
+    local worktree_using_branch=$(git -C "$main_repo" worktree list --porcelain 2>/dev/null | awk -v branch="branch refs/heads/$branch_name" '/^worktree /{wt=$0} $0==branch{print wt}' | sed 's/^worktree //')
     if [[ -n "$worktree_using_branch" ]]; then
         local current_toplevel=$(git rev-parse --show-toplevel 2>/dev/null)
         # It's OK if the current directory IS the worktree that has this branch
@@ -2248,26 +2291,27 @@ EOF
         fi
     fi
 
-    # Check if branch already exists
+    # Check if branch already exists.
+    # Query main repo so worktree mode works from any cwd.
     local branch_exists_check
-    if branch_exists_check=$(git show-ref --verify "refs/heads/$branch_name" 2>&1); then
+    if branch_exists_check=$(git -C "$main_repo" show-ref --verify "refs/heads/$branch_name" 2>&1); then
         # Branch exists - resume work
         echo "Branch '$branch_name' already exists. Resuming work on existing ticket..."
 
         if [[ "$use_worktree" == "true" ]]; then
             # Check if worktree already exists for this branch (may already be set above)
-            local existing_wt=$(git worktree list --porcelain 2>/dev/null | awk -v branch="branch refs/heads/$branch_name" '/^worktree /{wt=$0} $0==branch{print wt}' | sed 's/^worktree //')
+            local existing_wt=$(git -C "$main_repo" worktree list --porcelain 2>/dev/null | awk -v branch="branch refs/heads/$branch_name" '/^worktree /{wt=$0} $0==branch{print wt}' | sed 's/^worktree //')
             if [[ -n "$existing_wt" ]]; then
                 echo "Worktree already exists at: $existing_wt"
                 wt_path="$existing_wt"
             else
-                # Create worktree for existing branch
+                # Create worktree for existing branch (operate on main repo, never touch cwd HEAD)
                 if [[ -d "$wt_path" ]]; then
                     echo "Error: Directory '$wt_path' already exists but is not a worktree for this branch" >&2
                     return 1
                 fi
                 mkdir -p "$(dirname "$wt_path")"
-                run_git_command "git worktree add $wt_path $branch_name" || return 1
+                run_git_command "git -C $main_repo worktree add $wt_path $branch_name" || return 1
             fi
         else
             # Checkout existing branch (original behavior)
@@ -2373,18 +2417,28 @@ EOF
     local start_from="$effective_base"
 
     if [[ "$use_worktree" == "true" ]]; then
-        # Create worktree with new branch
+        # Create worktree with new branch (operate on main repo, never touch cwd HEAD)
         mkdir -p "$(dirname "$wt_path")"
-        run_git_command "git worktree add -b $branch_name $wt_path $start_from" || return 1
+        run_git_command "git -C $main_repo worktree add -b $branch_name $wt_path $start_from" || return 1
 
-        # If base_branch differs from where ticket was created, bring ticket files over
-        local prev_branch=$(get_current_branch)
+        # If the ticket file isn't on start_from, bring it (and related files)
+        # over from cwd's branch. Note: cwd is unchanged in worktree mode, so
+        # current_branch (captured earlier) is still cwd's HEAD.
+        local prev_branch="$current_branch"
         if [[ "$start_from" != "$prev_branch" ]]; then
             # In worktree context, use git show to copy files
             git -C "$wt_path" checkout "$prev_branch" -- "$ticket_file" 2>/dev/null || true
             local note_file="${tickets_dir}/${ticket_name}-note.md"
             git -C "$wt_path" checkout "$prev_branch" -- "$note_file" 2>/dev/null || true
             git -C "$wt_path" checkout "$prev_branch" -- "${tickets_dir}/README.md" 2>/dev/null || true
+        fi
+
+        # Final fallback: if the ticket file still isn't in the worktree but
+        # exists in cwd's working tree (e.g. just-created ticket not yet
+        # committed on start_from), copy it directly.
+        if [[ ! -f "${wt_path}/${ticket_file}" ]] && [[ -f "$ticket_file" ]]; then
+            mkdir -p "${wt_path}/$(dirname "$ticket_file")"
+            cp "$ticket_file" "${wt_path}/${ticket_file}"
         fi
 
         # Update ticket started_at in worktree

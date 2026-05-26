@@ -363,6 +363,11 @@ default_content: |
 - **Automatic cleanup**: `close` and `cancel` commands automatically remove the worktree
 - **Config mode**: Set `worktree_mode: true` in config to always use worktrees
 - **Custom directory**: Set `worktree_dir` in config to customize worktree location (default: `../<project>.worktrees/`)
+- **Safe from any branch / any worktree**: `start --worktree` never modifies the caller's `HEAD` or working tree.
+  It operates on the main repository via `git -C <main_repo> worktree add`, so it works correctly when:
+  - You are on a feature branch with uncommitted changes (no stash, no checkout)
+  - You are already inside another worktree (e.g. a previous ticket's worktree)
+  - Multiple AI agents (Claude Code, etc.) are running in parallel from different worktrees
 
 ### Check Command Diagnostics
 
