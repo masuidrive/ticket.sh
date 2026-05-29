@@ -134,7 +134,7 @@ cp ticket.sh /usr/local/bin/
 
 ### Core Commands
 - `init` - Initialize ticket system (idempotent, safe to re-run)
-- `new <slug>` - Create new ticket
+- `new <slug> [--epic <epic-slug>] [--created-at <YYMMDD-hhmmss>]` - Create new ticket (`--created-at` overrides the auto-generated timestamp; the value is used verbatim as the filename prefix and as `created_at` in UTC)
 - `list [--status todo|doing|done|canceled] [--count N]` - List tickets
 - `start [--worktree] <ticket>` - Start working on ticket (--worktree creates a separate worktree)
 - `close [--no-push] [--force] [--no-delete-remote] [--dry-run|-n] [--keep-worktree]` - Complete ticket

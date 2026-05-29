@@ -191,7 +191,7 @@ Each ticket is a single Markdown file with YAML frontmatter metadata.
 ## Usage
 
 - \`$SCRIPT_COMMAND init\` - Initialize system (create config, directories, .gitignore)
-- \`$SCRIPT_COMMAND new <slug>\` - Create new ticket file (slug: lowercase, numbers, hyphens only)
+- \`$SCRIPT_COMMAND new <slug> [--epic <epic-slug>] [--created-at <YYMMDD-hhmmss>]\` - Create new ticket file (slug: lowercase, numbers, hyphens only; --created-at overrides the timestamp, used as filename prefix and UTC created_at)
 - \`$SCRIPT_COMMAND list [--status STATUS] [--count N]\` - List tickets (default: todo + doing, count: 20)
 - \`$SCRIPT_COMMAND start [--worktree] <ticket-name>\` - Start working on ticket (creates or switches to feature branch, --worktree creates a separate worktree)
   - With \`--worktree\`: **cd to the worktree directory after start; cd back to the main repo after close.** In environments where cwd resets each command (e.g. LLM agents), cd must be re-run every time.
@@ -601,11 +601,18 @@ EOF
 cmd_new() {
     local slug=""
     local epic_slug=""
+    local created_at_override=""
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --epic)
                 epic_slug="$2"; shift 2 ;;
+            --created-at)
+                if [[ -z "${2:-}" ]]; then
+                    echo "Error: --created-at requires an argument (YYMMDD-hhmmss)" >&2
+                    return 1
+                fi
+                created_at_override="$2"; shift 2 ;;
             --*)
                 echo "Error: Unknown option: $1" >&2
                 return 1 ;;
@@ -617,7 +624,14 @@ cmd_new() {
 
     if [[ -z "$slug" ]]; then
         echo "Error: slug required" >&2
-        echo "Usage: $SCRIPT_COMMAND new <slug> [--epic <epic-slug>]" >&2
+        echo "Usage: $SCRIPT_COMMAND new <slug> [--epic <epic-slug>] [--created-at <YYMMDD-hhmmss>]" >&2
+        return 1
+    fi
+
+    # Validate --created-at format if provided (interpreted as UTC, like auto-generated timestamps)
+    if [[ -n "$created_at_override" ]] && [[ ! "$created_at_override" =~ ^[0-9]{6}-[0-9]{6}$ ]]; then
+        echo "Error: Invalid --created-at value '$created_at_override'" >&2
+        echo "Expected format: YYMMDD-hhmmss (e.g., 240115-093000)" >&2
         return 1
     fi
 
@@ -662,7 +676,12 @@ cmd_new() {
     local new_success_message=$(yaml_get "new_success_message" || echo "$DEFAULT_NEW_SUCCESS_MESSAGE")
     
     # Generate filename
-    local ticket_name=$(generate_ticket_filename "$slug")
+    local ticket_name
+    if [[ -n "$created_at_override" ]]; then
+        ticket_name="${created_at_override}-${slug}"
+    else
+        ticket_name=$(generate_ticket_filename "$slug")
+    fi
     local ticket_file="${tickets_dir}/${ticket_name}.md"
     local note_file="${tickets_dir}/${ticket_name}-note.md"
     
@@ -707,7 +726,13 @@ EOF
     fi
     
     # Create ticket file
-    local timestamp=$(get_utc_timestamp)
+    local timestamp
+    if [[ -n "$created_at_override" ]]; then
+        local d="$created_at_override"
+        timestamp="20${d:0:2}-${d:2:2}-${d:4:2}T${d:7:2}:${d:9:2}:${d:11:2}Z"
+    else
+        timestamp=$(get_utc_timestamp)
+    fi
     local _base_line="base_branch: default  # Override base branch for start/close (default: use default_branch from config)"
     local _epic_line=""
     if [[ -n "$epic_id_value" ]]; then
