@@ -172,6 +172,18 @@ Ticket Name                    Status   Created              Started            
 | `--no-delete-remote` | Keep remote feature branch after closing |
 | `--dry-run` \| `-n` | Show what would be done without making changes |
 | `--keep-worktree` | Preserve worktree after closing (for --worktree mode) |
+| `--no-merge` | Skip the squash-merge: assume the ticket's changes are already on the base branch (e.g. after a GitHub PR merge). Only set `closed_at`, move the ticket/note to `done/`, commit and push. Requires `<ticket-name>` as a positional argument. |
+| `--closed-at <ISO8601-UTC>` | (with `--no-merge`) Set `closed_at` to an explicit ISO8601 UTC value, e.g. `2026-05-29T12:17:36Z`. Defaults to the current UTC time. |
+
+### Finalizing a merged PR (`close --no-merge`)
+
+When a PR is merged on GitHub, the ticket's changes are already on the base branch, so a squash-merge would fail. Use `--no-merge` to finalize the ticket in place:
+
+```bash
+ticket.sh close --no-merge [--closed-at <ISO8601-UTC>] [--no-push] <ticket-name>
+```
+
+This runs on the base branch (not the feature branch), takes the ticket name as an explicit argument (it does not rely on `current-ticket.md` or the current branch), and is idempotent — re-running on an already-finalized ticket exits 0 without changes. Typical use is a GitHub Actions `pull_request: [closed]` trigger that passes `--closed-at "${{ github.event.pull_request.merged_at }}"` so `closed_at` records the actual merge time.
 
 ## Ticket File Format
 

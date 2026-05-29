@@ -201,6 +201,7 @@ Each ticket is a single Markdown file with YAML frontmatter metadata.
   - \`--dry-run\` (\`-n\`) runs all preflight checks (clean working dir, branch, ticket state, base_branch existence, worktree main repo state) and exits before any commit/merge. Useful for catching format mistakes or stale state before the real close. Note: pre-commit hooks are NOT executed by --dry-run.
   - From a worktree, close refuses to merge if the main repo is on a non-default branch or has uncommitted changes (protects parallel workers).
   - **Coding agents (Claude Code / Codex / etc.) must pass \`--keep-worktree\`**: without it, the worker's worktree is deleted and the agent's shell cwd points to a removed directory → every subsequent Bash tool call fails.
+  - \`--no-merge [--closed-at <ISO8601-UTC>] <ticket-name>\` - Skip the squash-merge (assume the ticket's changes are already on the base branch, e.g. after a GitHub PR merge). Only set closed_at, move the ticket/note to done/, commit and push. Requires \`<ticket-name>\`. \`--closed-at\` overrides closed_at with a full ISO8601 UTC value (default: now).
 - \`$SCRIPT_COMMAND cancel [--force|-f] [--keep-worktree]\` - Cancel current ticket (no merge, moves to done/ with CANCELED marker)
   - Same rule as close: coding agents should pass \`--keep-worktree\` to avoid dangling cwd.
 - \`$SCRIPT_COMMAND selfupdate\` - Update ticket.sh to the latest version from GitHub
@@ -1699,6 +1700,126 @@ cmd_check() {
     fi
 }
 
+# Finalize a ticket without merging (close --no-merge).
+# Assumes the ticket's changes are already on the base branch (e.g. the PR
+# was merged on GitHub). Only sets closed_at, moves ticket/note to done/,
+# commits on the current branch and pushes. No squash-merge, no branch
+# switching, no worktree/remote-branch operations.
+# Usage: cmd_close_no_merge <ticket-name> <closed-at-override> <no-push>
+cmd_close_no_merge() {
+    local ticket_name_arg="$1"
+    local closed_at_override="$2"
+    local no_push="$3"
+
+    if [[ -z "$ticket_name_arg" ]]; then
+        echo "Error: <ticket-name> is required with --no-merge" >&2
+        echo "Usage: $SCRIPT_COMMAND close --no-merge [--closed-at <ISO8601-UTC>] [--no-push] <ticket-name>" >&2
+        return 1
+    fi
+
+    # Validate --closed-at format if provided (full ISO8601 UTC, matches frontmatter)
+    if [[ -n "$closed_at_override" ]] && \
+       [[ ! "$closed_at_override" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]]; then
+        echo "Error: Invalid --closed-at value '$closed_at_override'" >&2
+        echo "Expected ISO8601 UTC format: YYYY-MM-DDThh:mm:ssZ (e.g., 2026-05-29T12:17:36Z)" >&2
+        return 1
+    fi
+
+    # Load configuration
+    if ! yaml_parse "$CONFIG_FILE"; then
+        echo "Error: Cannot parse configuration file: $CONFIG_FILE" >&2
+        echo "Configuration file may be corrupted or unreadable" >&2
+        return 1
+    fi
+    local repository=$(yaml_get "repository" || echo "$DEFAULT_REPOSITORY")
+    local auto_push=$(yaml_get "auto_push" || echo "$DEFAULT_AUTO_PUSH")
+    local close_success_message=$(yaml_get "close_success_message" || echo "$DEFAULT_CLOSE_SUCCESS_MESSAGE")
+    local tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
+
+    # Normalize ticket name (accept name, path, or .md)
+    local ticket_name=$(extract_ticket_name "$ticket_name_arg")
+    local ticket_file="${tickets_dir}/${ticket_name}.md"
+    local note_file="${tickets_dir}/${ticket_name}-note.md"
+    local done_dir="${tickets_dir}/done"
+    local done_ticket="${done_dir}/${ticket_name}.md"
+
+    # Idempotent: already finalized
+    if [[ -f "$done_ticket" ]]; then
+        echo "Ticket already finalized: $ticket_name"
+        return 0
+    fi
+
+    # Target must exist
+    if [[ ! -f "$ticket_file" ]]; then
+        cat >&2 << EOF
+Error: Ticket not found
+Ticket file '$ticket_file' does not exist (and not already in done/). Please:
+1. Check the ticket name, or
+2. Verify you are on the base branch where the ticket file lives
+EOF
+        return 1
+    fi
+
+    local current_branch=$(get_current_branch)
+    local description=$(get_yaml_field "$(extract_yaml_frontmatter "$ticket_file")" "description")
+
+    # Set closed_at (override or now-UTC)
+    local timestamp="${closed_at_override:-$(get_utc_timestamp)}"
+    update_yaml_frontmatter_field "$ticket_file" "closed_at" "$timestamp" || {
+        echo "Error: Failed to update ticket closed_at field" >&2
+        return 1
+    }
+
+    # Move ticket + note into done/
+    if [[ ! -d "$done_dir" ]] && ! mkdir -p "$done_dir"; then
+        echo "Error: Failed to create done directory: $done_dir" >&2
+        return 1
+    fi
+
+    run_git_command "git mv \"$ticket_file\" \"$done_ticket\"" || {
+        echo "Error: Failed to move ticket to done folder" >&2
+        return 1
+    }
+
+    if [[ -f "$note_file" ]]; then
+        run_git_command "git mv \"$note_file\" \"${done_dir}/${ticket_name}-note.md\"" || {
+            echo "Error: Failed to move note file to done folder" >&2
+            return 1
+        }
+    fi
+
+    # Commit on the current (base) branch
+    local commit_msg="Finalize ticket ${ticket_name} (closed via merged PR)"
+    if [[ -n "$description" ]]; then
+        commit_msg="${commit_msg}"$'\n\n'"${description}"
+    fi
+    echo "$commit_msg" | run_git_command "git commit -F -" || {
+        echo "Error: Failed to commit ticket finalization" >&2
+        return 1
+    }
+
+    if [[ "$auto_push" == "true" ]] && [[ "$no_push" == "false" ]]; then
+        run_git_command "git push $repository $current_branch" || {
+            echo "Warning: Failed to push to remote repository" >&2
+            echo "Local finalization completed. Please push manually later:" >&2
+            echo "  git push $repository $current_branch" >&2
+        }
+    fi
+
+    echo "Ticket finalized: $ticket_name"
+    echo "closed_at: $timestamp"
+    echo "Moved to: $done_ticket (no merge; assumed already on '$current_branch')"
+
+    if [[ "$auto_push" == "false" ]] || [[ "$no_push" == "true" ]]; then
+        echo "Note: Changes not pushed to remote. Use 'git push $repository $current_branch' when ready."
+    fi
+
+    if [[ -n "$close_success_message" ]]; then
+        echo ""
+        echo "$close_success_message"
+    fi
+}
+
 # Close current ticket
 cmd_close() {
     local no_push=false
@@ -1706,6 +1827,9 @@ cmd_close() {
     local no_delete_remote=false
     local keep_worktree=false
     local dry_run=false
+    local no_merge=false
+    local closed_at_override=""
+    local ticket_name_arg=""
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
@@ -1730,17 +1854,51 @@ cmd_close() {
                 dry_run=true
                 shift
                 ;;
-            *)
+            --no-merge)
+                no_merge=true
+                shift
+                ;;
+            --closed-at)
+                if [[ -z "${2:-}" ]]; then
+                    echo "Error: --closed-at requires an argument (ISO8601 UTC, e.g. 2026-05-29T12:17:36Z)" >&2
+                    return 1
+                fi
+                closed_at_override="$2"
+                shift 2
+                ;;
+            -*)
                 echo "Error: Unknown option: $1" >&2
                 echo "Usage: $SCRIPT_COMMAND close [--no-push] [--force|-f] [--no-delete-remote] [--keep-worktree] [--dry-run|-n]" >&2
+                echo "       $SCRIPT_COMMAND close --no-merge [--closed-at <ISO8601-UTC>] [--no-push] <ticket-name>" >&2
                 return 1
+                ;;
+            *)
+                if [[ -z "$ticket_name_arg" ]]; then
+                    ticket_name_arg="$1"
+                else
+                    echo "Error: Unexpected argument: $1" >&2
+                    return 1
+                fi
+                shift
                 ;;
         esac
     done
-    
+
     # Check prerequisites
     check_git_repo || return 1
     check_config || return 1
+
+    # --no-merge: finalize a ticket whose changes are already on the base
+    # branch (e.g. after a GitHub PR merge). No squash-merge / branch switch.
+    if [[ "$no_merge" == "true" ]]; then
+        cmd_close_no_merge "$ticket_name_arg" "$closed_at_override" "$no_push"
+        return $?
+    fi
+
+    if [[ -n "$ticket_name_arg" ]]; then
+        echo "Error: <ticket-name> is only valid with --no-merge" >&2
+        return 1
+    fi
 
     # Check clean working directory unless --force is used
     if [[ "$force" == "false" ]]; then
