@@ -12,7 +12,7 @@ fi
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20260529.145727
+# Version: 20260529.152801
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -1123,7 +1123,7 @@ if [ -z "${BASH_VERSION:-}" ]; then
 fi
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20260529.145727
+# Version: 20260529.152801
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -1215,7 +1215,7 @@ SCRIPT_COMMAND=$(get_script_command)
 
 
 # Global variables
-VERSION="20260529.145727"  # This will be replaced during build
+VERSION="20260529.152801"  # This will be replaced during build
 CONFIG_FILE=""  # Will be set dynamically by get_config_file()
 CURRENT_TICKET_LINK="current-ticket.md"
 CURRENT_NOTE_LINK="current-note.md"
@@ -2880,12 +2880,20 @@ EOF
         return 1
     }
 
+    local done_note="${done_dir}/${ticket_name}-note.md"
     if [[ -f "$note_file" ]]; then
-        run_git_command "git mv \"$note_file\" \"${done_dir}/${ticket_name}-note.md\"" || {
+        run_git_command "git mv \"$note_file\" \"$done_note\"" || {
             echo "Error: Failed to move note file to done folder" >&2
             return 1
         }
     fi
+
+    # git mv stages the pre-edit blob under the new name, so re-add the moved
+    # ticket to capture the closed_at edit in the same commit.
+    run_git_command "git add \"$done_ticket\"" || {
+        echo "Error: Failed to stage finalized ticket" >&2
+        return 1
+    }
 
     # Commit on the current (base) branch
     local commit_msg="Finalize ticket ${ticket_name} (closed via merged PR)"

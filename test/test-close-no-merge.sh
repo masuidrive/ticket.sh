@@ -37,7 +37,9 @@ setup_test_repo "$TEST_DIR"
 create_ticket_on_main() {
     local slug="$1"
     timeout 5 ./ticket.sh new "$slug" >/dev/null 2>&1
-    git add tickets >/dev/null 2>&1
+    # Commit ticket files AND the config so the working tree is clean
+    # before finalize (mirrors a real base branch after a PR merge).
+    git add tickets .ticket-config.yaml >/dev/null 2>&1
     git commit -q -m "add ticket $slug"
     safe_get_ticket_name "*${slug}.md"
 }
@@ -60,6 +62,28 @@ else
     test_result 1 "closed_at should equal --closed-at value" "$(grep closed_at tickets/done/${TICKET}.md 2>/dev/null)"
 fi
 
+# Regression: closed_at must be in the COMMIT, not just the working tree.
+if git show "HEAD:tickets/done/${TICKET}.md" 2>/dev/null | grep -q 'closed_at: 2026-05-29T12:17:36Z'; then
+    test_result 0 "closed_at is committed (HEAD), not left in working tree"
+else
+    test_result 1 "closed_at should be committed at HEAD" "$(git show HEAD:tickets/done/${TICKET}.md 2>/dev/null | grep closed_at)"
+fi
+
+# Regression: working tree must be clean after finalize.
+STATUS_OUT=$(git status --short)
+if [[ -z "$STATUS_OUT" ]]; then
+    test_result 0 "Working tree is clean after finalize"
+else
+    test_result 1 "Working tree should be clean after finalize" "$STATUS_OUT"
+fi
+
+# Regression: note must be moved to done/ in the same commit as the ticket.
+if git show --name-status HEAD | grep -q "tickets/done/${TICKET}-note.md"; then
+    test_result 0 "Note moved to done/ in the finalize commit"
+else
+    test_result 1 "Note should be moved to done/ in the same commit" "$(git show --name-status HEAD | grep -i note)"
+fi
+
 if [[ "$BEFORE_BRANCH" == "$AFTER_BRANCH" ]]; then
     test_result 0 "Branch unchanged (no merge/checkout): $AFTER_BRANCH"
 else
@@ -77,11 +101,17 @@ echo -e "\n2. Testing --no-merge without --closed-at (defaults to now-UTC)..."
 TICKET2=$(create_ticket_on_main "merged-feature-2")
 NOW_PREFIX=$(date -u '+%Y-%m-%dT%H:%M')
 timeout 10 ./ticket.sh close --no-merge --no-push "$TICKET2" >/dev/null 2>&1
-CLOSED_LINE=$(grep closed_at "tickets/done/${TICKET2}.md" 2>/dev/null)
+CLOSED_LINE=$(git show "HEAD:tickets/done/${TICKET2}.md" 2>/dev/null | grep closed_at)
 if echo "$CLOSED_LINE" | grep -q "closed_at: ${NOW_PREFIX}"; then
-    test_result 0 "closed_at defaults to current UTC time"
+    test_result 0 "closed_at defaults to current UTC time (committed at HEAD)"
 else
-    test_result 1 "closed_at should default to now-UTC ($NOW_PREFIX)" "$CLOSED_LINE"
+    test_result 1 "closed_at should default to now-UTC ($NOW_PREFIX) and be committed" "$CLOSED_LINE"
+fi
+
+if [[ -z "$(git status --short)" ]]; then
+    test_result 0 "Working tree clean after default-time finalize"
+else
+    test_result 1 "Working tree should be clean (default-time finalize)" "$(git status --short)"
 fi
 
 echo -e "\n3. Testing idempotency (already finalized)..."

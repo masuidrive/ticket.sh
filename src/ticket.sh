@@ -1781,12 +1781,20 @@ EOF
         return 1
     }
 
+    local done_note="${done_dir}/${ticket_name}-note.md"
     if [[ -f "$note_file" ]]; then
-        run_git_command "git mv \"$note_file\" \"${done_dir}/${ticket_name}-note.md\"" || {
+        run_git_command "git mv \"$note_file\" \"$done_note\"" || {
             echo "Error: Failed to move note file to done folder" >&2
             return 1
         }
     fi
+
+    # git mv stages the pre-edit blob under the new name, so re-add the moved
+    # ticket to capture the closed_at edit in the same commit.
+    run_git_command "git add \"$done_ticket\"" || {
+        echo "Error: Failed to stage finalized ticket" >&2
+        return 1
+    }
 
     # Commit on the current (base) branch
     local commit_msg="Finalize ticket ${ticket_name} (closed via merged PR)"
