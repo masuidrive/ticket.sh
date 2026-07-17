@@ -2304,6 +2304,43 @@ EOF
         }
     fi
 
+    # Detect divergent edits to the ticket file itself on the base branch.
+    # `close` squash-merges via a real content-level 3-way merge (base =
+    # merge-base(default_branch, current_branch), ours = default_branch HEAD,
+    # theirs = current_branch HEAD). If the SAME ticket file was also
+    # modified on default_branch after this feature branch was created
+    # (e.g. a human-review wording tweak applied directly to the base
+    # branch, or a commit landed against the wrong checkout/worktree), the
+    # squash-merge can produce a genuine CONFLICT instead of a clean merge.
+    # Surface that here, before any state is mutated, instead of leaving the
+    # user mid-conflict after close has already committed on the feature
+    # branch and switched to default_branch.
+    local _merge_base
+    _merge_base=$(git merge-base "$default_branch" "$current_branch" 2>/dev/null || echo "")
+    if [[ -n "$_merge_base" ]] && ! git diff --quiet "$_merge_base" "$default_branch" -- "$ticket_file" 2>/dev/null; then
+        if [[ "$force" == "true" ]]; then
+            echo "Warning: '$ticket_file' was also modified on '$default_branch' since this" >&2
+            echo "ticket's branch was created. Continuing due to --force; the upcoming" >&2
+            echo "squash-merge may still conflict and require manual resolution." >&2
+        else
+            cat >&2 << EOF
+Error: Ticket file diverged on base branch
+'$ticket_file' was also modified on '$default_branch' after '$current_branch'
+was created from it. Squash-merging now may produce a real content conflict
+instead of a clean merge.
+
+Please reconcile before closing:
+  git fetch                     # if '$default_branch' moved on a remote
+  git merge $default_branch     # or: git rebase $default_branch
+  # resolve any conflicts in '$ticket_file' on '$current_branch', then re-run close
+
+To proceed anyway and resolve the squash-merge conflict manually if it occurs:
+  $SCRIPT_COMMAND close --force (or -f)
+EOF
+            return 1
+        fi
+    fi
+
     # --dry-run: all preflight checks passed; exit before any mutation.
     if [[ "$dry_run" == "true" ]]; then
         echo "Dry-run: all preflight checks passed."
