@@ -158,11 +158,20 @@ ticket_note_path() {
 # Setup test repository with proper gitignore
 setup_test_repo() {
     local test_dir="${1:-test-tmp}"
-    
+
     echo "      Cleaning up old test directory..."
     rm -rf "$test_dir"
     mkdir "$test_dir"
-    cd "$test_dir"
+    # Resolve the target to an absolute path BEFORE cd'ing. On Alpine
+    # (busybox), when a caller has just rm'd and re-mkdir'd the same relative
+    # path and then invokes setup_test_repo, the shell's cwd inode tracking
+    # can hand `cd <relative>` back a stale directory whose parent has been
+    # unlinked — subsequent git commands then die with "unable to get current
+    # working directory". Anchoring on an absolute path resolves the inode
+    # freshly and avoids the flake.
+    local abs_test_dir
+    abs_test_dir="$(cd "$(dirname "$test_dir")" && pwd -P)/$(basename "$test_dir")"
+    cd "$abs_test_dir"
     
     echo "      Copying ticket.sh..."
     # Use existing ticket.sh without rebuild for performance

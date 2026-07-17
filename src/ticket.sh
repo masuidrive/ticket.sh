@@ -933,6 +933,70 @@ remove_current_ticket_symlinks() {
     rm -rf "${link_dir}/$CURRENT_TICKET_DIR_LINK"
 }
 
+# Emit a fixed-format "Active ticket paths" block so a downstream agent can
+# consume the output alone (without re-guessing which layout was produced) to
+# find the ticket body, note file, ticket directory (new-format only) and the
+# corresponding current-* symlinks. Called at the end of start/restore.
+#
+# Usage: emit_active_ticket_paths <link_dir> <tickets_dir> <ticket_name>
+#   link_dir     - where current-* symlinks live (usually "." or the worktree path)
+#   tickets_dir  - configured tickets directory (repo-relative)
+#   ticket_name  - bare ticket name (no path, no .md)
+#
+# Emitted keys (one per line, stable machine-parseable format):
+#   layout:       new | legacy
+#   ticket:       <path to ticket body markdown, always present>
+#   note:         <path to note markdown, always present>
+#   ticket_dir:   <path to per-ticket directory> (new layout only)
+#   tests_dir:    <path where ticket-local tests live> (new layout only)
+#   tmp_dir:      <path for ticket-local temp helpers> (new layout only)
+#   symlink_dir:  <link_dir>/current-ticket → ticket_dir (new layout only)
+#   symlink_file: <link_dir>/current-ticket.md → ticket
+#   symlink_note: <link_dir>/current-note.md → note
+#   legacy_note:  (only when layout=legacy) explains the flat -note.md convention
+emit_active_ticket_paths() {
+    local link_dir="$1"
+    local tickets_dir="$2"
+    local ticket_name="$3"
+
+    local layout
+    layout=$(ticket_layout "$ticket_name" "$tickets_dir")
+
+    echo ""
+    echo "Active ticket paths:"
+    echo "  layout:       $layout"
+
+    if [[ "$layout" == "new" ]]; then
+        local ticket_dir="${tickets_dir}/${ticket_name}"
+        [[ ! -d "$ticket_dir" ]] && ticket_dir="${tickets_dir}/done/${ticket_name}"
+        echo "  ticket:       ${ticket_dir}/ticket.md"
+        echo "  note:         ${ticket_dir}/note.md"
+        echo "  ticket_dir:   ${ticket_dir}/   (per-ticket root: ticket.md + note.md + tests/ + tmp/)"
+        echo "  tests_dir:    ${ticket_dir}/tests/   (ticket-local tests; run via ./scripts/test-ticket-local.sh if the project provides it)"
+        echo "  tmp_dir:      ${ticket_dir}/tmp/   (ticket-local temp helpers, not part of the ticket contract)"
+        echo "  symlink_dir:  ${link_dir}/${CURRENT_TICKET_DIR_LINK} -> ${ticket_dir}"
+        echo "  symlink_file: ${link_dir}/${CURRENT_TICKET_LINK} -> ${ticket_dir}/ticket.md"
+        echo "  symlink_note: ${link_dir}/${CURRENT_NOTE_LINK} -> ${ticket_dir}/note.md"
+    else
+        # Legacy flat layout: one ticket .md and a sibling <name>-note.md file.
+        # Resolve to whichever exists (open first, then done/).
+        local ticket_path="${tickets_dir}/${ticket_name}.md"
+        [[ ! -f "$ticket_path" ]] && ticket_path="${tickets_dir}/done/${ticket_name}.md"
+        local note_path="${tickets_dir}/${ticket_name}-note.md"
+        [[ ! -f "$note_path" ]] && note_path="${tickets_dir}/done/${ticket_name}-note.md"
+        echo "  ticket:       ${ticket_path}"
+        echo "  note:         ${note_path}"
+        echo "  symlink_file: ${link_dir}/${CURRENT_TICKET_LINK} -> ${ticket_path}"
+        if [[ -L "${link_dir}/${CURRENT_NOTE_LINK}" ]]; then
+            echo "  symlink_note: ${link_dir}/${CURRENT_NOTE_LINK} -> ${note_path}"
+        else
+            echo "  symlink_note: (not created; legacy tickets don't get a note symlink unless the note file exists)"
+        fi
+        echo "  legacy_note:  legacy flat layout — no per-ticket directory, no tests_dir/tmp_dir. Ticket body lives at the shown path; note lives as a sibling <name>-note.md file."
+    fi
+    echo ""
+}
+
 # List tickets
 cmd_list() {
     local filter_status=""
@@ -1453,6 +1517,7 @@ EOF
         create_current_ticket_symlinks "$link_dir" "$tickets_dir" "$ticket_name" || return 1
         echo "Resumed ticket: $ticket_name"
         echo "Continuing work on existing feature branch."
+        emit_active_ticket_paths "$link_dir" "$tickets_dir" "$ticket_name"
 
         if [[ "$use_worktree" == "true" ]]; then
             echo "Worktree: $wt_path"
@@ -1541,6 +1606,10 @@ EOF
         # Resolve layout against the worktree's tree, not cwd's.
         ( cd "$wt_path" && create_current_ticket_symlinks "." "$tickets_dir" "$ticket_name" ) || return 1
         echo "Started ticket: $ticket_name"
+        # Emit resolved paths relative to the worktree (that's where the agent
+        # will operate from, per the CAUTION below). The link_dir prefix in the
+        # output is "$wt_path" so downstream consumers can resolve without cwd.
+        emit_active_ticket_paths "$wt_path" "$tickets_dir" "$ticket_name"
         echo "Worktree created: $wt_path"
         echo "WORKTREE:${wt_path}"
         echo "Note: Branch created locally. Use 'git push -u $repository $branch_name' when ready to share."
@@ -1576,6 +1645,7 @@ EOF
         # Create current-* symlinks (handles new + legacy layouts).
         create_current_ticket_symlinks "." "$tickets_dir" "$ticket_name" || return 1
         echo "Started ticket: $ticket_name"
+        emit_active_ticket_paths "." "$tickets_dir" "$ticket_name"
         echo "Note: Branch created locally. Use 'git push -u $repository $branch_name' when ready to share."
     fi
 
@@ -1689,7 +1759,10 @@ EOF
             echo "Restored current ticket link: $CURRENT_TICKET_LINK -> $ticket_file"
         fi
     fi
-    
+
+    # Emit resolved paths so a downstream agent can act on this output alone.
+    emit_active_ticket_paths "." "$tickets_dir" "$ticket_name"
+
     # Display success message if configured
     if [[ -n "$restore_success_message" ]]; then
         echo ""

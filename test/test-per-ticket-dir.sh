@@ -66,7 +66,7 @@ fi
 git add tickets && git commit -q -m "add new-format ticket ${TICKET}"
 
 echo -e "\n2. Testing start creates dir symlink + compat file symlinks..."
-timeout 10 ./ticket.sh start "$TICKET" >/dev/null 2>&1
+START_OUT=$(timeout 10 ./ticket.sh start "$TICKET" 2>&1)
 
 if [[ -L "current-ticket" ]]; then
     test_result 0 "current-ticket dir symlink created"
@@ -93,6 +93,31 @@ if grep -q "^current-ticket$" .gitignore; then
 else
     test_result 1 ".gitignore should exclude current-ticket"
 fi
+
+# start must emit the "Active ticket paths" block with resolved paths for a
+# new-format ticket. A downstream agent must be able to consume this output
+# alone (no format guessing) to find the ticket body, note, dir, and symlinks.
+if echo "$START_OUT" | grep -q "^Active ticket paths:$"; then
+    test_result 0 "start emits 'Active ticket paths:' block"
+else
+    test_result 1 "start must emit 'Active ticket paths:' block" "$START_OUT"
+fi
+for KEY in "layout:       new" \
+           "ticket:       tickets/${TICKET}/ticket.md" \
+           "note:         tickets/${TICKET}/note.md" \
+           "ticket_dir:   tickets/${TICKET}/" \
+           "tests_dir:    tickets/${TICKET}/tests/" \
+           "tmp_dir:      tickets/${TICKET}/tmp/" \
+           "symlink_dir:  ./current-ticket -> tickets/${TICKET}" \
+           "symlink_file: ./current-ticket.md -> tickets/${TICKET}/ticket.md" \
+           "symlink_note: ./current-note.md -> tickets/${TICKET}/note.md"; do
+    if echo "$START_OUT" | grep -qF "$KEY"; then
+        test_result 0 "start info block contains: ${KEY%% *}..."
+    else
+        test_result 1 "start info block missing: $KEY" \
+            "$(echo "$START_OUT" | grep -A15 'Active ticket paths')"
+    fi
+done
 
 echo -e "\n3. Testing close moves whole directory + closed_at committed..."
 # start left started_at edit uncommitted → commit it before close so close's
@@ -207,6 +232,25 @@ else
     test_result 1 "restore should recreate current-ticket.md" "$RESTORE_OUT"
 fi
 
+# restore must ALSO emit the "Active ticket paths" block so a downstream
+# agent can act on its output alone (same contract as start).
+if echo "$RESTORE_OUT" | grep -q "^Active ticket paths:$"; then
+    test_result 0 "restore emits 'Active ticket paths:' block"
+else
+    test_result 1 "restore must emit 'Active ticket paths:' block" "$RESTORE_OUT"
+fi
+# restore is being run on the feature branch, which never got the mv-to-done
+# commit (that happened only on main during close). On the feature branch,
+# the ticket dir is still at tickets/<T>/. The info block must resolve to
+# that actually-present path — not fabricate a done/ path that doesn't exist
+# on this branch.
+if echo "$RESTORE_OUT" | grep -qF "ticket:       tickets/${TICKET}/ticket.md"; then
+    test_result 0 "restore info block resolves to the actually-present ticket path on this branch"
+else
+    test_result 1 "restore info block should resolve to the ticket path present on this branch" \
+        "$(echo "$RESTORE_OUT" | grep -A10 'Active ticket paths')"
+fi
+
 echo -e "\n7. Testing legacy flat tickets still work end-to-end..."
 git checkout -q main
 
@@ -241,7 +285,7 @@ else
 fi
 
 # start on a legacy ticket
-timeout 10 ./ticket.sh start "$LEGACY_NAME" >/dev/null 2>&1
+LEGACY_START_OUT=$(timeout 10 ./ticket.sh start "$LEGACY_NAME" 2>&1)
 if [[ -L "current-ticket.md" ]] && [[ "$(readlink current-ticket.md)" == "tickets/${LEGACY_NAME}.md" ]]; then
     test_result 0 "start on legacy ticket sets current-ticket.md -> flat path"
 else
@@ -253,6 +297,30 @@ if [[ ! -e "current-ticket" ]] && [[ ! -L "current-ticket" ]]; then
     test_result 0 "start on legacy ticket does not create current-ticket/ dir symlink"
 else
     test_result 1 "current-ticket/ dir symlink should not exist for legacy tickets"
+fi
+
+# start on a legacy ticket must emit an info block that explicitly identifies
+# the layout as "legacy" and shows resolved flat paths (no tests_dir/tmp_dir
+# lines, and a legacy_note line explaining the flat convention).
+for KEY in "layout:       legacy" \
+           "ticket:       tickets/${LEGACY_NAME}.md" \
+           "note:         tickets/${LEGACY_NAME}-note.md" \
+           "symlink_file: ./current-ticket.md -> tickets/${LEGACY_NAME}.md" \
+           "symlink_note: ./current-note.md -> tickets/${LEGACY_NAME}-note.md" \
+           "legacy_note:  legacy flat layout"; do
+    if echo "$LEGACY_START_OUT" | grep -qF "$KEY"; then
+        test_result 0 "legacy start info block contains: ${KEY%% *}..."
+    else
+        test_result 1 "legacy start info block missing: $KEY" \
+            "$(echo "$LEGACY_START_OUT" | grep -A15 'Active ticket paths')"
+    fi
+done
+# Legacy info block must NOT claim ticket_dir/tests_dir/tmp_dir (those don't exist).
+if echo "$LEGACY_START_OUT" | grep -qE '^\s*(ticket_dir|tests_dir|tmp_dir):'; then
+    test_result 1 "legacy start must not advertise ticket_dir/tests_dir/tmp_dir" \
+        "$(echo "$LEGACY_START_OUT" | grep -E 'ticket_dir|tests_dir|tmp_dir')"
+else
+    test_result 0 "legacy start info block correctly omits ticket_dir/tests_dir/tmp_dir"
 fi
 
 # close a legacy ticket → produces legacy flat move to done/
