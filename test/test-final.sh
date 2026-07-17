@@ -89,7 +89,8 @@ fi
 
 # Test 4: Create ticket
 ./ticket.sh new test-feature >/dev/null 2>&1
-if ls tickets/*test-feature.md >/dev/null 2>&1; then
+# Accept either layout: legacy tickets/*test-feature.md or new tickets/*-test-feature/ticket.md
+if ls tickets/*test-feature.md >/dev/null 2>&1 || ls tickets/*-test-feature/ticket.md >/dev/null 2>&1; then
     test_case "Create new ticket" "PASS"
 else
     test_case "Create new ticket" "FAIL"
@@ -112,7 +113,12 @@ fi
 # Test 7: Start ticket
 git add . >/dev/null 2>&1
 git commit -q -m "Add ticket" >/dev/null 2>&1
-TICKET_NAME=$(ls tickets/*test-feature.md | xargs basename | sed 's/.md$//')
+# Resolve ticket name from either layout
+if ls tickets/*test-feature.md >/dev/null 2>&1; then
+    TICKET_NAME=$(ls tickets/*test-feature.md | xargs basename | sed 's/.md$//')
+else
+    TICKET_NAME=$(ls -d tickets/*-test-feature | xargs basename)
+fi
 ./ticket.sh start "$TICKET_NAME" --no-push >/dev/null 2>&1
 
 BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
@@ -128,8 +134,8 @@ else
     test_case "Start creates symlink" "FAIL"
 fi
 
-# Commit the started_at change
-git add tickets/*.md >/dev/null 2>&1
+# Commit the started_at change (both layouts, and the new current-ticket dir link is git-ignored)
+git add tickets >/dev/null 2>&1
 git commit -q -m "Update ticket started_at" >/dev/null 2>&1
 
 # Test 8: Restore
@@ -159,8 +165,8 @@ else
     echo "  Current branch: $BRANCH"
 fi
 
-# Check if any ticket has been closed (check in done folder)
-if ls tickets/done/*.md 2>/dev/null | xargs grep -l "closed_at: 20" >/dev/null 2>&1; then
+# Check if any ticket has been closed (check in done folder, both layouts)
+if { ls tickets/done/*.md 2>/dev/null; ls tickets/done/*/ticket.md 2>/dev/null; } | xargs grep -l "closed_at: 20" >/dev/null 2>&1; then
     test_case "Close updates ticket" "PASS"
 else
     test_case "Close updates ticket" "FAIL"

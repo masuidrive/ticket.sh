@@ -59,22 +59,23 @@ echo "    Test ticket created."
 if [[ ! -d tickets ]]; then
     test_result 1 "Tickets directory not created"
 else
-    # Find first ticket file
-    FIRST_TICKET=$(safe_get_first_file "*test-duplicate.md" "tickets")
-    
+    # Find first ticket (works for either flat or per-ticket-dir layout)
+    FIRST_TICKET=$(safe_get_ticket_name "*test-duplicate*")
+
     if [[ -z "$FIRST_TICKET" ]]; then
         test_result 1 "First ticket not created"
     else
         sleep 1  # Ensure different timestamp
         if timeout 5 ./ticket.sh new test-duplicate >/dev/null 2>&1; then
-            # Find all matching files
+            # Count matching tickets across both layouts
             TICKET_COUNT=0
             for f in tickets/*test-duplicate.md; do
-                if [[ -f "$f" ]]; then
-                    ((TICKET_COUNT++))
-                fi
+                [[ -f "$f" ]] && TICKET_COUNT=$((TICKET_COUNT + 1))
             done
-            
+            for d in tickets/*test-duplicate*; do
+                [[ -d "$d" ]] && [[ -f "$d/ticket.md" ]] && TICKET_COUNT=$((TICKET_COUNT + 1))
+            done
+
             if [[ $TICKET_COUNT -gt 1 ]]; then
                 test_result 0 "Allows same slug with different timestamp"
             else
@@ -89,7 +90,7 @@ fi
 # Test 2: Start already started ticket
 echo -e "\n2. Testing start on already started ticket..."
 git add tickets .ticket-config.yaml && git commit -q -m "add tickets"
-TICKET_NAME=$(basename "$FIRST_TICKET" .md)
+TICKET_NAME="$FIRST_TICKET"
 ./ticket.sh start "$TICKET_NAME" --no-push >/dev/null 2>&1
 git add tickets current-ticket.md && git commit -q -m "update"
 git checkout -q main
@@ -111,7 +112,10 @@ fi
 # Test 4: Restore with broken symlink
 echo -e "\n4. Testing restore with broken symlink..."
 git checkout -q "feature/$TICKET_NAME"
-rm -f tickets/*.md  # Remove ticket file but keep symlink
+# Remove ticket files but keep the current-ticket* symlinks. Handle both
+# layouts: flat tickets/*.md and per-ticket tickets/<name>/.
+rm -f tickets/*.md
+rm -rf tickets/[0-9]*
 if timeout 5 ./ticket.sh restore >/dev/null 2>&1; then
     test_result 1 "Should fail when ticket file is missing"
 else

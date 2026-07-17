@@ -108,7 +108,7 @@ run_tests() {
     
     # Valid slugs
     timeout 5 ./ticket.sh new feature-abc >/dev/null 2>&1
-    TICKET1=$(safe_get_first_file "*feature-abc.md" "tickets")
+    TICKET1=$(safe_get_ticket_name "*feature-abc*")
     [[ -n "$TICKET1" ]] && pass "Creates ticket with valid slug" || fail "Failed to create ticket"
     
     # Invalid slugs
@@ -135,11 +135,8 @@ run_tests() {
     git add .
     git commit -q -m "Add tickets"
     
-    # Start ticket
-    TICKET_NAME=""
-    if [[ -n "$TICKET1" ]]; then
-        TICKET_NAME=$(basename "$TICKET1" .md)
-    fi
+    # Start ticket (TICKET1 already holds the ticket name)
+    TICKET_NAME="$TICKET1"
     timeout 5 ./ticket.sh start "$TICKET_NAME" --no-push >/dev/null 2>&1
     
     # Commit the started_at change

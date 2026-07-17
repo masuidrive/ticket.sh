@@ -12,7 +12,7 @@ fi
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20260529.152801
+# Version: 20260717.152737
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -933,28 +933,83 @@ generate_ticket_filename() {
     echo "${timestamp}-${slug}"
 }
 
-# Extract ticket name from various input formats
+# Extract ticket name from various input formats.
+# Accepts: bare name, .md file, tickets/<name>/ticket.md, tickets/<name>/,
+# tickets/done/<name>/ticket.md.
 extract_ticket_name() {
     local input="$1"
-    
-    # Remove directory path if present
+
+    # Strip trailing slashes
+    input="${input%/}"
+
     local basename="${input##*/}"
-    
-    # Remove .md extension if present
-    basename="${basename%.md}"
-    
+
+    if [[ "$basename" == "ticket.md" ]]; then
+        # Path is <...>/<name>/ticket.md — take parent dir name
+        local parent="${input%/*}"
+        basename="${parent##*/}"
+    else
+        basename="${basename%.md}"
+    fi
+
     echo "$basename"
 }
 
-# Get ticket file path from ticket name
+# Detect layout for a given ticket name.
+# Echoes one of: "new" (dir with ticket.md), "legacy" (flat .md), "unknown".
+# Usage: ticket_layout <ticket_name> <tickets_dir>
+ticket_layout() {
+    local ticket_name="$1"
+    local tickets_dir="$2"
+    ticket_name=$(extract_ticket_name "$ticket_name")
+
+    if [[ -f "${tickets_dir}/${ticket_name}/ticket.md" ]]; then
+        echo "new"
+    elif [[ -f "${tickets_dir}/done/${ticket_name}/ticket.md" ]]; then
+        echo "new"
+    elif [[ -f "${tickets_dir}/${ticket_name}.md" ]]; then
+        echo "legacy"
+    elif [[ -f "${tickets_dir}/done/${ticket_name}.md" ]]; then
+        echo "legacy"
+    else
+        echo "unknown"
+    fi
+}
+
+# Get ticket file path from ticket name.
+# Prefers the new-format path when the per-ticket directory exists (open or done);
+# falls back to the legacy flat path otherwise.
 get_ticket_file() {
     local ticket_name="$1"
     local tickets_dir="$2"
-    
-    # Extract just the ticket name
+
     ticket_name=$(extract_ticket_name "$ticket_name")
-    
-    echo "${tickets_dir}/${ticket_name}.md"
+
+    if [[ -f "${tickets_dir}/${ticket_name}/ticket.md" ]]; then
+        echo "${tickets_dir}/${ticket_name}/ticket.md"
+    elif [[ -f "${tickets_dir}/done/${ticket_name}/ticket.md" ]]; then
+        echo "${tickets_dir}/done/${ticket_name}/ticket.md"
+    else
+        echo "${tickets_dir}/${ticket_name}.md"
+    fi
+}
+
+# Get note file path from ticket name.
+# For new-format tickets, returns the note.md inside the ticket dir; for
+# legacy, returns the flat -note.md sibling. Prefers the open location over done/.
+get_note_file() {
+    local ticket_name="$1"
+    local tickets_dir="$2"
+
+    ticket_name=$(extract_ticket_name "$ticket_name")
+
+    if [[ -d "${tickets_dir}/${ticket_name}" ]]; then
+        echo "${tickets_dir}/${ticket_name}/note.md"
+    elif [[ -d "${tickets_dir}/done/${ticket_name}" ]]; then
+        echo "${tickets_dir}/done/${ticket_name}/note.md"
+    else
+        echo "${tickets_dir}/${ticket_name}-note.md"
+    fi
 }
 
 # Check if main repo is in a safe state to perform merge operations.
@@ -1123,7 +1178,7 @@ if [ -z "${BASH_VERSION:-}" ]; then
 fi
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20260529.152801
+# Version: 20260717.152737
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -1215,10 +1270,11 @@ SCRIPT_COMMAND=$(get_script_command)
 
 
 # Global variables
-VERSION="20260529.152801"  # This will be replaced during build
+VERSION="20260717.152737"  # This will be replaced during build
 CONFIG_FILE=""  # Will be set dynamically by get_config_file()
 CURRENT_TICKET_LINK="current-ticket.md"
 CURRENT_NOTE_LINK="current-note.md"
+CURRENT_TICKET_DIR_LINK="current-ticket"
 
 # Default configuration values
 DEFAULT_TICKETS_DIR="tickets"
@@ -1285,7 +1341,26 @@ show_usage() {
 ## Overview
 
 This is a self-contained ticket management system using shell script + files + Git.
-Each ticket is a single Markdown file with YAML frontmatter metadata.
+
+Each ticket lives in its own per-ticket directory:
+
+\`\`\`
+tickets/
+  <TICKETNAME>/
+    ticket.md     # ticket body (YAML frontmatter + Markdown)
+    note.md       # working notes / log
+    tests/        # ticket-local tests (created on demand)
+    tmp/          # ticket-local temp helpers (created on demand)
+  done/<TICKETNAME>/    # closed / cancelled tickets (moved as a whole directory)
+\`\`\`
+
+While a ticket is active, three symlinks are created in the repository root:
+\`current-ticket/\` (directory symlink to the per-ticket dir),
+\`current-ticket.md\` and \`current-note.md\` (compat file symlinks).
+
+*Legacy compatibility*: existing flat-file tickets
+(\`tickets/<TICKETNAME>.md\` + \`tickets/<TICKETNAME>-note.md\`) continue to
+be recognized by every command; they are never auto-migrated.
 
 ## Usage
 
@@ -1378,7 +1453,8 @@ support with Claude Code's \`EnterWorktree\` to keep the session cwd pinned:
    - Output includes \`WORKTREE:<absolute-path>\`. Pin the session cwd to that
      path via \`EnterWorktree({ path: "<absolute-path>" })\`.
 2. **Work inside the worktree** for the whole ticket. Do NOT run ticket.sh
-   from the main repo — \`current-ticket.md\` only exists in the worktree.
+   from the main repo — \`current-ticket/\` and \`current-ticket.md\` only
+   exist in the worktree.
 3. **Always close with \`--keep-worktree\`**:
      \`$SCRIPT_COMMAND close --keep-worktree\`
    - Preserves the worktree so the cwd stays valid.
@@ -1569,8 +1645,25 @@ The \`$SCRIPT_COMMAND close\` command handles merging and cleanup automatically.
 
 ## Directory Structure
 
-- Active tickets: \`*.md\` files in this directory
-- Completed tickets: \`done/\` subdirectory (created automatically)
+Each ticket lives in its own per-ticket directory:
+
+\`\`\`
+tickets/
+  <TICKETNAME>/
+    ticket.md   # the ticket body (YAML frontmatter + Markdown)
+    note.md     # working notes / log
+    tests/      # ticket-local tests (created on demand)
+    tmp/        # ticket-local temp helpers (created on demand)
+  done/
+    <TICKETNAME>/    # closed / canceled tickets, moved here as a whole directory
+\`\`\`
+
+While a ticket is active, three symlinks in the repository root point at it:
+\`current-ticket/\` (directory), \`current-ticket.md\`, and \`current-note.md\`.
+
+Legacy compatibility: existing flat tickets (\`<TICKETNAME>.md\` +
+\`<TICKETNAME>-note.md\`) are still recognized by every command. They are not
+migrated automatically.
 
 ## Getting Help
 
@@ -1589,24 +1682,23 @@ EOF
         echo "README file already exists: $readme_file"
     fi
     
-    # Update .gitignore
+    # Update .gitignore. Cover both the per-ticket-directory symlink
+    # (current-ticket) and the two compat file symlinks (current-ticket.md,
+    # current-note.md).
+    local _gi_entries=("$CURRENT_TICKET_LINK" "$CURRENT_NOTE_LINK" "$CURRENT_TICKET_DIR_LINK")
     if [[ ! -f .gitignore ]]; then
-        echo "$CURRENT_TICKET_LINK" > .gitignore
-        echo "$CURRENT_NOTE_LINK" >> .gitignore
-        echo "Created .gitignore with: $CURRENT_TICKET_LINK and $CURRENT_NOTE_LINK"
+        printf '%s\n' "${_gi_entries[@]}" > .gitignore
+        echo "Created .gitignore with: ${_gi_entries[*]}"
     else
-        if ! grep -q "^${CURRENT_TICKET_LINK}$" .gitignore; then
-            echo "$CURRENT_TICKET_LINK" >> .gitignore
-            echo "Added to .gitignore: $CURRENT_TICKET_LINK"
-        else
-            echo ".gitignore already contains: $CURRENT_TICKET_LINK"
-        fi
-        if ! grep -q "^${CURRENT_NOTE_LINK}$" .gitignore; then
-            echo "$CURRENT_NOTE_LINK" >> .gitignore
-            echo "Added to .gitignore: $CURRENT_NOTE_LINK"
-        else
-            echo ".gitignore already contains: $CURRENT_NOTE_LINK"
-        fi
+        local _entry
+        for _entry in "${_gi_entries[@]}"; do
+            if ! grep -q "^${_entry}$" .gitignore; then
+                echo "$_entry" >> .gitignore
+                echo "Added to .gitignore: $_entry"
+            else
+                echo ".gitignore already contains: $_entry"
+            fi
+        done
     fi
     
     echo ""
@@ -1782,40 +1874,54 @@ cmd_new() {
     else
         ticket_name=$(generate_ticket_filename "$slug")
     fi
-    local ticket_file="${tickets_dir}/${ticket_name}.md"
-    local note_file="${tickets_dir}/${ticket_name}-note.md"
-    
-    # Check if file already exists
-    if [[ -f "$ticket_file" ]]; then
+    # New-format per-ticket directory layout:
+    #   tickets/<TICKETNAME>/ticket.md
+    #   tickets/<TICKETNAME>/note.md
+    #   tickets/<TICKETNAME>/tests/  (ticket-local tests, created lazily)
+    #   tickets/<TICKETNAME>/tmp/    (ticket-local temp helpers, created lazily)
+    local ticket_dir="${tickets_dir}/${ticket_name}"
+    local ticket_file="${ticket_dir}/ticket.md"
+    local note_file="${ticket_dir}/note.md"
+
+    # Refuse if either the new-format dir or the legacy flat file already exists
+    if [[ -e "$ticket_dir" ]]; then
         cat >&2 << EOF
 Error: Ticket already exists
-File '$ticket_file' already exists. Please:
+Directory '$ticket_dir' already exists. Please:
+1. Use a different slug name, or
+2. Edit the existing ticket, or
+3. Remove the existing directory if it's no longer needed
+EOF
+        return 1
+    fi
+    if [[ -f "${tickets_dir}/${ticket_name}.md" ]]; then
+        cat >&2 << EOF
+Error: Ticket already exists (legacy flat layout)
+File '${tickets_dir}/${ticket_name}.md' already exists. Please:
 1. Use a different slug name, or
 2. Edit the existing ticket, or
 3. Remove the existing file if it's no longer needed
 EOF
         return 1
     fi
-    
-    # Check if note file already exists (when note_content is defined)
-    if [[ -n "$note_content" ]] && [[ -f "$note_file" ]]; then
+
+    # Create the per-ticket directory
+    if ! mkdir -p "$ticket_dir"; then
         cat >&2 << EOF
-Error: Note file already exists
-File '$note_file' already exists. Please:
-1. Use a different slug name, or
-2. Remove the existing file if it's no longer needed
+Error: Permission denied
+Cannot create directory '$ticket_dir'. Please:
+1. Check write permissions in tickets directory, or
+2. Run with appropriate permissions
 EOF
         return 1
     fi
-    
+
     # Process placeholders in default_content
     local processed_content="$default_content"
     if [[ -n "$note_content" ]]; then
-        # Replace $$NOTE_PATH$$ with relative path to note file
-        local note_path="${ticket_name}-note.md"
-        processed_content="${processed_content//\$\$NOTE_PATH\$\$/$note_path}"
+        # Ticket body links to sibling note.md
+        processed_content="${processed_content//\$\$NOTE_PATH\$\$/note.md}"
     else
-        # Remove $$NOTE_PATH$$ placeholder if no note file
         processed_content="${processed_content//\$\$NOTE_PATH\$\$/}"
     fi
     
@@ -1860,9 +1966,11 @@ Cannot create file '$ticket_file'. Please:
 2. Run with appropriate permissions, or
 3. Verify tickets directory exists and is writable
 EOF
+        rm -rf "$ticket_dir"
         return 1
     fi
-    
+
+    echo "Created ticket directory: $ticket_dir"
     echo "Created ticket file: $ticket_file"
     if [[ -n "$epic_id_value" ]]; then
         echo "epic_id: $epic_id_value"
@@ -1880,14 +1988,13 @@ Cannot create note file '$note_file'. Please:
 1. Check write permissions in tickets directory, or
 2. Run with appropriate permissions
 EOF
-            # Clean up ticket file since note creation failed
-            rm -f "$ticket_file"
+            rm -rf "$ticket_dir"
             return 1
         fi
         echo "Created note file: $note_file"
     fi
     
-    echo "Please edit the file to add title, description and details."
+    echo "Please edit $ticket_file to add title, description and details."
     echo "To start working on this ticket, you **must** run: $SCRIPT_COMMAND start $ticket_name"
     
     # Display success message if configured
@@ -1895,6 +2002,89 @@ EOF
         echo ""
         echo "$new_success_message"
     fi
+}
+
+# Create the three current-* symlinks that point at an active ticket.
+#
+# Behavior by layout (per PDH per-ticket-directory design):
+#   new    : current-ticket/    -> tickets/<name>/       (dir symlink)
+#            current-ticket.md  -> tickets/<name>/ticket.md   (compat)
+#            current-note.md    -> tickets/<name>/note.md     (compat)
+#   legacy : current-ticket.md  -> tickets/<name>.md      (as before)
+#            current-note.md    -> tickets/<name>-note.md (only if it exists)
+#            current-ticket/    is NOT created (there is no per-ticket dir)
+#
+# The two compat file symlinks are maintained permanently as the migration
+# layer so existing skills/scripts that read current-ticket.md keep working.
+#
+# Usage: create_current_ticket_symlinks <link_dir> <tickets_dir> <ticket_name>
+#   link_dir     - directory in which to create symlinks (usually "." or worktree path)
+#   tickets_dir  - configured tickets directory (repo-relative)
+#   ticket_name  - bare ticket name (no path, no .md)
+# Returns 0 on success, 1 if the primary ticket symlink cannot be created.
+create_current_ticket_symlinks() {
+    local link_dir="$1"
+    local tickets_dir="$2"
+    local ticket_name="$3"
+
+    local layout
+    layout=$(ticket_layout "$ticket_name" "$tickets_dir")
+
+    # Wipe any stale links (both formats) before writing
+    rm -f "${link_dir}/$CURRENT_TICKET_LINK" \
+          "${link_dir}/$CURRENT_NOTE_LINK"
+    # Directory symlink needs -rf because it may resolve as a dir
+    rm -rf "${link_dir}/$CURRENT_TICKET_DIR_LINK"
+
+    if [[ "$layout" == "new" ]]; then
+        local ticket_dir="${tickets_dir}/${ticket_name}"
+        local ticket_file="${ticket_dir}/ticket.md"
+        local note_file="${ticket_dir}/note.md"
+
+        if ! ln -s "$ticket_dir" "${link_dir}/$CURRENT_TICKET_DIR_LINK"; then
+            echo "Error: Cannot create symlink $CURRENT_TICKET_DIR_LINK" >&2
+            return 1
+        fi
+        if ! ln -s "$ticket_file" "${link_dir}/$CURRENT_TICKET_LINK"; then
+            echo "Error: Cannot create symlink $CURRENT_TICKET_LINK" >&2
+            return 1
+        fi
+        # note.md may not exist yet for a freshly-created ticket; link anyway
+        # for compat (dangling is OK — old skills that write to it will create it)
+        if ! ln -s "$note_file" "${link_dir}/$CURRENT_NOTE_LINK"; then
+            echo "Warning: Cannot create note symlink $CURRENT_NOTE_LINK" >&2
+        fi
+        echo "Current ticket linked: $CURRENT_TICKET_DIR_LINK -> $ticket_dir"
+        echo "Current ticket linked: $CURRENT_TICKET_LINK -> $ticket_file"
+        echo "Current note linked: $CURRENT_NOTE_LINK -> $note_file"
+    else
+        # legacy flat layout (or unknown — best-effort)
+        local ticket_file="${tickets_dir}/${ticket_name}.md"
+        local note_file="${tickets_dir}/${ticket_name}-note.md"
+
+        if ! ln -s "$ticket_file" "${link_dir}/$CURRENT_TICKET_LINK"; then
+            echo "Error: Cannot create symlink $CURRENT_TICKET_LINK" >&2
+            return 1
+        fi
+        echo "Current ticket linked: $CURRENT_TICKET_LINK -> $ticket_file"
+        if [[ -f "${link_dir}/${note_file}" ]] || [[ -f "$note_file" ]]; then
+            if ! ln -s "$note_file" "${link_dir}/$CURRENT_NOTE_LINK"; then
+                echo "Warning: Cannot create note symlink $CURRENT_NOTE_LINK" >&2
+            else
+                echo "Current note linked: $CURRENT_NOTE_LINK -> $note_file"
+            fi
+        fi
+    fi
+    return 0
+}
+
+# Remove all current-* symlinks (used by close/cancel).
+# Usage: remove_current_ticket_symlinks <link_dir>
+remove_current_ticket_symlinks() {
+    local link_dir="$1"
+    rm -f "${link_dir}/$CURRENT_TICKET_LINK" \
+          "${link_dir}/$CURRENT_NOTE_LINK"
+    rm -rf "${link_dir}/$CURRENT_TICKET_DIR_LINK"
 }
 
 # List tickets
@@ -1979,8 +2169,17 @@ EOF
     local displayed=0
     local temp_file=$(mktemp)
     
-    # Collect all tickets with their metadata
-    for ticket_file in "$tickets_dir"/*.md "$tickets_dir"/done/*.md; do
+    # Collect all tickets with their metadata.
+    # Enumerate both layouts:
+    #   legacy: tickets/<name>.md, tickets/done/<name>.md
+    #   new:    tickets/<name>/ticket.md, tickets/done/<name>/ticket.md
+    # nullglob is not portable across bash 3.2 (macOS) — skip non-existent
+    # entries with the -f test below.
+    for ticket_file in \
+        "$tickets_dir"/*.md \
+        "$tickets_dir"/done/*.md \
+        "$tickets_dir"/*/ticket.md \
+        "$tickets_dir"/done/*/ticket.md; do
         [[ -f "$ticket_file" ]] || continue
         
         # Extract YAML frontmatter
@@ -2055,7 +2254,14 @@ EOF
 
         # Show worktree info for doing tickets
         if [[ "$status" == "doing" ]]; then
-            local _ticket_basename=$(basename "$ticket_path" .md)
+            local _ticket_basename
+            if [[ "$(basename "$ticket_path")" == "ticket.md" ]]; then
+                # new-format: <parent_dir>/ticket.md -> parent_dir name
+                local _parent="${ticket_path%/*}"
+                _ticket_basename="${_parent##*/}"
+            else
+                _ticket_basename=$(basename "$ticket_path" .md)
+            fi
             local _branch_prefix=$(yaml_get "branch_prefix" || echo "$DEFAULT_BRANCH_PREFIX")
             local _branch="${_branch_prefix}${_ticket_basename}"
             local _wt_path=$(git worktree list --porcelain 2>/dev/null | awk -v branch="branch refs/heads/$_branch" '/^worktree /{wt=$0} $0==branch{print wt}' | sed 's/^worktree //')
@@ -2139,6 +2345,33 @@ cmd_start() {
     # Get ticket file path early to determine base_branch before switching branches
     local ticket_name=$(extract_ticket_name "$ticket_input")
     local ticket_file=$(get_ticket_file "$ticket_name" "$tickets_dir")
+    # Resolve main repo path (needed here so we can probe the base branch when
+    # the ticket isn't in cwd's tree — e.g. worktree started from a stale branch).
+    local main_repo
+    if is_git_worktree; then
+        main_repo=$(get_main_repo_from_worktree)
+    else
+        main_repo=$(git rev-parse --show-toplevel)
+    fi
+    # If the ticket isn't in cwd's tree, get_ticket_file falls back to the
+    # legacy flat path by default. Correct that by probing git objects on the
+    # current branch and on default_branch for the new-format path.
+    if [[ ! -f "$ticket_file" ]]; then
+        local _new_path="${tickets_dir}/${ticket_name}/ticket.md"
+        local _new_done_path="${tickets_dir}/done/${ticket_name}/ticket.md"
+        local _probe_branch
+        for _probe_branch in "$(get_current_branch)" "$default_branch"; do
+            [[ -z "$_probe_branch" ]] && continue
+            if git -C "$main_repo" cat-file -e "${_probe_branch}:${_new_path}" 2>/dev/null; then
+                ticket_file="$_new_path"
+                break
+            fi
+            if git -C "$main_repo" cat-file -e "${_probe_branch}:${_new_done_path}" 2>/dev/null; then
+                ticket_file="$_new_done_path"
+                break
+            fi
+        done
+    fi
 
     # Determine effective base branch (base_branch from ticket, or default_branch)
     local effective_base="$default_branch"
@@ -2161,15 +2394,7 @@ cmd_start() {
         fi
     fi
 
-    # Resolve main repo path (works in both main repo and worktrees).
-    # Needed for worktree mode operations and for verifying branches without
-    # depending on cwd HEAD.
-    local main_repo
-    if is_git_worktree; then
-        main_repo=$(get_main_repo_from_worktree)
-    else
-        main_repo=$(git rev-parse --show-toplevel)
-    fi
+    # main_repo was resolved above (needed for ticket-file probe).
 
     # Check current branch
     local current_branch=$(get_current_branch)
@@ -2377,29 +2602,10 @@ EOF
             link_dir="$wt_path"
         fi
 
-        # Create symlink (restore functionality)
-        rm -f "${link_dir}/$CURRENT_TICKET_LINK"
-        if ! ln -s "$ticket_file" "${link_dir}/$CURRENT_TICKET_LINK"; then
-            echo "Error: Cannot create symlink $CURRENT_TICKET_LINK" >&2
-            echo "Permission denied or filesystem issue" >&2
-            return 1
-        fi
-
-        # Create note symlink if note file exists
-        local note_file="${tickets_dir}/${ticket_name}-note.md"
-        if [[ -f "${link_dir}/${note_file}" ]]; then
-            rm -f "${link_dir}/$CURRENT_NOTE_LINK"
-            if ! ln -s "$note_file" "${link_dir}/$CURRENT_NOTE_LINK"; then
-                echo "Warning: Cannot create note symlink $CURRENT_NOTE_LINK" >&2
-            fi
-            echo "Resumed ticket: $ticket_name"
-            echo "Current ticket linked: $CURRENT_TICKET_LINK -> $ticket_file"
-            echo "Current note linked: $CURRENT_NOTE_LINK -> $note_file"
-        else
-            rm -f "${link_dir}/$CURRENT_NOTE_LINK"
-            echo "Resumed ticket: $ticket_name"
-            echo "Current ticket linked: $CURRENT_TICKET_LINK -> $ticket_file"
-        fi
+        # Recreate all current-* symlinks (handles both new/legacy layouts).
+        # For new-format tickets this also creates the current-ticket/ dir symlink.
+        create_current_ticket_symlinks "$link_dir" "$tickets_dir" "$ticket_name" || return 1
+        echo "Resumed ticket: $ticket_name"
         echo "Continuing work on existing feature branch."
 
         if [[ "$use_worktree" == "true" ]]; then
@@ -2452,46 +2658,43 @@ EOF
         # current_branch (captured earlier) is still cwd's HEAD.
         local prev_branch="$current_branch"
         if [[ "$start_from" != "$prev_branch" ]]; then
-            # In worktree context, use git show to copy files
+            # In worktree context, use git checkout to copy files
             git -C "$wt_path" checkout "$prev_branch" -- "$ticket_file" 2>/dev/null || true
-            local note_file="${tickets_dir}/${ticket_name}-note.md"
-            git -C "$wt_path" checkout "$prev_branch" -- "$note_file" 2>/dev/null || true
+            if [[ "$ticket_file" == "${tickets_dir}/${ticket_name}/ticket.md" ]]; then
+                # New-format layout: also fetch sibling note.md if present.
+                # tests/ and tmp/ are ticket-local and don't need to travel.
+                git -C "$wt_path" checkout "$prev_branch" -- "${tickets_dir}/${ticket_name}/note.md" 2>/dev/null || true
+            else
+                # Legacy flat layout
+                git -C "$wt_path" checkout "$prev_branch" -- "${tickets_dir}/${ticket_name}-note.md" 2>/dev/null || true
+            fi
             git -C "$wt_path" checkout "$prev_branch" -- "${tickets_dir}/README.md" 2>/dev/null || true
         fi
 
         # Final fallback: if the ticket file still isn't in the worktree but
         # exists in cwd's working tree (e.g. just-created ticket not yet
-        # committed on start_from), copy it directly.
+        # committed on start_from), copy it (and sibling note.md for new-format)
+        # directly.
         if [[ ! -f "${wt_path}/${ticket_file}" ]] && [[ -f "$ticket_file" ]]; then
             mkdir -p "${wt_path}/$(dirname "$ticket_file")"
             cp "$ticket_file" "${wt_path}/${ticket_file}"
+            if [[ "$ticket_file" == "${tickets_dir}/${ticket_name}/ticket.md" ]]; then
+                local _src_note="${tickets_dir}/${ticket_name}/note.md"
+                if [[ -f "$_src_note" ]]; then
+                    cp "$_src_note" "${wt_path}/${_src_note}"
+                fi
+            fi
         fi
 
         # Update ticket started_at in worktree
         local timestamp=$(get_utc_timestamp)
         update_yaml_frontmatter_field "${wt_path}/${ticket_file}" "started_at" "$timestamp"
 
-        # Create symlinks in worktree directory
-        rm -f "${wt_path}/$CURRENT_TICKET_LINK"
-        if ! ln -s "$ticket_file" "${wt_path}/$CURRENT_TICKET_LINK"; then
-            echo "Error: Cannot create symlink $CURRENT_TICKET_LINK" >&2
-            return 1
-        fi
-
-        local note_file="${tickets_dir}/${ticket_name}-note.md"
-        if [[ -f "${wt_path}/${note_file}" ]]; then
-            rm -f "${wt_path}/$CURRENT_NOTE_LINK"
-            if ! ln -s "$note_file" "${wt_path}/$CURRENT_NOTE_LINK"; then
-                echo "Warning: Cannot create note symlink $CURRENT_NOTE_LINK" >&2
-            fi
-            echo "Started ticket: $ticket_name"
-            echo "Current ticket linked: $CURRENT_TICKET_LINK -> $ticket_file"
-            echo "Current note linked: $CURRENT_NOTE_LINK -> $note_file"
-        else
-            rm -f "${wt_path}/$CURRENT_NOTE_LINK"
-            echo "Started ticket: $ticket_name"
-            echo "Current ticket linked: $CURRENT_TICKET_LINK -> $ticket_file"
-        fi
+        # Create symlinks in worktree directory (handles new + legacy layouts;
+        # for new-format tickets this also sets up current-ticket/ dir symlink).
+        # Resolve layout against the worktree's tree, not cwd's.
+        ( cd "$wt_path" && create_current_ticket_symlinks "." "$tickets_dir" "$ticket_name" ) || return 1
+        echo "Started ticket: $ticket_name"
         echo "Worktree created: $wt_path"
         echo "WORKTREE:${wt_path}"
         echo "Note: Branch created locally. Use 'git push -u $repository $branch_name' when ready to share."
@@ -2512,8 +2715,11 @@ EOF
                 echo "Error: Failed to retrieve ticket file from $prev_branch" >&2
                 return 1
             }
-            local note_file="${tickets_dir}/${ticket_name}-note.md"
-            git checkout "$prev_branch" -- "$note_file" 2>/dev/null || true
+            if [[ "$ticket_file" == "${tickets_dir}/${ticket_name}/ticket.md" ]]; then
+                git checkout "$prev_branch" -- "${tickets_dir}/${ticket_name}/note.md" 2>/dev/null || true
+            else
+                git checkout "$prev_branch" -- "${tickets_dir}/${ticket_name}-note.md" 2>/dev/null || true
+            fi
             run_git_command "git checkout $prev_branch -- ${tickets_dir}/README.md" 2>/dev/null || true
         fi
 
@@ -2521,29 +2727,9 @@ EOF
         local timestamp=$(get_utc_timestamp)
         update_yaml_frontmatter_field "$ticket_file" "started_at" "$timestamp"
 
-        # Create symlink
-        rm -f "$CURRENT_TICKET_LINK"
-        if ! ln -s "$ticket_file" "$CURRENT_TICKET_LINK"; then
-            echo "Error: Cannot create symlink $CURRENT_TICKET_LINK" >&2
-            echo "Permission denied or filesystem issue" >&2
-            return 1
-        fi
-
-        # Create note symlink if note file exists
-        local note_file="${tickets_dir}/${ticket_name}-note.md"
-        if [[ -f "$note_file" ]]; then
-            rm -f "$CURRENT_NOTE_LINK"
-            if ! ln -s "$note_file" "$CURRENT_NOTE_LINK"; then
-                echo "Warning: Cannot create note symlink $CURRENT_NOTE_LINK" >&2
-            fi
-            echo "Started ticket: $ticket_name"
-            echo "Current ticket linked: $CURRENT_TICKET_LINK -> $ticket_file"
-            echo "Current note linked: $CURRENT_NOTE_LINK -> $note_file"
-        else
-            rm -f "$CURRENT_NOTE_LINK"
-            echo "Started ticket: $ticket_name"
-            echo "Current ticket linked: $CURRENT_TICKET_LINK -> $ticket_file"
-        fi
+        # Create current-* symlinks (handles new + legacy layouts).
+        create_current_ticket_symlinks "." "$tickets_dir" "$ticket_name" || return 1
+        echo "Started ticket: $ticket_name"
         echo "Note: Branch created locally. Use 'git push -u $repository $branch_name' when ready to share."
     fi
 
@@ -2587,59 +2773,75 @@ EOF
     
     # Extract ticket name from branch
     local ticket_name="${current_branch#"$branch_prefix"}"
-    local ticket_file="${tickets_dir}/${ticket_name}.md"
-    
-    # Check if ticket file exists in regular location or done folder
-    if [[ ! -f "$ticket_file" ]]; then
-        # Check in done folder
+
+    # Resolve ticket layout & path. Prefer new-format (per-ticket dir); fall
+    # back to legacy flat. Check both open and done/ locations.
+    local layout=$(ticket_layout "$ticket_name" "$tickets_dir")
+    local ticket_file
+    if [[ -f "${tickets_dir}/${ticket_name}/ticket.md" ]]; then
+        ticket_file="${tickets_dir}/${ticket_name}/ticket.md"
+    elif [[ -f "${tickets_dir}/done/${ticket_name}/ticket.md" ]]; then
+        ticket_file="${tickets_dir}/done/${ticket_name}/ticket.md"
+    elif [[ -f "${tickets_dir}/${ticket_name}.md" ]]; then
+        ticket_file="${tickets_dir}/${ticket_name}.md"
+    elif [[ -f "${tickets_dir}/done/${ticket_name}.md" ]]; then
         ticket_file="${tickets_dir}/done/${ticket_name}.md"
-        if [[ ! -f "$ticket_file" ]]; then
-            cat >&2 << EOF
+    else
+        cat >&2 << EOF
 Error: No matching ticket found
 No ticket file found for branch '$current_branch'. Please:
 1. Check if ticket file exists in $tickets_dir/ or $tickets_dir/done/
 2. Ensure branch name matches ticket name format
 3. Or start a new ticket if this is a new feature
 EOF
-            return 1
-        fi
+        return 1
     fi
-    
-    # Create symlink
-    rm -f "$CURRENT_TICKET_LINK"
-    if ! ln -s "$ticket_file" "$CURRENT_TICKET_LINK"; then
-        cat >&2 << EOF
+
+    # For new-format tickets in done/, create_current_ticket_symlinks would
+    # target the open location. Handle done-directly case specially by falling
+    # back to a bare file symlink in that case.
+    if [[ "$layout" == "new" ]] && [[ "$ticket_file" != */done/* ]]; then
+        # Standard case: open new-format ticket. Create the dir + compat symlinks.
+        create_current_ticket_symlinks "." "$tickets_dir" "$ticket_name" || return 1
+        local _sink_dir="${tickets_dir}/${ticket_name}"
+        echo "Restored $CURRENT_TICKET_DIR_LINK -> $_sink_dir"
+    else
+        # Legacy layout, or new-format ticket already in done/ (unusual).
+        # Just re-establish the compat file symlinks and clear the dir symlink.
+        rm -rf "$CURRENT_TICKET_DIR_LINK"
+        rm -f "$CURRENT_TICKET_LINK"
+        if ! ln -s "$ticket_file" "$CURRENT_TICKET_LINK"; then
+            cat >&2 << EOF
 Error: Cannot create symlink
 Permission denied creating symlink. Please:
 1. Check write permissions in current directory
 2. Ensure no file named '$CURRENT_TICKET_LINK' exists
 3. Run with appropriate permissions if needed
 EOF
-        return 1
-    fi
-    
-    # Restore note symlink if note file exists
-    local note_file_regular="${tickets_dir}/${ticket_name}-note.md"
-    local note_file_done="${tickets_dir}/done/${ticket_name}-note.md"
-    local note_file=""
-    
-    if [[ -f "$note_file_regular" ]]; then
-        note_file="$note_file_regular"
-    elif [[ -f "$note_file_done" ]]; then
-        note_file="$note_file_done"
-    fi
-    
-    if [[ -n "$note_file" ]] && [[ -f "$note_file" ]]; then
-        rm -f "$CURRENT_NOTE_LINK"
-        if ! ln -s "$note_file" "$CURRENT_NOTE_LINK"; then
-            echo "Warning: Cannot create note symlink $CURRENT_NOTE_LINK" >&2
-            # Continue execution - note link is not critical
+            return 1
         fi
-        echo "Restored current ticket link: $CURRENT_TICKET_LINK -> $ticket_file"
-        echo "Restored current note link: $CURRENT_NOTE_LINK -> $note_file"
-    else
-        rm -f "$CURRENT_NOTE_LINK"  # Clean up any old note link
-        echo "Restored current ticket link: $CURRENT_TICKET_LINK -> $ticket_file"
+
+        # Note symlink for legacy layout
+        local note_file_regular="${tickets_dir}/${ticket_name}-note.md"
+        local note_file_done="${tickets_dir}/done/${ticket_name}-note.md"
+        local note_file=""
+        if [[ -f "$note_file_regular" ]]; then
+            note_file="$note_file_regular"
+        elif [[ -f "$note_file_done" ]]; then
+            note_file="$note_file_done"
+        fi
+
+        if [[ -n "$note_file" ]] && [[ -f "$note_file" ]]; then
+            rm -f "$CURRENT_NOTE_LINK"
+            if ! ln -s "$note_file" "$CURRENT_NOTE_LINK"; then
+                echo "Warning: Cannot create note symlink $CURRENT_NOTE_LINK" >&2
+            fi
+            echo "Restored current ticket link: $CURRENT_TICKET_LINK -> $ticket_file"
+            echo "Restored current note link: $CURRENT_NOTE_LINK -> $note_file"
+        else
+            rm -f "$CURRENT_NOTE_LINK"
+            echo "Restored current ticket link: $CURRENT_TICKET_LINK -> $ticket_file"
+        fi
     fi
     
     # Display success message if configured
@@ -2672,7 +2874,14 @@ cmd_check() {
     if [[ -L "$CURRENT_TICKET_LINK" && -f "$CURRENT_TICKET_LINK" ]]; then
         # Case 1 & 2: current-ticket.md exists
         local ticket_file=$(readlink "$CURRENT_TICKET_LINK")
-        local ticket_name=$(basename "$ticket_file" .md)
+        local ticket_name
+        if [[ "$(basename "$ticket_file")" == "ticket.md" ]]; then
+            # New-format: <parent>/ticket.md
+            local _parent="${ticket_file%/*}"
+            ticket_name="${_parent##*/}"
+        else
+            ticket_name=$(basename "$ticket_file" .md)
+        fi
         local expected_branch="${branch_prefix}${ticket_name}"
         
         if [[ "$current_branch" == "$expected_branch" ]]; then
@@ -2700,8 +2909,18 @@ cmd_check() {
         elif [[ "$current_branch" =~ ^${branch_prefix} ]]; then
             # Cases 4-5: On feature branch
             local ticket_name="${current_branch#"$branch_prefix"}"
-            local ticket_file="${tickets_dir}/${ticket_name}.md"
-            
+            # Resolve to either new-format or legacy path; prefer new-format.
+            local ticket_file
+            if [[ -f "${tickets_dir}/${ticket_name}/ticket.md" ]]; then
+                ticket_file="${tickets_dir}/${ticket_name}/ticket.md"
+            elif [[ -f "${tickets_dir}/done/${ticket_name}/ticket.md" ]]; then
+                ticket_file="${tickets_dir}/done/${ticket_name}/ticket.md"
+            elif [[ -f "${tickets_dir}/${ticket_name}.md" ]]; then
+                ticket_file="${tickets_dir}/${ticket_name}.md"
+            else
+                ticket_file="${tickets_dir}/${ticket_name}.md"
+            fi
+
             # Check if ticket file exists in regular location or done folder
             if [[ -f "$ticket_file" ]]; then
                 # Extract YAML frontmatter and check started_at
@@ -2739,8 +2958,12 @@ cmd_check() {
                     fi
                 fi
             else
-                # Check in done folder
-                ticket_file="${tickets_dir}/done/${ticket_name}.md"
+                # Check in done folder (both layouts)
+                if [[ -f "${tickets_dir}/done/${ticket_name}/ticket.md" ]]; then
+                    ticket_file="${tickets_dir}/done/${ticket_name}/ticket.md"
+                else
+                    ticket_file="${tickets_dir}/done/${ticket_name}.md"
+                fi
                 if [[ -f "$ticket_file" ]]; then
                     # Extract YAML frontmatter and check started_at
                     local yaml_content=$(extract_yaml_frontmatter "$ticket_file" 2>/dev/null)
@@ -2837,13 +3060,27 @@ cmd_close_no_merge() {
 
     # Normalize ticket name (accept name, path, or .md)
     local ticket_name=$(extract_ticket_name "$ticket_name_arg")
-    local ticket_file="${tickets_dir}/${ticket_name}.md"
-    local note_file="${tickets_dir}/${ticket_name}-note.md"
     local done_dir="${tickets_dir}/done"
-    local done_ticket="${done_dir}/${ticket_name}.md"
 
-    # Idempotent: already finalized
-    if [[ -f "$done_ticket" ]]; then
+    # Detect layout: new (per-ticket dir) vs legacy (flat .md + -note.md)
+    local is_new_format=false
+    local ticket_file="" note_file="" src_ticket_dir=""
+    local done_ticket="" done_note="" done_ticket_dir=""
+    if [[ -f "${tickets_dir}/${ticket_name}/ticket.md" ]]; then
+        is_new_format=true
+        src_ticket_dir="${tickets_dir}/${ticket_name}"
+        ticket_file="${src_ticket_dir}/ticket.md"
+        done_ticket_dir="${done_dir}/${ticket_name}"
+        done_ticket="${done_ticket_dir}/ticket.md"
+    else
+        ticket_file="${tickets_dir}/${ticket_name}.md"
+        note_file="${tickets_dir}/${ticket_name}-note.md"
+        done_ticket="${done_dir}/${ticket_name}.md"
+        done_note="${done_dir}/${ticket_name}-note.md"
+    fi
+
+    # Idempotent: already finalized (either layout in done/)
+    if [[ -f "${done_dir}/${ticket_name}/ticket.md" ]] || [[ -f "${done_dir}/${ticket_name}.md" ]]; then
         echo "Ticket already finalized: $ticket_name"
         return 0
     fi
@@ -2869,23 +3106,28 @@ EOF
         return 1
     }
 
-    # Move ticket + note into done/
+    # Move ticket (and note / whole dir) into done/
     if [[ ! -d "$done_dir" ]] && ! mkdir -p "$done_dir"; then
         echo "Error: Failed to create done directory: $done_dir" >&2
         return 1
     fi
 
-    run_git_command "git mv \"$ticket_file\" \"$done_ticket\"" || {
-        echo "Error: Failed to move ticket to done folder" >&2
-        return 1
-    }
-
-    local done_note="${done_dir}/${ticket_name}-note.md"
-    if [[ -f "$note_file" ]]; then
-        run_git_command "git mv \"$note_file\" \"$done_note\"" || {
-            echo "Error: Failed to move note file to done folder" >&2
+    if [[ "$is_new_format" == "true" ]]; then
+        run_git_command "git mv \"$src_ticket_dir\" \"$done_ticket_dir\"" || {
+            echo "Error: Failed to move ticket directory to done folder" >&2
             return 1
         }
+    else
+        run_git_command "git mv \"$ticket_file\" \"$done_ticket\"" || {
+            echo "Error: Failed to move ticket to done folder" >&2
+            return 1
+        }
+        if [[ -f "$note_file" ]]; then
+            run_git_command "git mv \"$note_file\" \"$done_note\"" || {
+                echo "Error: Failed to move note file to done folder" >&2
+                return 1
+            }
+        fi
     fi
 
     # git mv stages the pre-edit blob under the new name, so re-add the moved
@@ -2915,7 +3157,11 @@ EOF
 
     echo "Ticket finalized: $ticket_name"
     echo "closed_at: $timestamp"
-    echo "Moved to: $done_ticket (no merge; assumed already on '$current_branch')"
+    if [[ "$is_new_format" == "true" ]]; then
+        echo "Moved to: $done_ticket_dir/ (no merge; assumed already on '$current_branch')"
+    else
+        echo "Moved to: $done_ticket (no merge; assumed already on '$current_branch')"
+    fi
 
     if [[ "$auto_push" == "false" ]] || [[ "$no_push" == "true" ]]; then
         echo "Note: Changes not pushed to remote. Use 'git push $repository $current_branch' when ready."
@@ -3207,9 +3453,18 @@ EOF
         return 1
     }
     
-    # Get ticket name and full content BEFORE switching branches
-    # This ensures we capture the updated content from the feature branch
-    local ticket_name=$(basename "$ticket_file" .md)
+    # Get ticket name and full content BEFORE switching branches.
+    # For new-format tickets ($ticket_file ends in /<name>/ticket.md) the
+    # canonical ticket name is the parent-dir name, not the file basename.
+    local ticket_name
+    local is_new_format=false
+    if [[ "$(basename "$ticket_file")" == "ticket.md" ]]; then
+        is_new_format=true
+        local _parent_dir="${ticket_file%/*}"
+        ticket_name="${_parent_dir##*/}"
+    else
+        ticket_name="$(basename "$ticket_file" .md)"
+    fi
     local ticket_content=$(cat "$ticket_file")
 
     # Push feature branch if auto_push
@@ -3228,9 +3483,20 @@ EOF
 
     local tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
     local done_dir="${tickets_dir}/done"
-    local note_file="${tickets_dir}/${ticket_name}-note.md"
-    local new_ticket_path="${done_dir}/$(basename "$ticket_file")"
-    local new_note_path="${done_dir}/$(basename "$note_file")"
+    # Compute source/destination paths for the mv step. New-format tickets move
+    # the whole per-ticket directory in one git-mv; legacy uses separate mv for
+    # ticket.md and -note.md.
+    local src_ticket_dir="" src_note="" note_file=""
+    local new_ticket_path="" new_note_path="" new_ticket_dir=""
+    if [[ "$is_new_format" == "true" ]]; then
+        src_ticket_dir="${tickets_dir}/${ticket_name}"
+        new_ticket_dir="${done_dir}/${ticket_name}"
+    else
+        note_file="${tickets_dir}/${ticket_name}-note.md"
+        src_note="$note_file"
+        new_ticket_path="${done_dir}/$(basename "$ticket_file")"
+        new_note_path="${done_dir}/$(basename "$note_file")"
+    fi
 
     if [[ "$in_worktree" == "true" ]]; then
         # Worktree mode: perform the merge via "git -C $main_repo" so this
@@ -3251,16 +3517,25 @@ EOF
             return 1
         fi
 
-        run_git_command "git -C $main_repo mv \"$ticket_file\" \"$new_ticket_path\"" || {
-            echo "Error: Failed to move ticket to done folder" >&2
-            return 1
-        }
-
-        if [[ -f "${main_repo}/${note_file}" ]]; then
-            run_git_command "git -C $main_repo mv \"$note_file\" \"$new_note_path\"" || {
-                echo "Error: Failed to move note file to done folder" >&2
+        if [[ "$is_new_format" == "true" ]]; then
+            # Move the whole per-ticket directory in one shot. git-mv on a
+            # directory renames every tracked entry beneath it (ticket.md,
+            # note.md, tests/, tmp/) as a single change.
+            run_git_command "git -C $main_repo mv \"$src_ticket_dir\" \"$new_ticket_dir\"" || {
+                echo "Error: Failed to move ticket directory to done folder" >&2
                 return 1
             }
+        else
+            run_git_command "git -C $main_repo mv \"$ticket_file\" \"$new_ticket_path\"" || {
+                echo "Error: Failed to move ticket to done folder" >&2
+                return 1
+            }
+            if [[ -f "${main_repo}/${note_file}" ]]; then
+                run_git_command "git -C $main_repo mv \"$note_file\" \"$new_note_path\"" || {
+                    echo "Error: Failed to move note file to done folder" >&2
+                    return 1
+                }
+            fi
         fi
 
         echo -e "$commit_msg" | run_git_command "git -C $main_repo commit -F -" || {
@@ -3328,16 +3603,22 @@ EOF
             return 1
         fi
 
-        run_git_command "git mv \"$ticket_file\" \"$new_ticket_path\"" || {
-            echo "Error: Failed to move ticket to done folder" >&2
-            return 1
-        }
-
-        if [[ -f "$note_file" ]]; then
-            run_git_command "git mv \"$note_file\" \"$new_note_path\"" || {
-                echo "Error: Failed to move note file to done folder" >&2
+        if [[ "$is_new_format" == "true" ]]; then
+            run_git_command "git mv \"$src_ticket_dir\" \"$new_ticket_dir\"" || {
+                echo "Error: Failed to move ticket directory to done folder" >&2
                 return 1
             }
+        else
+            run_git_command "git mv \"$ticket_file\" \"$new_ticket_path\"" || {
+                echo "Error: Failed to move ticket to done folder" >&2
+                return 1
+            }
+            if [[ -f "$note_file" ]]; then
+                run_git_command "git mv \"$note_file\" \"$new_note_path\"" || {
+                    echo "Error: Failed to move note file to done folder" >&2
+                    return 1
+                }
+            fi
         fi
 
         echo -e "$commit_msg" | run_git_command "git commit -F -" || {
@@ -3367,9 +3648,9 @@ EOF
         fi
     fi
 
-    # Remove current ticket and note links - core workflow is complete, safe to remove
-    rm -f "$CURRENT_TICKET_LINK"
-    rm -f "$CURRENT_NOTE_LINK"
+    # Remove current-* links (compat file symlinks + dir symlink) — core
+    # workflow is complete, safe to remove.
+    remove_current_ticket_symlinks "."
 
     echo "Ticket completed: $ticket_name"
     echo "Merged to $default_branch branch"
@@ -3572,32 +3853,40 @@ EOF
         return 1
     }
 
-    # Get ticket name BEFORE proceeding with cleanup paths
-    local ticket_name=$(basename "$ticket_file" .md)
+    # Get ticket name and layout BEFORE proceeding with cleanup paths.
+    # For new-format tickets, ticket_file ends in /<name>/ticket.md.
+    local ticket_name
+    local is_new_format=false
+    if [[ "$(basename "$ticket_file")" == "ticket.md" ]]; then
+        is_new_format=true
+        local _parent_dir="${ticket_file%/*}"
+        ticket_name="${_parent_dir##*/}"
+    else
+        ticket_name="$(basename "$ticket_file" .md)"
+    fi
 
     local tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
     local done_dir="${tickets_dir}/done"
-    local note_file="${tickets_dir}/${ticket_name}-note.md"
 
-    # Build canceled filename: insert -CANCELED- before the slug part
-    # Original: YYMMDD-hhmmss-slug-name.md -> YYMMDD-hhmmss-CANCELED-slug-name.md
-    local base_name=$(basename "$ticket_file")
+    # Build canceled name: insert -CANCELED- after the timestamp prefix.
+    # Original: YYMMDD-hhmmss-slug -> YYMMDD-hhmmss-CANCELED-slug
     local canceled_name
-    if [[ "$base_name" =~ ^([0-9]{6}-[0-9]{6})-(.*)$ ]]; then
+    if [[ "$ticket_name" =~ ^([0-9]{6}-[0-9]{6})-(.*)$ ]]; then
         canceled_name="${BASH_REMATCH[1]}-CANCELED-${BASH_REMATCH[2]}"
     else
-        canceled_name="CANCELED-${base_name}"
+        canceled_name="CANCELED-${ticket_name}"
     fi
-    local new_ticket_path="${done_dir}/${canceled_name}"
 
-    local note_base=$(basename "$note_file")
-    local canceled_note_name
-    if [[ "$note_base" =~ ^([0-9]{6}-[0-9]{6})-(.*)$ ]]; then
-        canceled_note_name="${BASH_REMATCH[1]}-CANCELED-${BASH_REMATCH[2]}"
+    local src_ticket_dir="" canceled_dir=""
+    local note_file="" new_ticket_path="" new_note_path=""
+    if [[ "$is_new_format" == "true" ]]; then
+        src_ticket_dir="${tickets_dir}/${ticket_name}"
+        canceled_dir="${done_dir}/${canceled_name}"
     else
-        canceled_note_name="CANCELED-${note_base}"
+        note_file="${tickets_dir}/${ticket_name}-note.md"
+        new_ticket_path="${done_dir}/${canceled_name}.md"
+        new_note_path="${done_dir}/${canceled_name}-note.md"
     fi
-    local new_note_path="${done_dir}/${canceled_note_name}"
 
     local commit_msg="[${ticket_name}] Ticket canceled"
 
@@ -3611,20 +3900,33 @@ EOF
             return 1
         fi
 
-        run_git_command "git -C $main_repo checkout $current_branch -- $ticket_file" || {
-            echo "Error: Failed to retrieve ticket file from feature branch" >&2
-            return 1
-        }
+        if [[ "$is_new_format" == "true" ]]; then
+            # Bring the feature-branch version of the ticket dir into main repo,
+            # then rename it to the CANCELED location via git-mv (preserves history).
+            run_git_command "git -C $main_repo checkout $current_branch -- \"$src_ticket_dir\"" || {
+                echo "Error: Failed to retrieve ticket directory from feature branch" >&2
+                return 1
+            }
+            run_git_command "git -C $main_repo mv \"$src_ticket_dir\" \"$canceled_dir\"" || {
+                echo "Error: Failed to move ticket directory to canceled location" >&2
+                return 1
+            }
+        else
+            run_git_command "git -C $main_repo checkout $current_branch -- $ticket_file" || {
+                echo "Error: Failed to retrieve ticket file from feature branch" >&2
+                return 1
+            }
 
-        mv "${main_repo}/${ticket_file}" "${main_repo}/${new_ticket_path}" || {
-            echo "Error: Failed to move ticket to canceled location" >&2
-            return 1
-        }
+            mv "${main_repo}/${ticket_file}" "${main_repo}/${new_ticket_path}" || {
+                echo "Error: Failed to move ticket to canceled location" >&2
+                return 1
+            }
 
-        if git -C "$main_repo" show "${current_branch}:${note_file}" >/dev/null 2>&1; then
-            run_git_command "git -C $main_repo checkout $current_branch -- $note_file" || true
-            if [[ -f "${main_repo}/${note_file}" ]]; then
-                mv "${main_repo}/${note_file}" "${main_repo}/${new_note_path}" || true
+            if git -C "$main_repo" show "${current_branch}:${note_file}" >/dev/null 2>&1; then
+                run_git_command "git -C $main_repo checkout $current_branch -- $note_file" || true
+                if [[ -f "${main_repo}/${note_file}" ]]; then
+                    mv "${main_repo}/${note_file}" "${main_repo}/${new_note_path}" || true
+                fi
             fi
         fi
 
@@ -3665,17 +3967,28 @@ EOF
             return 1
         fi
 
-        run_git_command "git checkout $current_branch -- $ticket_file" || {
-            echo "Error: Failed to retrieve ticket file from feature branch" >&2
-            return 1
-        }
+        if [[ "$is_new_format" == "true" ]]; then
+            run_git_command "git checkout $current_branch -- \"$src_ticket_dir\"" || {
+                echo "Error: Failed to retrieve ticket directory from feature branch" >&2
+                return 1
+            }
+            run_git_command "git mv \"$src_ticket_dir\" \"$canceled_dir\"" || {
+                echo "Error: Failed to move ticket directory to canceled location" >&2
+                return 1
+            }
+        else
+            run_git_command "git checkout $current_branch -- $ticket_file" || {
+                echo "Error: Failed to retrieve ticket file from feature branch" >&2
+                return 1
+            }
 
-        mv "$ticket_file" "$new_ticket_path"
+            mv "$ticket_file" "$new_ticket_path"
 
-        if git show "${current_branch}:${note_file}" >/dev/null 2>&1; then
-            run_git_command "git checkout $current_branch -- $note_file" || true
-            if [[ -f "$note_file" ]]; then
-                mv "$note_file" "$new_note_path"
+            if git show "${current_branch}:${note_file}" >/dev/null 2>&1; then
+                run_git_command "git checkout $current_branch -- $note_file" || true
+                if [[ -f "$note_file" ]]; then
+                    mv "$note_file" "$new_note_path"
+                fi
             fi
         fi
 
@@ -3690,12 +4003,15 @@ EOF
         }
     fi
 
-    # Remove current ticket and note links
-    rm -f "$CURRENT_TICKET_LINK"
-    rm -f "$CURRENT_NOTE_LINK"
+    # Remove current-* symlinks (compat file symlinks + dir symlink)
+    remove_current_ticket_symlinks "."
 
     echo "Ticket canceled: $ticket_name"
-    echo "Moved to: $new_ticket_path"
+    if [[ "$is_new_format" == "true" ]]; then
+        echo "Moved to: $canceled_dir/"
+    else
+        echo "Moved to: $new_ticket_path"
+    fi
     echo "Feature branch '$current_branch' has been kept (not deleted)"
 }
 
@@ -3715,43 +4031,68 @@ cmd_prompt() {
 
 Use `./ticket.sh` for ticket management.
 
-## Working with current-ticket.md
+## Layout
 
-### If `current-ticket.md` exists in project root
+Each ticket lives in its own per-ticket directory:
 
-- This file is your work instruction - follow its contents
-- When receiving additional instructions from users, add them as new tasks under `## Tasks` and record details in `current-note.md` before proceeding
-- During the work, also write down notes, logs, and findings in `current-note.md`
-- Continue working on the active ticket
+```
+tickets/<TICKETNAME>/
+  ticket.md   # ticket body
+  note.md     # working notes / log
+  tests/      # ticket-local tests (created on demand)
+  tmp/        # ticket-local temp helpers (created on demand)
+```
 
-### If current-ticket.md does not exist in project root
-- When receiving user requests, first ask whether to create a new ticket
-- Do not start work without confirming ticket creation
-- Even small requests should be tracked through the ticket system
+When a ticket is active, three symlinks in the repo root point at it:
+
+- `current-ticket/` → the per-ticket directory (all files reachable as `current-ticket/ticket.md`, `current-ticket/note.md`, `current-ticket/tests/`, `current-ticket/tmp/`)
+- `current-ticket.md` → the ticket body (compat with older tooling)
+- `current-note.md` → the note file (compat with older tooling)
+
+Legacy compatibility: pre-existing flat tickets (`tickets/<TICKETNAME>.md` +
+`tickets/<TICKETNAME>-note.md`) still work end-to-end; they are not migrated
+automatically.
+
+## Working with the active ticket
+
+### If `current-ticket/` (or `current-ticket.md`) exists in the repo root
+
+- This is your work instruction — follow its contents.
+- Record additional instructions and progress in `current-ticket/note.md` (or the compat `current-note.md`) before proceeding.
+- During the work, keep notes, logs, and findings in `current-ticket/note.md`.
+- Continue working on the active ticket.
+
+### If it does not exist in the repo root
+
+- When receiving user requests, first ask whether to create a new ticket.
+- Do not start work without confirming ticket creation.
+- Even small requests should be tracked through the ticket system.
 
 ## Create New Ticket
 
-1. Create ticket: `./ticket.sh new feature-name`
-2. Edit ticket content and description in the generated file
+1. Create ticket: `./ticket.sh new feature-name` — creates `tickets/<TICKETNAME>/{ticket.md,note.md}`.
+2. Edit ticket content and description in the generated `tickets/<TICKETNAME>/ticket.md`.
 
 ## Start Working on Ticket
 
-1. Check available tickets: `./ticket.sh` list or browse tickets directory
-2. Start work: `./ticket.sh start 241225-143502-feature-name`
-3. Develop on feature branch
-4. Reference work files:
-   - `current-ticket.md` shows active ticket with tasks
-   - `current-note.md` for working notes related to this ticket (if used)
+1. Check available tickets: `./ticket.sh list` (both new and legacy layouts are shown).
+2. Start work: `./ticket.sh start 241225-143502-feature-name` — creates the feature branch and the three `current-*` symlinks.
+3. Develop on the feature branch.
+4. Reference work files via the active-ticket symlinks:
+   - `current-ticket/ticket.md` — the ticket body
+   - `current-ticket/note.md` — working notes for this ticket
+   - Compat: `current-ticket.md`, `current-note.md`
 
 ## Closing Tickets
 
 1. Before closing:
-   - Review `current-ticket.md` content and description, collect information from `current-note.md` and other notes, and summarize the final work results and conclusions so that anyone reading the ticket can understand the work done on this branch
-   - Check all tasks in checklist are completed (mark with `[x]`)
-   - Commit all your work: `git add . && git commit -m "your message"`
-   - Get user approval before proceeding
+   - Review the ticket content and description; collect information from `current-ticket/note.md` and summarize the final work so any reader can understand what was done on this branch.
+   - Check all checklist tasks are completed (mark with `[x]`).
+   - Commit all your work: `git add . && git commit -m "your message"`.
+   - Get user approval before proceeding.
 2. Complete: `./ticket.sh close`
-   - **When inside a worktree, always add `--keep-worktree`**: `./ticket.sh close --keep-worktree`
+   - `close` moves the whole `tickets/<TICKETNAME>/` directory to `tickets/done/<TICKETNAME>/` in a single commit that also records `closed_at`.
+   - **When inside a worktree, always add `--keep-worktree`**: `./ticket.sh close --keep-worktree`.
      Without it, ticket.sh removes the worktree and your shell's cwd becomes dangling, which makes every subsequent Bash tool call fail.
    - Same rule for cancel: `./ticket.sh cancel --keep-worktree`.
 EOF
@@ -4055,14 +4396,18 @@ epic_find_linked_tickets() {
     local slug="$1" epic_branch="${2:-}"
     local tickets_dir="tickets"
 
-    # Working tree: open tickets at tickets/*.md
+    # Working tree: enumerate BOTH layouts.
+    #   legacy: tickets/<name>.md, tickets/done/<name>.md
+    #   new:    tickets/<name>/ticket.md, tickets/done/<name>/ticket.md
     local f
     if [[ -d "$tickets_dir" ]]; then
-        for f in "$tickets_dir"/*.md; do
+        for f in \
+            "$tickets_dir"/*.md \
+            "$tickets_dir"/*/ticket.md; do
             [[ -f "$f" ]] || continue
             local base="${f##*/}"
             [[ "$base" == "README.md" ]] && continue
-            local fm body
+            local fm
             fm=$(extract_yaml_frontmatter "$f" 2>/dev/null) || continue
             local eid
             eid=$(get_yaml_field "$fm" "epic_id") || true
@@ -4070,9 +4415,10 @@ epic_find_linked_tickets() {
                 echo "open|working tree|$f"
             fi
         done
-        # Closed tickets at tickets/done/*.md
         if [[ -d "$tickets_dir/done" ]]; then
-            for f in "$tickets_dir"/done/*.md; do
+            for f in \
+                "$tickets_dir"/done/*.md \
+                "$tickets_dir"/done/*/ticket.md; do
                 [[ -f "$f" ]] || continue
                 local fm
                 fm=$(extract_yaml_frontmatter "$f" 2>/dev/null) || continue
@@ -4085,14 +4431,19 @@ epic_find_linked_tickets() {
         fi
     fi
 
-    # Epic branch (if provided): scan tickets/*.md
+    # Epic branch (if provided): scan tickets/ for both layouts.
     if [[ -n "$epic_branch" ]]; then
-        local seen_paths=()
         local path
         while IFS= read -r path; do
             [[ -z "$path" ]] && continue
             [[ "$path" == "tickets/done/"* ]] && continue
             [[ "$path" == "tickets/README.md" ]] && continue
+            # Only accept legacy top-level .md OR new-format */ticket.md
+            case "$path" in
+                tickets/*/ticket.md) ;;
+                tickets/*.md) ;;
+                *) continue ;;
+            esac
             local content
             content=$(git show "${epic_branch}:${path}" 2>/dev/null) || continue
             local fm
@@ -4100,7 +4451,6 @@ epic_find_linked_tickets() {
             local eid
             eid=$(get_yaml_field "$fm" "epic_id") || true
             if [[ "$eid" == "$slug" ]]; then
-                # Skip if already seen on working tree
                 if [[ ! -f "$path" ]]; then
                     echo "open|${epic_branch}|${path}"
                 fi
@@ -4836,7 +5186,14 @@ cmd_epic_show() {
                 lcontent=$(git show "${lloc}:${lpath}" 2>/dev/null || echo "")
             fi
             lfm=$(epic_extract_frontmatter "$lcontent")
-            local lslug="${lpath##*/}"; lslug="${lslug%.md}"
+            # Derive slug from path: legacy "<name>.md" → <name>; new-format
+            # "<name>/ticket.md" → parent dir name.
+            local lslug
+            if [[ "${lpath##*/}" == "ticket.md" ]]; then
+                local _lp="${lpath%/*}"; lslug="${_lp##*/}"
+            else
+                lslug="${lpath##*/}"; lslug="${lslug%.md}"
+            fi
             local ltitle ldesc lbase leid
             ltitle=$(get_yaml_field "$lfm" "title"); [[ -z "$ltitle" ]] && ltitle="$lslug"
             ldesc=$(get_yaml_field "$lfm" "description")

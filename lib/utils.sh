@@ -145,28 +145,83 @@ generate_ticket_filename() {
     echo "${timestamp}-${slug}"
 }
 
-# Extract ticket name from various input formats
+# Extract ticket name from various input formats.
+# Accepts: bare name, .md file, tickets/<name>/ticket.md, tickets/<name>/,
+# tickets/done/<name>/ticket.md.
 extract_ticket_name() {
     local input="$1"
-    
-    # Remove directory path if present
+
+    # Strip trailing slashes
+    input="${input%/}"
+
     local basename="${input##*/}"
-    
-    # Remove .md extension if present
-    basename="${basename%.md}"
-    
+
+    if [[ "$basename" == "ticket.md" ]]; then
+        # Path is <...>/<name>/ticket.md — take parent dir name
+        local parent="${input%/*}"
+        basename="${parent##*/}"
+    else
+        basename="${basename%.md}"
+    fi
+
     echo "$basename"
 }
 
-# Get ticket file path from ticket name
+# Detect layout for a given ticket name.
+# Echoes one of: "new" (dir with ticket.md), "legacy" (flat .md), "unknown".
+# Usage: ticket_layout <ticket_name> <tickets_dir>
+ticket_layout() {
+    local ticket_name="$1"
+    local tickets_dir="$2"
+    ticket_name=$(extract_ticket_name "$ticket_name")
+
+    if [[ -f "${tickets_dir}/${ticket_name}/ticket.md" ]]; then
+        echo "new"
+    elif [[ -f "${tickets_dir}/done/${ticket_name}/ticket.md" ]]; then
+        echo "new"
+    elif [[ -f "${tickets_dir}/${ticket_name}.md" ]]; then
+        echo "legacy"
+    elif [[ -f "${tickets_dir}/done/${ticket_name}.md" ]]; then
+        echo "legacy"
+    else
+        echo "unknown"
+    fi
+}
+
+# Get ticket file path from ticket name.
+# Prefers the new-format path when the per-ticket directory exists (open or done);
+# falls back to the legacy flat path otherwise.
 get_ticket_file() {
     local ticket_name="$1"
     local tickets_dir="$2"
-    
-    # Extract just the ticket name
+
     ticket_name=$(extract_ticket_name "$ticket_name")
-    
-    echo "${tickets_dir}/${ticket_name}.md"
+
+    if [[ -f "${tickets_dir}/${ticket_name}/ticket.md" ]]; then
+        echo "${tickets_dir}/${ticket_name}/ticket.md"
+    elif [[ -f "${tickets_dir}/done/${ticket_name}/ticket.md" ]]; then
+        echo "${tickets_dir}/done/${ticket_name}/ticket.md"
+    else
+        echo "${tickets_dir}/${ticket_name}.md"
+    fi
+}
+
+# Get note file path from ticket name.
+# For new-format tickets, returns the note.md inside the ticket dir; for
+# legacy, returns the flat -note.md sibling. Prefers the open location over done/.
+get_note_file() {
+    local ticket_name="$1"
+    local tickets_dir="$2"
+
+    ticket_name=$(extract_ticket_name "$ticket_name")
+
+    if [[ -d "${tickets_dir}/${ticket_name}" ]]; then
+        echo "${tickets_dir}/${ticket_name}/note.md"
+    elif [[ -d "${tickets_dir}/done/${ticket_name}" ]]; then
+        echo "${tickets_dir}/done/${ticket_name}/note.md"
+    else
+        echo "${tickets_dir}/${ticket_name}-note.md"
+    fi
 }
 
 # Check if main repo is in a safe state to perform merge operations.

@@ -45,35 +45,113 @@ timeout() {
     fi
 }
 
-# Safe way to get first matching file
+# Safe way to get first matching file.
+# For tickets/ we probe both the legacy flat layout (tickets/<name>.md) and
+# the new per-ticket-directory layout (tickets/<name>/ticket.md), and skip
+# the tickets/README.md file that `ticket.sh init` creates.
 safe_get_first_file() {
     local pattern="$1"
     local dir="${2:-.}"
-    
-    # Try to find files matching the pattern
+
+    # Try to find files matching the pattern (legacy flat layout).
     for file in $dir/$pattern; do
         if [[ -f "$file" ]]; then
+            # Skip the README.md created by init.
+            if [[ "$(basename "$file")" == "README.md" ]]; then
+                continue
+            fi
             echo "$file"
             return 0
         fi
     done
-    
+
+    # Fallback: new per-ticket-directory layout — strip trailing .md from
+    # the pattern and probe as a directory containing ticket.md.
+    local dir_pattern="${pattern%.md}"
+    local d
+    for d in $dir/$dir_pattern; do
+        if [[ -d "$d" ]] && [[ -f "$d/ticket.md" ]]; then
+            echo "$d/ticket.md"
+            return 0
+        fi
+    done
+
     # Return empty string on failure
     echo ""
     return 1
 }
 
-# Safe way to extract ticket name from pattern
+# Safe way to extract ticket name from pattern.
+# Supports both layouts:
+#   legacy flat:  tickets/<name>.md              → returns <name>
+#   new per-dir:  tickets/<name>/ticket.md       → returns <name>
+# The pattern is matched loosely: if the pattern is like "*slug.md" it will
+# also try "*slug" (directory) so callers don't need to know which layout was
+# produced.
 safe_get_ticket_name() {
     local pattern="$1"
-    local file
-    
-    file=$(safe_get_first_file "$pattern" "tickets")
-    if [[ -n "$file" ]]; then
-        basename "$file" .md
+    local file dir
+
+    # New-format first: strip trailing .md from the pattern and probe as a
+    # directory containing ticket.md.
+    local dir_pattern="${pattern%.md}"
+    for dir in tickets/$dir_pattern; do
+        if [[ -d "$dir" ]] && [[ -f "$dir/ticket.md" ]]; then
+            basename "$dir"
+            return 0
+        fi
+    done
+
+    # Legacy flat layout: match tickets/<pattern> as a file, skipping README.md
+    for file in tickets/$pattern; do
+        if [[ -f "$file" ]]; then
+            [[ "$(basename "$file")" == "README.md" ]] && continue
+            local base=$(basename "$file" .md)
+            echo "$base"
+            return 0
+        fi
+    done
+
+    echo ""
+    return 1
+}
+
+# Resolve the current on-disk path of a ticket's body file, checking both
+# layouts. Usage: ticket_body_path <name> [--done]
+#   default: prefers tickets/<name>/ticket.md (new), else tickets/<name>.md (legacy)
+#   --done : prefers tickets/done/<name>/ticket.md, else tickets/done/<name>.md
+# Prints the path, or empty string if none found.
+ticket_body_path() {
+    local name="$1"
+    local mode="${2:-}"
+    local base="tickets"
+    if [[ "$mode" == "--done" ]]; then
+        base="tickets/done"
+    fi
+    if [[ -f "${base}/${name}/ticket.md" ]]; then
+        echo "${base}/${name}/ticket.md"
+    elif [[ -f "${base}/${name}.md" ]]; then
+        echo "${base}/${name}.md"
     else
         echo ""
-        return 1
+    fi
+}
+
+# Resolve the current on-disk path of a ticket's note file. Same signature as
+# ticket_body_path.
+ticket_note_path() {
+    local name="$1"
+    local mode="${2:-}"
+    local base="tickets"
+    if [[ "$mode" == "--done" ]]; then
+        base="tickets/done"
+    fi
+    if [[ -f "${base}/${name}/note.md" ]]; then
+        echo "${base}/${name}/note.md"
+    elif [[ -f "${base}/${name}-note.md" ]]; then
+        echo "${base}/${name}-note.md"
+    else
+        echo ""
     fi
 }
 

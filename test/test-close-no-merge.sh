@@ -50,23 +50,24 @@ BEFORE_BRANCH=$(git branch --show-current)
 OUT=$(timeout 10 ./ticket.sh close --no-merge --no-push --closed-at "2026-05-29T12:17:36Z" "$TICKET" 2>&1)
 AFTER_BRANCH=$(git branch --show-current)
 
-if [[ -f "tickets/done/${TICKET}.md" ]]; then
-    test_result 0 "Ticket moved to done/"
+DONE_TICKET=$(ticket_body_path "$TICKET" --done)
+if [[ -n "$DONE_TICKET" ]]; then
+    test_result 0 "Ticket moved to done/ ($DONE_TICKET)"
 else
     test_result 1 "Ticket should be moved to done/" "$OUT"
 fi
 
-if grep -q 'closed_at: 2026-05-29T12:17:36Z' "tickets/done/${TICKET}.md" 2>/dev/null; then
+if [[ -n "$DONE_TICKET" ]] && grep -q 'closed_at: 2026-05-29T12:17:36Z' "$DONE_TICKET"; then
     test_result 0 "closed_at set to the provided value"
 else
-    test_result 1 "closed_at should equal --closed-at value" "$(grep closed_at tickets/done/${TICKET}.md 2>/dev/null)"
+    test_result 1 "closed_at should equal --closed-at value" "$(grep closed_at "$DONE_TICKET" 2>/dev/null)"
 fi
 
 # Regression: closed_at must be in the COMMIT, not just the working tree.
-if git show "HEAD:tickets/done/${TICKET}.md" 2>/dev/null | grep -q 'closed_at: 2026-05-29T12:17:36Z'; then
+if [[ -n "$DONE_TICKET" ]] && git show "HEAD:$DONE_TICKET" 2>/dev/null | grep -q 'closed_at: 2026-05-29T12:17:36Z'; then
     test_result 0 "closed_at is committed (HEAD), not left in working tree"
 else
-    test_result 1 "closed_at should be committed at HEAD" "$(git show HEAD:tickets/done/${TICKET}.md 2>/dev/null | grep closed_at)"
+    test_result 1 "closed_at should be committed at HEAD" "$(git show HEAD:$DONE_TICKET 2>/dev/null | grep closed_at)"
 fi
 
 # Regression: working tree must be clean after finalize.
@@ -78,7 +79,8 @@ else
 fi
 
 # Regression: note must be moved to done/ in the same commit as the ticket.
-if git show --name-status HEAD | grep -q "tickets/done/${TICKET}-note.md"; then
+# Legacy layout uses tickets/done/<name>-note.md; new layout uses tickets/done/<name>/note.md.
+if git show --name-status HEAD | grep -qE "tickets/done/${TICKET}(-note\.md|/note\.md)"; then
     test_result 0 "Note moved to done/ in the finalize commit"
 else
     test_result 1 "Note should be moved to done/ in the same commit" "$(git show --name-status HEAD | grep -i note)"
@@ -101,7 +103,8 @@ echo -e "\n2. Testing --no-merge without --closed-at (defaults to now-UTC)..."
 TICKET2=$(create_ticket_on_main "merged-feature-2")
 NOW_PREFIX=$(date -u '+%Y-%m-%dT%H:%M')
 timeout 10 ./ticket.sh close --no-merge --no-push "$TICKET2" >/dev/null 2>&1
-CLOSED_LINE=$(git show "HEAD:tickets/done/${TICKET2}.md" 2>/dev/null | grep closed_at)
+DONE_TICKET2=$(ticket_body_path "$TICKET2" --done)
+CLOSED_LINE=$(git show "HEAD:$DONE_TICKET2" 2>/dev/null | grep closed_at)
 if echo "$CLOSED_LINE" | grep -q "closed_at: ${NOW_PREFIX}"; then
     test_result 0 "closed_at defaults to current UTC time (committed at HEAD)"
 else

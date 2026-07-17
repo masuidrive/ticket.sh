@@ -50,7 +50,9 @@ setup_test
 
 # Create ticket with Japanese characters converted to slug format
 if timeout 5 ./ticket.sh new "日本語-テスト" >/dev/null 2>&1 || timeout 5 ./ticket.sh new "nihongo-test" >/dev/null 2>&1; then
-    if ls tickets/*nihongo-test.md >/dev/null 2>&1 || ls tickets/*test.md >/dev/null 2>&1; then
+    # Accept both layouts: legacy tickets/<name>.md and new tickets/<name>/ticket.md
+    if [[ -n "$(safe_get_ticket_name "*nihongo-test*")" ]] \
+       || [[ -n "$(safe_get_ticket_name "*test*")" ]]; then
         test_result 0 "Created ticket with UTF-8 related slug"
     else
         test_result 1 "Failed to create ticket with UTF-8 related slug"
@@ -104,7 +106,7 @@ EOF
 
     # Start the ticket to verify content handling
     git add tickets .ticket-config.yaml && git commit -q -m "add utf8 ticket"
-    TICKET_NAME=$(basename "$TICKET" .md)
+    TICKET_NAME=$(safe_get_ticket_name "*utf8-content-test*")
     
     if timeout 5 ./ticket.sh start "$TICKET_NAME" --no-push >/dev/null 2>&1; then
         test_result 0 "Started ticket with UTF-8 content"

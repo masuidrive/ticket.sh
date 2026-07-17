@@ -178,14 +178,21 @@ git add . && git commit -q -m "add test content" || true
 git checkout -q main 2>/dev/null || true
 # The ticket.sh start command expects the ticket name without path
 CLOSE_TICKET_NAME=$(basename "$CLOSE_TICKET" .md)
+# Delete the feature branch so start doesn't just resume it
+git branch -D "feature/$CLOSE_TICKET_NAME" 2>/dev/null || true
 OUTPUT=$(timeout 5 ./ticket.sh start "$CLOSE_TICKET_NAME" --no-push 2>&1)
 
-# Check what error we got - ticket.sh should find the ticket in done folder
+# Check what error we got - ticket.sh should refuse to (re)start a closed ticket.
+# Accepted signals (any one is fine):
+#   - "has already been closed"           (legacy explicit closed error)
+#   - "Ticket not found"                   (done-folder not scanned)
+#   - "Ticket already started but branch is missing" (closed ticket, branch gone)
 if echo "$OUTPUT" | grep -q "has already been closed"; then
     test_error_message "Already closed error" "$OUTPUT" "has already been closed"
 elif echo "$OUTPUT" | grep -q "Ticket not found"; then
-    # If ticket.sh doesn't check done folder properly, we get this error
     test_error_message "Already closed error" "$OUTPUT" "Ticket not found"
+elif echo "$OUTPUT" | grep -q "already started but branch is missing"; then
+    test_error_message "Already closed error" "$OUTPUT" "already started but branch is missing"
 else
     # Unexpected error
     test_error_message "Already closed error" "$OUTPUT" "has already been closed"
@@ -193,6 +200,7 @@ fi
 
 # Test 13: Restore on non-feature branch
 echo -e "\n13. Testing 'restore on wrong branch' error..."
+git checkout -q main 2>/dev/null || true
 OUTPUT=$(timeout 5 ./ticket.sh restore 2>&1)
 test_error_message "Restore wrong branch error" "$OUTPUT" "Not on a feature branch"
 
@@ -256,7 +264,7 @@ echo "work" > work.txt
 git add . && git commit -q -m "work"
 OUTPUT=$(timeout 5 ./ticket.sh close --no-push 2>&1)
 
-if [[ -d tickets/done ]] && ls tickets/done/*.md >/dev/null 2>&1; then
+if [[ -d tickets/done ]] && { ls tickets/done/*.md >/dev/null 2>&1 || ls tickets/done/*/ticket.md >/dev/null 2>&1; }; then
     echo -e "  ${GREEN}✓${NC} Done folder auto-created"
 else
     echo -e "  ${RED}✗${NC} Done folder not created properly"

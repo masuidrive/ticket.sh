@@ -54,8 +54,7 @@ MAIN_REPO=$(pwd)
 
 echo "1. Testing start --worktree creates worktree..."
 timeout 5 ./ticket.sh new test-wt-feature >/dev/null 2>&1
-TICKET=$(ls tickets/*.md 2>/dev/null | grep -v note | head -1)
-TICKET_NAME=$(basename "$TICKET" .md)
+TICKET_NAME=$(safe_get_ticket_name "*test-wt-feature*")
 git add . && git commit -q -m "Add ticket"
 
 OUTPUT=$(timeout 10 ./ticket.sh start --worktree "$TICKET_NAME" 2>&1)
@@ -145,8 +144,8 @@ else
     fail "Worktree still exists after close"
 fi
 
-# Check ticket was moved to done
-if ls tickets/done/*.md >/dev/null 2>&1; then
+# Check ticket was moved to done (either flat or per-ticket-dir layout)
+if ls tickets/done/*.md >/dev/null 2>&1 || ls tickets/done/*/ticket.md >/dev/null 2>&1; then
     pass "Ticket moved to done folder"
 else
     fail "Ticket not in done folder"
@@ -163,8 +162,7 @@ fi
 echo
 echo "7. Testing start --worktree and cancel..."
 timeout 5 ./ticket.sh new test-wt-cancel >/dev/null 2>&1
-TICKET2=$(ls tickets/*.md 2>/dev/null | grep -v note | grep cancel | head -1)
-TICKET2_NAME=$(basename "$TICKET2" .md)
+TICKET2_NAME=$(safe_get_ticket_name "*test-wt-cancel*")
 git add . && git commit -q -m "Add cancel ticket"
 
 OUTPUT=$(timeout 10 ./ticket.sh start --worktree "$TICKET2_NAME" 2>&1)
@@ -193,8 +191,8 @@ else
     echo "  Output: $OUTPUT"
 fi
 
-# Check canceled ticket in done folder
-if ls tickets/done/*CANCELED* >/dev/null 2>&1; then
+# Check canceled ticket in done folder (files or dirs)
+if ls -d tickets/done/*CANCELED* >/dev/null 2>&1; then
     pass "Canceled ticket in done folder"
 else
     fail "Canceled ticket not in done folder"
@@ -203,8 +201,7 @@ fi
 echo
 echo "8. Testing resume existing worktree..."
 timeout 5 ./ticket.sh new test-wt-resume >/dev/null 2>&1
-TICKET3=$(ls tickets/*.md 2>/dev/null | grep -v note | grep resume | head -1)
-TICKET3_NAME=$(basename "$TICKET3" .md)
+TICKET3_NAME=$(safe_get_ticket_name "*test-wt-resume*")
 git add . && git commit -q -m "Add resume ticket"
 
 OUTPUT=$(timeout 10 ./ticket.sh start --worktree "$TICKET3_NAME" 2>&1)
@@ -229,8 +226,7 @@ echo 'worktree_mode: true' >> .ticket-config.yaml
 git add . && git commit -q -m "Enable worktree_mode"
 
 timeout 5 ./ticket.sh new test-wt-config >/dev/null 2>&1
-TICKET4=$(ls tickets/*.md 2>/dev/null | grep -v note | grep config | head -1)
-TICKET4_NAME=$(basename "$TICKET4" .md)
+TICKET4_NAME=$(safe_get_ticket_name "*test-wt-config*")
 git add . && git commit -q -m "Add config ticket"
 
 # Start without --worktree flag - should still use worktree because of config
@@ -251,8 +247,7 @@ rm -f .ticket-config.yaml.bak
 echo
 echo "10. Testing checkout guard when branch is in another worktree..."
 timeout 5 ./ticket.sh new test-wt-guard >/dev/null 2>&1
-TICKET5=$(ls tickets/*.md 2>/dev/null | grep -v note | grep guard | head -1)
-TICKET5_NAME=$(basename "$TICKET5" .md)
+TICKET5_NAME=$(safe_get_ticket_name "*test-wt-guard*")
 git add . && git commit -q -m "Add guard ticket"
 
 # Start with worktree first
@@ -284,8 +279,7 @@ git worktree remove "$WT_PATH5" --force 2>/dev/null || true
 echo
 echo "11. Testing close keeps process cwd in the worker's worktree..."
 timeout 5 ./ticket.sh new test-wt-cwd-preserved >/dev/null 2>&1
-TICKET_P=$(ls tickets/*.md 2>/dev/null | grep -v note | grep cwd-preserved | head -1)
-TICKET_P_NAME=$(basename "$TICKET_P" .md)
+TICKET_P_NAME=$(safe_get_ticket_name "*test-wt-cwd-preserved*")
 git add . && git commit -q -m "Add cwd-preserved ticket"
 
 OUTPUT=$(timeout 10 ./ticket.sh start --worktree "$TICKET_P_NAME" 2>&1)
@@ -332,8 +326,7 @@ git -C "$MAIN_REPO" worktree remove --force "$WT_PATH_P" 2>/dev/null || true
 echo
 echo "12. Testing cancel --keep-worktree preserves the worker's worktree..."
 timeout 5 ./ticket.sh new test-wt-cancel-keep >/dev/null 2>&1
-TICKET_K=$(ls tickets/*.md 2>/dev/null | grep -v note | grep cancel-keep | head -1)
-TICKET_K_NAME=$(basename "$TICKET_K" .md)
+TICKET_K_NAME=$(safe_get_ticket_name "*test-wt-cancel-keep*")
 git add . && git commit -q -m "Add cancel-keep ticket"
 
 OUTPUT=$(timeout 10 ./ticket.sh start --worktree "$TICKET_K_NAME" 2>&1)
@@ -366,8 +359,7 @@ git -C "$MAIN_REPO" worktree remove --force "$WT_PATH_K" 2>/dev/null || true
 echo
 echo "13. Testing close refuses when main_repo is off default_branch..."
 timeout 5 ./ticket.sh new test-wt-main-off >/dev/null 2>&1
-TICKET_O=$(ls tickets/*.md 2>/dev/null | grep -v note | grep main-off | head -1)
-TICKET_O_NAME=$(basename "$TICKET_O" .md)
+TICKET_O_NAME=$(safe_get_ticket_name "*test-wt-main-off*")
 git add . && git commit -q -m "Add main-off ticket"
 
 OUTPUT=$(timeout 10 ./ticket.sh start --worktree "$TICKET_O_NAME" 2>&1)

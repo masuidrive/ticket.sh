@@ -13,6 +13,10 @@ NC='\033[0m'
 
 # Test directory
 TEST_DIR="tmp/test-close-force-$(date +%s)"
+# Absolute path to project root (parent of tmp/). Used for reliable `cd` back
+# between test-block resets: relative `cd ../..` can go stale under busybox
+# on Alpine after intermediate rm/mkdir cycles.
+PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 echo -e "${YELLOW}=== Testing close --force option ===${NC}"
 echo
@@ -77,7 +81,7 @@ fi
 
 echo -e "\n3. Testing close -f (short form)..."
 # Setup again with a fresh test directory
-cd ..
+cd "$PROJECT_ROOT"
 rm -rf "$TEST_DIR"
 setup_test_repo "$TEST_DIR"
 
@@ -106,7 +110,7 @@ fi
 
 echo -e "\n4. Testing combined options..."
 # Setup again with a fresh test directory
-cd ..
+cd "$PROJECT_ROOT"
 rm -rf "$TEST_DIR"
 setup_test_repo "$TEST_DIR"
 
@@ -142,7 +146,7 @@ fi
 
 echo -e "\n6. Testing current-ticket.md removal from git history..."
 # Setup again with a fresh test directory
-cd ..
+cd "$PROJECT_ROOT"
 rm -rf "$TEST_DIR"
 setup_test_repo "$TEST_DIR"
 
@@ -187,7 +191,7 @@ fi
 
 echo -e "\n7. Testing normal close without current-ticket.md in git..."
 # Setup again with a fresh test directory
-cd ..
+cd "$PROJECT_ROOT"
 rm -rf "$TEST_DIR"
 setup_test_repo "$TEST_DIR"
 
@@ -212,7 +216,7 @@ else
 fi
 
 # Cleanup
-cd ..
+cd "$PROJECT_ROOT"
 rm -rf "$TEST_DIR"
 
 echo -e "\n${YELLOW}=== close --force tests completed ===${NC}"
