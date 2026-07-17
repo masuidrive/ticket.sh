@@ -20,7 +20,7 @@ fi
 # Test 2: Check command exists
 echo "2. Testing check command exists..."
 output=$("$TICKET_SH" check 2>&1 || true)
-if [[ "$output" =~ "not a git repository" ]] || [[ "$output" =~ "No active ticket" ]] || [[ "$output" =~ "unknown branch" ]] || [[ "$output" =~ "Current ticket is active" ]] || [[ "$output" =~ "Found matching ticket" ]]; then
+if [[ "$output" =~ "not a git repository" ]] || [[ "$output" =~ "No active ticket" ]] || [[ "$output" =~ "unknown branch" ]] || [[ "$output" =~ "Current ticket is active" ]] || [[ "$output" =~ "Found matching ticket" ]] || [[ "$output" =~ "No ticket found for current feature branch" ]]; then
     echo "  ✓ Check command responds appropriately"
 else
     echo "  ✗ Check command unexpected response: $output"

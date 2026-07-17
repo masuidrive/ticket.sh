@@ -19,16 +19,16 @@ FAIL_COUNT=0
 # Test helper functions
 pass() {
     echo -e "  ${GREEN}✓${NC} $1"
-    ((PASS_COUNT++))
+    PASS_COUNT=$((PASS_COUNT + 1))
 }
 
 fail() {
     echo -e "  ${RED}✗${NC} $1"
-    ((FAIL_COUNT++))
+    FAIL_COUNT=$((FAIL_COUNT + 1))
 }
 
 run_test() {
-    ((TEST_COUNT++))
+    TEST_COUNT=$((TEST_COUNT + 1))
     echo -e "\n${BLUE}$TEST_COUNT. $1${NC}"
 }
 
@@ -65,14 +65,22 @@ fi
 
 git commit --allow-empty -m "Initial commit" > /dev/null 2>&1
 
-"$TICKET_SH" init </dev/null > /dev/null 2>&1
+# Ignore ticket.sh so it doesn't count as an uncommitted non-ticket file
+echo "ticket.sh" > .gitignore
+git add .gitignore
+git commit -q -m "Add .gitignore" > /dev/null 2>&1
+
+$TICKET_SH init </dev/null > /dev/null 2>&1
+# Commit config + tickets/README created by init
+git add .gitignore .ticket-config.yaml tickets 2>/dev/null
+git commit -q -m "Init ticket system" > /dev/null 2>&1
 
 echo -e "${YELLOW}=== Check Command Tests ===${NC}"
 
 # Test 1: Check on default branch without current ticket
 run_test "Testing check on default branch without current ticket"
 rm -f current-ticket.md
-output=$("$TICKET_SH" check 2>&1)
+output=$($TICKET_SH check 2>&1)
 if [[ "$output" =~ "No active ticket (on default branch)" ]] && [[ "$output" =~ "ticket.sh list" ]]; then
     pass "Shows correct message for default branch"
 else
@@ -81,18 +89,24 @@ fi
 
 # Test 2: Create ticket and test feature branch scenarios
 run_test "Creating test ticket"
-"$TICKET_SH" new test-feature > /dev/null 2>&1
-TICKET_NAME=$(ls tickets/ | grep test-feature | head -1 | sed 's/\.md$//')
+$TICKET_SH new test-feature > /dev/null 2>&1
+# Enumerate tickets in both layouts: legacy tickets/<name>.md and new
+# per-directory tickets/<name>/ticket.md. Ignore README.md.
+TICKET_NAME=$(ls tickets/ | grep -v '^README\.md$' | grep test-feature | head -1 | sed 's/\.md$//')
 if [[ -n "$TICKET_NAME" ]]; then
     pass "Created ticket: $TICKET_NAME"
 else
     fail "Failed to create ticket"
 fi
 
+# Commit the new ticket so start can proceed on a clean tree
+git add tickets > /dev/null 2>&1
+git commit -q -m "Add ticket $TICKET_NAME" > /dev/null 2>&1
+
 # Test 3: Start ticket and test synchronized state
 run_test "Testing check on synchronized feature branch"
-"$TICKET_SH" start "$TICKET_NAME" > /dev/null 2>&1
-output=$("$TICKET_SH" check 2>&1)
+$TICKET_SH start "$TICKET_NAME" > /dev/null 2>&1
+output=$($TICKET_SH check 2>&1)
 if [[ "$output" =~ "Current ticket is active and synchronized" ]] && [[ "$output" =~ "Working on: $TICKET_NAME" ]]; then
     pass "Shows synchronized state correctly"
 else
@@ -102,7 +116,7 @@ fi
 # Test 4: Test branch/ticket mismatch
 run_test "Testing check with branch/ticket mismatch"
 git checkout main > /dev/null 2>&1
-output=$("$TICKET_SH" check 2>&1 || true)
+output=$($TICKET_SH check 2>&1 || true)
 if [[ "$output" =~ "Ticket file and branch mismatch detected" ]] && [[ "$output" =~ "ticket.sh restore" ]]; then
     pass "Detects branch/ticket mismatch correctly"
 else
@@ -113,7 +127,7 @@ fi
 run_test "Testing check restore functionality on feature branch"
 git checkout "feature/$TICKET_NAME" > /dev/null 2>&1
 rm -f current-ticket.md
-output=$("$TICKET_SH" check 2>&1)
+output=$($TICKET_SH check 2>&1)
 if [[ "$output" =~ "Found matching ticket for current branch" ]] && [[ "$output" =~ "Restored ticket link" ]]; then
     pass "Restores ticket link correctly"
 else
@@ -131,7 +145,7 @@ fi
 run_test "Testing check on feature branch without ticket"
 git checkout -b feature/nonexistent-ticket > /dev/null 2>&1
 rm -f current-ticket.md
-output=$("$TICKET_SH" check 2>&1 || true)
+output=$($TICKET_SH check 2>&1 || true)
 if [[ "$output" =~ "No ticket found for current feature branch" ]] && [[ "$output" =~ "ticket.sh new" ]]; then
     pass "Shows correct error for missing ticket"
 else
@@ -142,7 +156,7 @@ fi
 run_test "Testing check on unknown branch"
 git checkout -b unknown-branch-type > /dev/null 2>&1
 rm -f current-ticket.md
-output=$("$TICKET_SH" check 2>&1)
+output=$($TICKET_SH check 2>&1)
 if [[ "$output" =~ "You are on an unknown branch" ]] && [[ "$output" =~ "git checkout main" ]]; then
     pass "Shows correct message for unknown branch"
 else
@@ -153,9 +167,15 @@ fi
 run_test "Testing check with completed ticket"
 git checkout "feature/$TICKET_NAME" > /dev/null 2>&1
 mkdir -p tickets/done
-mv "tickets/$TICKET_NAME.md" "tickets/done/$TICKET_NAME.md"
+# Move ticket to done/ regardless of layout (flat file vs per-ticket dir)
+if [[ -d "tickets/$TICKET_NAME" ]]; then
+    mv "tickets/$TICKET_NAME" "tickets/done/$TICKET_NAME"
+elif [[ -f "tickets/$TICKET_NAME.md" ]]; then
+    mv "tickets/$TICKET_NAME.md" "tickets/done/$TICKET_NAME.md"
+fi
 rm -f current-ticket.md
-output=$("$TICKET_SH" check 2>&1)
+rm -rf current-ticket 2>/dev/null || true
+output=$($TICKET_SH check 2>&1)
 if [[ "$output" =~ "Found matching ticket for current branch" ]] && [[ "$output" =~ "Restored ticket link" ]]; then
     pass "Handles completed tickets in done folder"
 else
@@ -166,8 +186,12 @@ fi
 run_test "Testing check command prerequisites"
 # Create a non-git directory for testing
 NON_GIT_DIR=$(mktemp -d)
+# Save the absolute path to ticket.sh (was in $TEST_DIR); reuse for the
+# non-git cd, and then again when returning to the test dir.
+TEST_DIR_ABS="$(pwd)"
+TICKET_ABS="$TEST_DIR_ABS/ticket.sh"
 cd "$NON_GIT_DIR"
-output=$("$TICKET_SH" check 2>&1 || true)
+output=$(timeout 5 "$TICKET_ABS" check 2>&1 || true)
 if [[ "$output" =~ "not a git repository" ]] || [[ "$output" =~ "Not in a git repository" ]]; then
     pass "Correctly detects missing git repository"
 else
@@ -177,9 +201,9 @@ rm -rf "$NON_GIT_DIR"
 
 # Test 10: Test check command with missing config
 run_test "Testing check with missing config"
-cd "$TEST_DIR"
+cd "$TEST_DIR_ABS"
 rm -f .ticket-config.yaml
-output=$("$TICKET_SH" check 2>&1 || true)
+output=$($TICKET_SH check 2>&1 || true)
 if [[ "$output" =~ "not initialized" ]] || [[ "$output" =~ "config" ]]; then
     pass "Correctly detects missing config"
 else

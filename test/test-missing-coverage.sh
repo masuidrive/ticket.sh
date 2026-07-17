@@ -84,8 +84,8 @@ cd .. && setup_test
 ./ticket.sh new closed-test >/dev/null 2>&1
 git add tickets .ticket-config.yaml && git commit -q -m "add"
 TICKET_NAME=$(safe_get_ticket_name "*closed-test.md")
-# Manually set closed_at
-TICKET_FILE="tickets/${TICKET_NAME}.md"
+# Manually set closed_at — locate the actual ticket file in whichever layout
+TICKET_FILE=$(ticket_body_path "$TICKET_NAME")
 sed_i 's/started_at: null/started_at: "2025-01-01T00:00:00Z"/' "$TICKET_FILE"
 sed_i 's/closed_at: null/closed_at: "2025-01-01T01:00:00Z"/' "$TICKET_FILE"
 

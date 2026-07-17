@@ -64,8 +64,9 @@ fi
 
 # Create a ticket linked to the epic
 ./ticket.sh new feat-1 --epic alpha >/dev/null 2>&1
-TICKET_FILE=$(ls tickets/*-feat-1.md 2>/dev/null | head -1)
-if [[ -f "$TICKET_FILE" ]]; then
+TICKET_NAME=$(safe_get_ticket_name "*-feat-1*")
+TICKET_FILE=$(ticket_body_path "$TICKET_NAME")
+if [[ -n "$TICKET_FILE" ]] && [[ -f "$TICKET_FILE" ]]; then
     ok "ticket file created"
     if grep -q '^epic_id: alpha' "$TICKET_FILE"; then ok "ticket has epic_id: alpha"; else fail "ticket missing epic_id"; fi
     if grep -q '^base_branch: epic/alpha' "$TICKET_FILE"; then ok "ticket has base_branch: epic/alpha"; else fail "ticket missing base_branch"; fi
@@ -75,7 +76,6 @@ fi
 
 # Drive ticket through start/work/close
 git add -A && git commit -q -m "add ticket"
-TICKET_NAME=$(basename "$TICKET_FILE" .md)
 ./ticket.sh start "$TICKET_NAME" --no-push >/dev/null 2>&1
 git add -A && git commit -q -m "start"
 mkdir -p src && echo "feature" > src/feat.js
