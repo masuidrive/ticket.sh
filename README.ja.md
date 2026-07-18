@@ -6,11 +6,12 @@ Gitブランチとマークダウンファイルを使った軽量で堅牢な�
 - 🎯 **シンプルなワークフロー**: 作成、開始、作業、完了（またはキャンセル）
 - 📝 **マークダウンチケット**: YAMLフロントマッター付きリッチフォーマット
 - 🌿 **Git統合**: チケット毎の自動ブランチ管理
-- 📁 **スマートな整理**: 自動doneフォルダ整理、タイムゾーン対応タイムスタンプ
+- 📁 **per-ticket ディレクトリ**: 各チケットが `tickets/<TICKETNAME>/` に本文・note・tests・tmp をまとめて置く
+- 📁 **スマートな整理**: 自動 done フォルダ整理、タイムゾーン対応タイムスタンプ
 - 🔧 **依存関係なし**: 純粋なBash + Git、どこでも動作
-- 🚀 **AI対応**: シームレスなAIアシスタント連携を想定した設計
+- 🚀 **AI対応**: 下流エージェントが解決済みパスをそのまま消費できる出力を start/restore が emit
 - 🛡️ **堅牢性**: UTF-8対応、エラー回復、競合解決
-- 📓 **作業ノート分離**: デバッグ・調査ログ用の別ファイル（オプション）
+- ♻️ **レガシー互換**: 旧版で作られたフラット形式チケットもすべてのコマンドで動く（自動移行はしない）
 
 **言語版**: [English](README.md) | [日本語](README.ja.md)
 
@@ -100,6 +101,40 @@ cp ticket.sh /usr/local/bin/
 3. **作業開始**: `./ticket.sh start <ticket-name>`
 4. **チケット完了**: `./ticket.sh close`（または `./ticket.sh cancel` でキャンセル）
 
+## チケットのレイアウト
+
+各チケットは **per-ticket ディレクトリ** に置かれます：
+
+```
+tickets/
+  <TICKETNAME>/
+    ticket.md   # チケット本体（YAML frontmatter + Markdown）
+    note.md     # 作業ノート／ログ
+    tests/      # ticket-local test（必要時に作成）
+    tmp/        # ticket-local 一時 helper（必要時に作成）
+  done/
+    <TICKETNAME>/   # close/cancel されたチケット — ディレクトリごと移動
+```
+
+チケット作業中は `start` がリポジトリ直下に固定パスの symlink を 3 本張り、
+下流エージェントも含めて常に同じ場所からアクティブチケットに到達できます：
+
+| symlink                | 指し先                                  | 役割                                             |
+|------------------------|----------------------------------------|--------------------------------------------------|
+| `current-ticket/`      | `tickets/<TICKETNAME>/`                | dir symlink — per-ticket ディレクトリの root     |
+| `current-ticket.md`    | `tickets/<TICKETNAME>/ticket.md`       | 互換 file symlink（旧ツール想定）                |
+| `current-note.md`      | `tickets/<TICKETNAME>/note.md`         | 互換 file symlink                                |
+
+`close` と `cancel` は `tickets/<TICKETNAME>/` を丸ごと
+`tickets/done/<TICKETNAME>/` へ git-mv します（`cancel` はディレクトリ名に
+`-CANCELED-` を挿入）。単一 commit で rename と `closed_at`／`cancelled_at`
+追記が入ります。
+
+**レガシー互換**: 旧版で作られたフラット形式チケット
+(`tickets/<TICKETNAME>.md` + `tickets/<TICKETNAME>-note.md`) は
+`list`／`start`／`close`／`cancel`／`restore`／`check` すべてで従来どおり
+動作します。自動移行は行いません（好きなタイミングで手動変換してください）。
+
 ## 使用例
 
 ### 基本ワークフロー
@@ -139,10 +174,10 @@ cp ticket.sh /usr/local/bin/
 - `start [--worktree] <ticket>` - チケットの作業を開始（--worktreeで別ディレクトリにworktreeを作成）
 - `close [--no-push] [--force] [--no-delete-remote]` - チケットを完了
 - `cancel [--force|-f]` - マージせずにチケットをキャンセル
-- `restore` - current-ticket.mdシンボリックリンクを復元
+- `restore` - アクティブチケット symlink 群 (`current-ticket/`, `current-ticket.md`, `current-note.md`) を現在ブランチ名から再構築
 
 ### ユーティリティコマンド
-- `check` - 現在の状態を診断してガイダンスを提供
+- `check` - 現在の状態を診断してガイダンスを提供（git repo・config・tickets/・アクティブチケット symlink・worktree 状態）
 - `version` / `--version` - バージョン情報を表示
 - `selfupdate` - GitHubから最新リリースにアップデート
 
@@ -184,13 +219,13 @@ delete_remote_on_close: true
 # Success messages (leave empty to disable)
 # Message displayed after starting work on a ticket
 start_success_message: |
-  Please review the ticket content in `current-ticket.md` and make any necessary adjustments before you begin work.
+  Please review the ticket content in `current-ticket/ticket.md` and make any necessary adjustments before you begin work.
   Run ticket.sh list to view all todo tickets. For any related tasks that have already been prioritized, list them under the `## Notes` section.
 
 # Message displayed after closing a ticket
 close_success_message: |
   I've closed the ticket—please perform a backlog refinement.
-  Run ticket.sh list to view all todo tickets; if you find any with overlapping content, review the corresponding `tickets/*.md` files.
+  Run ticket.sh list to view all todo tickets; if you find any with overlapping content, review the corresponding ticket files.
   If you spot tasks that are already complete, update their tickets as needed.
 
 # Note template (optional - if not defined, no note file will be created)
@@ -282,15 +317,14 @@ default_content: |
 - **競合検出**: クローズ時のマージ競合処理のガイダンス提供
 
 ### 自動整理
-- **doneフォルダ**: 完了チケットを自動的に `tickets/done/` に移動
+- **doneフォルダ**: 完了チケットを自動的に `tickets/done/<TICKETNAME>/` にディレクトリごと移動
 - **リモートクリーンアップ**: リモートfeatureブランチの自動削除オプション
-- **Git履歴**: `current-ticket.md` の誤コミット防止
 
-### 作業ノート分離（オプション）
-- **別ノートファイル**: デバッグログや調査詳細を `*-note.md` ファイルに分離
-- **クリーンなチケット**: メインのチケットファイルは要件に集中し簡潔に
-- **自動管理**: ノートファイルの作成、移動、リンクを自動化
-- **後方互換性**: configで `note_content` が定義された場合のみ有効
+### 作業ノート（同一ディレクトリに配置）
+- **per-ticket ディレクトリの `note.md`**: デバッグログ・調査詳細・進捗ノートをチケット本文と同じディレクトリに置く — 1 ディレクトリ = 1 作業単位
+- **テンプレート指定可**: config の `note_content` で新チケット作成時の `note.md` 初期内容を設定
+- **自動管理**: close/cancel でチケットディレクトリと一緒に `note.md` も移動、互換 `current-note.md` symlink も自動で作成／削除
+- **git-ignore 対象**: `init` が `current-ticket`, `current-ticket.md`, `current-note.md` を `.gitignore` に追加し、誤コミットを防ぐ
 
 ### Worktreeサポート（オプション）
 - **並行作業**: `start`に`--worktree`フラグを付けてチケット毎に別のgit worktreeを作成

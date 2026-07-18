@@ -81,7 +81,7 @@ The main script uses a case statement to route commands:
 - `start`: Start work on ticket
 - `close`: Complete ticket
 - `cancel`: Cancel ticket without merging
-- `restore`: Restore current-ticket.md symlink
+- `restore`: Rebuild the active-ticket symlinks (`current-ticket/`, `current-ticket.md`, `current-note.md`) from the current branch name
 - `check`: Diagnose current state and provide guidance
 - `version`: Display version information
 - `selfupdate`: Update to latest release from GitHub
@@ -108,34 +108,41 @@ The main script uses a case statement to route commands:
 
 #### `create_ticket()`
 - Validates slug format
-- Generates timestamp-based filename
-- Creates ticket file with template
-- Creates optional note file when `note_content` is configured
+- Generates timestamp-based ticket name (`YYMMDD-hhmmss-<slug>`)
+- Creates the per-ticket directory `tickets/<TICKETNAME>/` with `ticket.md` (body, from `default_content` template) and `note.md` (log, from `note_content` template when configured)
+- `tests/` and `tmp/` inside the directory are created lazily by the ticket owner as needed
 
 #### `start_ticket()`
 - Creates feature branch (or git worktree with `--worktree` flag)
 - Updates `started_at` timestamp
-- Creates `current-ticket.md` symlink (in worktree directory if using worktree mode)
-- Creates `current-note.md` symlink when note file exists
+- Creates the active-ticket symlinks in the working tree root (or the worktree root in `--worktree` mode):
+  - `current-ticket/` → `tickets/<TICKETNAME>/` (dir symlink; new-format tickets only)
+  - `current-ticket.md` → the ticket body file (compat)
+  - `current-note.md` → the note file (compat)
+- For legacy flat tickets, only the two compat file symlinks are created (there is no per-ticket directory to link to)
+- Emits an `Active ticket paths:` block listing resolved paths so a downstream agent can consume the output without guessing layout
 - Worktree mode: creates directory at `../<project>.worktrees/<ticket-name>/`
 
 #### `close_ticket()`
-- Updates `closed_at` timestamp
-- Removes current-ticket.md and current-note.md from git history
+- Updates `closed_at` timestamp in `ticket.md`
+- Removes any `current-ticket.md` / `current-note.md` that were force-committed to git history
 - Detects worktree mode and switches to main repo for merge
 - Squash merges to target branch (ticket's `base_branch` field if set, otherwise config's `default_branch`)
-- Moves ticket and note files to `done/` folder
+- Moves the ticket to `done/`:
+  - New layout: `git mv tickets/<TICKETNAME> tickets/done/<TICKETNAME>` in one step, then `git add` on the moved `ticket.md` so the `closed_at` edit lands in the SAME final commit as the rename (avoids the pre-edit blob problem)
+  - Legacy layout: `git mv` on the `.md` file plus (if present) the `-note.md` sibling
 - Removes worktree if running from one
+- Removes all active-ticket symlinks (`current-ticket/`, `current-ticket.md`, `current-note.md`)
 - Optional remote branch cleanup
 
 #### `cancel_ticket()`
 - Sets `canceled_at` timestamp and adds `[CANCELED]` prefix to description
-- Renames ticket file with `-CANCELED-` prefix before slug
-- Moves ticket to `done/` folder
+- Renames the ticket directory (or, for legacy tickets, the flat `.md` file) with `-CANCELED-` inserted after the timestamp prefix
+- Moves the whole directory to `done/`
 - Detects worktree mode and switches to main repo
 - Switches to default branch without merging (keeps feature branch)
 - Removes worktree if running from one
-- Removes current-ticket.md and current-note.md symlinks
+- Removes all active-ticket symlinks
 
 ## Testing
 

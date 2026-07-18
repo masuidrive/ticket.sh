@@ -3,8 +3,8 @@ priority: 2
 base_branch: default
 description: "リポジトリ直下のドキュメント群 (README.md / README.ja.md / spec.md / spec.ja.md / DEV.md / CLAUDE.md) と cmd_init post-init echo を per-ticket ディレクトリレイアウト canonical に更新し、レガシー互換言及は各所1箇所に留める。"
 created_at: "2026-07-18T15:05:32Z"
-started_at: null
-closed_at: null
+started_at: 2026-07-18T15:08:00Z
+closed_at: 2026-07-18T15:28:11Z
 canceled_at: null
 ---
 
@@ -16,16 +16,16 @@ canceled_at: null
 
 ### What / Acceptance Criteria
 
-- [ ] AC 1 (README.md 更新): "Commands" 表・"Complete Example"・"Design Principles"・"Troubleshooting" 節が per-ticket dir レイアウトを canonical として説明する。`current-ticket/` (dir symlink) と `current-ticket.md` / `current-note.md` (互換 file symlink) の関係が図または箇条書きで示されている。レガシーフラット形式は「Legacy compatibility」相当の見出しで1箇所まとめて言及される。
-- [ ] AC 2 (README.ja.md 更新): AC 1 と同じ内容が日本語版でも反映される。
-- [ ] AC 3 (spec.md Storage Model 更新): Storage Model 節が per-ticket dir (`tickets/<TICKETNAME>/{ticket.md,note.md,tests/,tmp/}`) を canonical として列挙し、close/cancel はディレクトリごと `done/<TICKETNAME>/` へ git-mv されると記述されている。レガシー形式は Legacy 節1箇所で説明される。
-- [ ] AC 4 (spec.ja.md 更新): AC 3 と同じ内容が日本語版でも反映される。
-- [ ] AC 5 (DEV.md 更新): start/close/cancel/restore の内部フロー説明が新レイアウト (dir mv + 3 本 symlink) に更新されている。レガシーは補足1箇所で言及。
-- [ ] AC 6 (CLAUDE.md — この repo 自身のもの — 更新): "Working with current-ticket" 節が per-ticket dir + 互換 symlink 前提の記述に更新されている (この repo 自体もこの canonical layout に従っていることが読み取れる)。
-- [ ] AC 7 (`cmd_init` post-init echo 更新): `init` 実行時の "Next Steps" heredoc 内 (現在は `current-ticket.md` しか触れていない箇所) が per-ticket dir を canonical に書き直され、互換 symlink はレガシー言及として1箇所のみに整理される。ソースは `src/ticket.sh` を編集、`bash build.sh` で `ticket.sh` 再生成。
-- [ ] AC 8 (drift 検証): 更新後に `rg -n 'current-ticket\.md|tests/tickets/|tickets/<[^>]+>\.md' README.md README.ja.md spec.md spec.ja.md DEV.md CLAUDE.md` を実行しても、残るヒットは「Legacy compatibility」相当の説明文脈内だけ (canonical 説明の中に混在していない)。
-- [ ] AC 9 (テスト): 既存の `bash test/run-all.sh` (241/241) と `bash test/run-all-on-docker.sh` (Ubuntu 222/222 + Alpine 222/222) が全 pass のまま (今回はドキュメント更新 + `cmd_init` の echo テキスト変更のみで、コマンド挙動を変えないため)。
-- [ ] AC 10 (`ticket.sh init` の実出力検証): 新しく `init` を実行した際の post-init 出力に per-ticket dir の説明が含まれ、レガシー言及は canonical と混在せず 1 箇所に集約されていることを実行証跡で確認する。
+- [x] AC 1 (README.md 更新): "Commands" 表・"Complete Example"・"Design Principles"・"Troubleshooting" 節が per-ticket dir レイアウトを canonical として説明する。`current-ticket/` (dir symlink) と `current-ticket.md` / `current-note.md` (互換 file symlink) の関係が図または箇条書きで示されている。レガシーフラット形式は「Legacy compatibility」相当の見出しで1箇所まとめて言及される。
+- [x] AC 2 (README.ja.md 更新): AC 1 と同じ内容が日本語版でも反映される。
+- [x] AC 3 (spec.md Storage Model 更新): Storage Model 節が per-ticket dir (`tickets/<TICKETNAME>/{ticket.md,note.md,tests/,tmp/}`) を canonical として列挙し、close/cancel はディレクトリごと `done/<TICKETNAME>/` へ git-mv されると記述されている。レガシー形式は Legacy 節1箇所で説明される。
+- [x] AC 4 (spec.ja.md 更新): AC 3 と同じ内容が日本語版でも反映される。
+- [x] AC 5 (DEV.md 更新): start/close/cancel/restore の内部フロー説明が新レイアウト (dir mv + 3 本 symlink) に更新されている。レガシーは補足1箇所で言及。
+- [x] AC 6 (CLAUDE.md — この repo 自身のもの — 更新): "Working with current-ticket" 節が per-ticket dir + 互換 symlink 前提の記述に更新されている (この repo 自体もこの canonical layout に従っていることが読み取れる)。
+- [x] AC 7 (`cmd_init` post-init echo 更新): `init` 実行時の "Next Steps" heredoc 内 (現在は `current-ticket.md` しか触れていない箇所) が per-ticket dir を canonical に書き直され、互換 symlink はレガシー言及として1箇所のみに整理される。ソースは `src/ticket.sh` を編集、`bash build.sh` で `ticket.sh` 再生成。
+- [x] AC 8 (drift 検証): 更新後に `rg -n 'current-ticket\.md|tests/tickets/|tickets/<[^>]+>\.md' README.md README.ja.md spec.md spec.ja.md DEV.md CLAUDE.md` を実行しても、残るヒットは「Legacy compatibility」相当の説明文脈内だけ (canonical 説明の中に混在していない)。
+- [x] AC 9 (テスト): 既存の `bash test/run-all.sh` (241/241) と `bash test/run-all-on-docker.sh` (Ubuntu 222/222 + Alpine 222/222) が全 pass のまま (今回はドキュメント更新 + `cmd_init` の echo テキスト変更のみで、コマンド挙動を変えないため)。
+- [x] AC 10 (`ticket.sh init` の実出力検証): 新しく `init` を実行した際の post-init 出力に per-ticket dir の説明が含まれ、レガシー言及は canonical と混在せず 1 箇所に集約されていることを実行証跡で確認する。
 
 ### Architectural Invariants check
 

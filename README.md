@@ -6,11 +6,12 @@ A lightweight, robust ticket management system that uses Git branches and markdo
 - 🎯 **Simple workflow**: Create, start, work, close (or cancel)
 - 📝 **Markdown tickets**: Rich formatting with YAML frontmatter
 - 🌿 **Git integration**: Automatic branch management per ticket
+- 📁 **Per-ticket directory**: Each ticket lives in `tickets/<TICKETNAME>/` with body, note, tests, and temp helpers colocated
 - 📁 **Smart organization**: Auto-organized done folder, timezone-aware timestamps
 - 🔧 **Zero dependencies**: Pure Bash + Git, works everywhere
-- 🚀 **AI-friendly**: Designed for seamless AI assistant collaboration
+- 🚀 **AI-friendly**: Designed for seamless AI assistant collaboration — start/restore emit resolved paths for downstream agents
 - 🛡️ **Robust**: UTF-8 support, error recovery, conflict resolution
-- 📓 **Work notes separation**: Optional separate note files for debugging/investigation logs
+- ♻️ **Legacy compatible**: Flat single-file tickets from earlier ticket.sh versions keep working with every command
 
 **Language versions**: [English](README.md) | [日本語](README.ja.md)
 
@@ -100,6 +101,40 @@ cp ticket.sh /usr/local/bin/
 3. **Start work**: `./ticket.sh start <ticket-name>`
 4. **Close ticket**: `./ticket.sh close` (or `./ticket.sh cancel` to abandon)
 
+## Ticket Layout
+
+Each ticket lives in its own **per-ticket directory**:
+
+```
+tickets/
+  <TICKETNAME>/
+    ticket.md   # ticket body (YAML frontmatter + Markdown)
+    note.md     # working notes / log
+    tests/      # ticket-local tests (created on demand)
+    tmp/        # ticket-local temp helpers (created on demand)
+  done/
+    <TICKETNAME>/   # closed / cancelled tickets — moved here as a whole directory
+```
+
+While a ticket is active, `start` creates three symlinks in the repo root so
+you (and downstream agents) can always reach the active ticket at fixed paths:
+
+| Symlink                | Points at                              | Purpose                                        |
+|------------------------|----------------------------------------|------------------------------------------------|
+| `current-ticket/`      | `tickets/<TICKETNAME>/`                | dir symlink — full per-ticket root             |
+| `current-ticket.md`    | `tickets/<TICKETNAME>/ticket.md`       | compat file symlink (works with older tooling) |
+| `current-note.md`      | `tickets/<TICKETNAME>/note.md`         | compat file symlink                            |
+
+`close` and `cancel` move the whole `tickets/<TICKETNAME>/` directory into
+`tickets/done/<TICKETNAME>/` (cancel prefixes the directory name with
+`-CANCELED-`) in a single Git commit that also stamps `closed_at` /
+`cancelled_at`.
+
+**Legacy compatibility.** Flat-file tickets produced by earlier versions
+(`tickets/<TICKETNAME>.md` + `tickets/<TICKETNAME>-note.md`) continue to work
+with every command — `list`, `start`, `close`, `cancel`, `restore`, `check`.
+They are never auto-migrated to the new layout; convert on your own schedule.
+
 ## Usage Examples
 
 ### Basic Workflow
@@ -139,10 +174,10 @@ cp ticket.sh /usr/local/bin/
 - `start [--worktree] <ticket>` - Start working on ticket (--worktree creates a separate worktree)
 - `close [--no-push] [--force] [--no-delete-remote] [--dry-run|-n] [--keep-worktree]` - Complete ticket
 - `cancel [--force|-f] [--keep-worktree]` - Cancel ticket without merging
-- `restore` - Restore current-ticket.md symlink
+- `restore` - Rebuild the active-ticket symlinks (`current-ticket/`, `current-ticket.md`, `current-note.md`) from the current branch name
 
 ### Utility Commands
-- `check` - Diagnose current state and provide guidance (checks git repo, config, tickets dir, current-ticket.md, worktree state)
+- `check` - Diagnose current state and provide guidance (checks git repo, config, tickets dir, active-ticket symlinks, worktree state)
 - `version` / `--version` - Show version information
 - `selfupdate` - Update to latest release from GitHub (checks GitHub releases, downloads new version, preserves config, fixes CRLF line endings)
 
@@ -183,7 +218,7 @@ When a PR is merged on GitHub, the ticket's changes are already on the base bran
 ticket.sh close --no-merge [--closed-at <ISO8601-UTC>] [--no-push] <ticket-name>
 ```
 
-This runs on the base branch (not the feature branch), takes the ticket name as an explicit argument (it does not rely on `current-ticket.md` or the current branch), and is idempotent — re-running on an already-finalized ticket exits 0 without changes. Typical use is a GitHub Actions `pull_request: [closed]` trigger that passes `--closed-at "${{ github.event.pull_request.merged_at }}"` so `closed_at` records the actual merge time.
+This runs on the base branch (not the feature branch), takes the ticket name as an explicit argument (it does not rely on the active-ticket symlinks or the current branch), and is idempotent — re-running on an already-finalized ticket exits 0 without changes. Typical use is a GitHub Actions `pull_request: [closed]` trigger that passes `--closed-at "${{ github.event.pull_request.merged_at }}"` so `closed_at` records the actual merge time.
 
 ## Ticket File Format
 
@@ -261,13 +296,13 @@ delete_remote_on_close: true
 # Success messages (leave empty to disable)
 # Message displayed after starting work on a ticket
 start_success_message: |
-  Please review the ticket content in `current-ticket.md` and make any necessary adjustments before you begin work.
+  Please review the ticket content in `current-ticket/ticket.md` and make any necessary adjustments before you begin work.
   Run ticket.sh list to view all todo tickets. For any related tasks that have already been prioritized, list them under the `## Notes` section.
 
 # Message displayed after closing a ticket
 close_success_message: |
   I've closed the ticket—please perform a backlog refinement.
-  Run ticket.sh list to view all todo tickets; if you find any with overlapping content, review the corresponding `tickets/*.md` files.
+  Run ticket.sh list to view all todo tickets; if you find any with overlapping content, review the corresponding ticket files.
   If you spot tasks that are already complete, update their tickets as needed.
 
 # Note template (optional - if not defined, no note file will be created)
@@ -359,15 +394,14 @@ default_content: |
 - **Conflict detection**: Provides guidance for handling merge conflicts during close
 
 ### Automatic Organization
-- **Done folder**: Completed tickets moved to `tickets/done/` automatically
+- **Done folder**: Completed tickets moved to `tickets/done/<TICKETNAME>/` automatically (whole directory rename)
 - **Remote cleanup**: Optional automatic deletion of remote feature branches
 
-### Work Notes Separation (Optional)
-- **Separate note files**: Keep debugging logs and investigation details in separate `*-note.md` files
-- **Clean tickets**: Main ticket files stay concise and focused on requirements
-- **Automatic management**: Note files are created, moved, and linked automatically
-- **Backward compatible**: Only enabled when `note_content` is defined in config
-- **Git history**: Prevents accidental commits of `current-ticket.md`
+### Working Notes (Colocated)
+- **`note.md` inside the per-ticket directory**: Debugging logs, investigation details, and progress notes live next to the ticket body — one directory, one work unit.
+- **Configurable template**: `note_content` in config seeds a fresh `note.md` when a ticket is created.
+- **Automatic management**: The note file moves with the ticket directory on close/cancel; the compat `current-note.md` symlink is created/removed automatically.
+- **Git-ignored active symlinks**: `init` adds `current-ticket`, `current-ticket.md`, and `current-note.md` to `.gitignore` so they never get committed by accident.
 
 ### Worktree Support (Optional)
 - **Parallel work**: Use `--worktree` flag with `start` to create a separate git worktree per ticket
@@ -390,7 +424,7 @@ The `check` command verifies the following:
 | Git repository | Verifies current directory is a Git repository |
 | Config file | Checks for `.ticket-config.yaml` or `.ticket-config.yml` |
 | Tickets directory | Ensures `tickets/` directory exists |
-| Current ticket | Validates `current-ticket.md` symlink |
+| Current ticket | Validates the active-ticket symlinks (`current-ticket/`, `current-ticket.md`, `current-note.md`) |
 | Working directory | Reports uncommitted changes |
 | Worktree state | Shows active worktree if in use |
 | Branch alignment | Verifies current branch matches expected state |

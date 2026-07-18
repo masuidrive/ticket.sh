@@ -13,46 +13,76 @@
 
 Use `./ticket.sh` for ticket management.
 
-## Working with current-ticket.md
+## Ticket Layout
 
-### If `current-ticket.md` exists in project root
+Each ticket is a **per-ticket directory** under `tickets/`:
 
-- This file is your work instruction - follow its contents
-- When receiving additional instructions from users, add them as new tasks under `## Tasks` and record details in `current-note.md` before proceeding
-- During the work, also write down notes, logs, and findings in `current-note.md`
-- Continue working on the active ticket
+```
+tickets/<TICKETNAME>/
+  ticket.md   # ticket body (YAML frontmatter + Markdown)
+  note.md     # working notes / log
+  tests/      # ticket-local tests (created on demand)
+  tmp/        # ticket-local temp helpers (created on demand)
+```
 
-### If current-ticket.md does not exist in project root
+While a ticket is active, three symlinks in the repo root point at it:
 
-- When receiving user requests, first ask whether to create a new ticket
-- Do not start work without confirming ticket creation
-- Even small requests should be tracked through the ticket system
+- `current-ticket/` → the per-ticket directory (reach everything as `current-ticket/ticket.md`, `current-ticket/note.md`, `current-ticket/tests/`, `current-ticket/tmp/`)
+- `current-ticket.md` → the ticket body (compat with older tooling)
+- `current-note.md` → the note file (compat with older tooling)
+
+`close` / `cancel` move the whole `tickets/<TICKETNAME>/` directory into
+`tickets/done/<TICKETNAME>/` (cancel prefixes the directory name with
+`-CANCELED-`) in a single Git commit that also stamps `closed_at` /
+`cancelled_at`.
+
+**Legacy compatibility.** Flat-file tickets from earlier versions
+(`tickets/<TICKETNAME>.md` + `tickets/<TICKETNAME>-note.md`) continue to work
+with every command; they are never auto-migrated. Do not migrate them without
+explicit user instruction.
+
+## Working with the active ticket
+
+### If `current-ticket/` (or `current-ticket.md`) exists in the project root
+
+- This is your work instruction — follow its contents.
+- When receiving additional instructions from users, add them as new tasks under `## Tasks` and record details in `current-ticket/note.md` (compat: `current-note.md`) before proceeding.
+- During the work, keep notes, logs, and findings in `current-ticket/note.md`.
+- Continue working on the active ticket.
+
+### If it does not exist in the project root
+
+- When receiving user requests, first ask whether to create a new ticket.
+- Do not start work without confirming ticket creation.
+- Even small requests should be tracked through the ticket system.
 
 ## Create New Ticket
 
-1. Create ticket: `./ticket.sh new feature-name`
-2. Edit ticket content and description in the generated file
+1. Create ticket: `./ticket.sh new feature-name` — creates `tickets/<TICKETNAME>/{ticket.md,note.md}`.
+2. Edit the ticket content and description in the generated `tickets/<TICKETNAME>/ticket.md`.
 
 ## Start Working on Ticket
 
-1. Check available tickets: `./ticket.sh list` or browse tickets directory
-2. Start work: `./ticket.sh start 241225-143502-feature-name`
-3. Develop on feature branch
-4. Reference work files:
-   - `current-ticket.md` shows active ticket with tasks
-   - `current-note.md` for working notes related to this ticket (if used)
+1. Check available tickets: `./ticket.sh list` (both new and legacy layouts are listed).
+2. Start work: `./ticket.sh start 241225-143502-feature-name`.
+3. Read the `Active ticket paths:` block that `start` emits — it lists the resolved paths for `ticket`, `note`, `ticket_dir`, `tests_dir`, `tmp_dir`, and every symlink correspondence, so you never need to guess the layout.
+4. Develop on the feature branch.
+5. Reference work files via the active-ticket symlinks:
+   - `current-ticket/ticket.md` — the ticket body with tasks
+   - `current-ticket/note.md` — working notes for this ticket
+   - Compat: `current-ticket.md`, `current-note.md`
 
 ## Closing Tickets
 
 1. Before closing:
-   - Review `current-ticket.md` content and description, collect information from `current-note.md` and other notes, and summarize the final work results and conclusions so that anyone reading the ticket can understand the work done on this branch
-   - Check all tasks in checklist are completed (mark with `[x]`)
-   - Commit all your work: `git add . && git commit -m "your message"`
-   - Get user approval before proceeding
+   - Review the ticket content and description, collect information from `current-ticket/note.md` and other notes, and summarize the final work results and conclusions so anyone reading the ticket can understand the work done on this branch.
+   - Check all tasks in the checklist are completed (mark with `[x]`).
+   - Commit all your work: `git add . && git commit -m "your message"`.
+   - Get user approval before proceeding.
 2. Complete: `./ticket.sh close`
+   - This moves the whole `tickets/<TICKETNAME>/` directory to `tickets/done/<TICKETNAME>/` in a single commit that also stamps `closed_at`.
 
 ## Canceling Tickets
 
 - If a ticket is no longer needed, cancel it: `./ticket.sh cancel`
-- This moves the ticket to done/ without merging and switches back to the default branch
-- The feature branch is kept for reference
+- This moves the ticket directory to `tickets/done/<YYMMDD-hhmmss>-CANCELED-<slug>/` without merging, switches back to the default branch, and keeps the feature branch for reference.

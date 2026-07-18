@@ -37,11 +37,30 @@ A self-contained ticket management system using a single shell script + files + 
 - Ticket name format: `YYMMDD-hhmmss-<slug>`
 - Used as base for filenames and branch names
 
-#### File-Based Management
-- Complete ticket in single file: `tickets/<ticket-name>.md`
-- Optional work notes file: `tickets/<ticket-name>-note.md` (when `note_content` is configured)
-- Metadata stored in YAML Front Matter section
-- Ticket details written in Markdown body section
+#### Per-Ticket Directory Layout
+
+Each ticket lives in its own directory under `tickets/`:
+
+```
+tickets/
+  <TICKETNAME>/
+    ticket.md   # ticket body (YAML frontmatter + Markdown)
+    note.md     # working notes / log
+    tests/      # ticket-local tests (created on demand)
+    tmp/        # ticket-local temp helpers (created on demand)
+  done/
+    <TICKETNAME>/   # closed / cancelled tickets — moved here as a whole directory
+```
+
+- Metadata is stored in the YAML frontmatter of `ticket.md`.
+- Ticket details, tasks, and acceptance criteria go in the Markdown body of `ticket.md`.
+- `note.md` is a colocated free-form log (progress, debugging, investigation notes). Its initial content is seeded from the config `note_content` template.
+- `tests/` and `tmp/` are created only when the ticket needs them.
+- `close` / `cancel` move the whole `tickets/<TICKETNAME>/` directory into `tickets/done/<TICKETNAME>/` (cancel prefixes the directory name with `-CANCELED-`). The rename plus `closed_at` / `cancelled_at` timestamp is committed as a single Git commit.
+
+**Legacy compatibility.** Flat-file tickets from earlier ticket.sh versions
+(`tickets/<TICKETNAME>.md` + `tickets/<TICKETNAME>-note.md`) continue to work
+with every command. They are never auto-migrated to the new layout.
 
 #### Minimal YAML Configuration
 ```yaml
@@ -61,8 +80,11 @@ canceled_at: null  # Do not modify manually
 
 #### Branch Integration
 - Work performed on `feature/<ticket-name>` branches
-- Current work ticket visualization via current-ticket.md
-- Optional work notes visualization via current-note.md (when note_content is configured)
+- `start` creates three symlinks at the repo root pointing at the active ticket:
+  - `current-ticket/` → `tickets/<TICKETNAME>/` (directory symlink)
+  - `current-ticket.md` → `tickets/<TICKETNAME>/ticket.md` (compat file symlink)
+  - `current-note.md` → `tickets/<TICKETNAME>/note.md` (compat file symlink)
+- For legacy flat tickets, only the two file symlinks are created (there is no per-ticket directory to point at).
 
 ---
 
@@ -89,16 +111,16 @@ Creates empty ticket file, then edit to add title, description, and details
 ./ticket.sh start --worktree <ticket-file>
 ```
 - Switches to corresponding feature branch (or creates worktree with `--worktree`)
-- Creates symlink to current-ticket.md
-- Creates symlink to current-note.md (when note file exists)
-- Reference current-ticket.md and current-note.md while developing
+- Creates the active-ticket symlinks (`current-ticket/`, `current-ticket.md`, `current-note.md`)
+- Emits an `Active ticket paths:` block with resolved paths so downstream agents can consume the output without guessing layout
+- Reference `current-ticket/ticket.md` and `current-ticket/note.md` (or the compat `current-ticket.md` / `current-note.md`) while developing
 - With `--worktree`: creates a separate working directory, main repo stays on default branch
 
 ### Restore Link
 ```bash
 ./ticket.sh restore
 ```
-Auto-restores from branch name when current-ticket.md is lost after clone/pull
+Rebuilds the active-ticket symlinks (`current-ticket/`, `current-ticket.md`, `current-note.md`) from the current feature branch name — useful after clone / pull / manual branch switch. Also emits the same `Active ticket paths:` block as `start`.
 
 ### Complete Work
 ```bash
@@ -106,8 +128,9 @@ Auto-restores from branch name when current-ticket.md is lost after clone/pull
 ```
 - Squashes commits for organization
 - Merges to default_branch
-- Updates ticket status to completed
-- Moves ticket file to `tickets/done/` folder
+- Updates ticket status to completed (stamps `closed_at` in the same commit)
+- Moves the whole `tickets/<TICKETNAME>/` directory into `tickets/done/<TICKETNAME>/` (for legacy flat tickets, moves the `.md` file and, if present, the `-note.md` sibling)
+- Removes all active-ticket symlinks
 
 ### Cancel Work
 ```bash
@@ -115,10 +138,9 @@ Auto-restores from branch name when current-ticket.md is lost after clone/pull
 ```
 - Cancels the current ticket without merging
 - Sets `canceled_at` timestamp and adds `[CANCELED]` prefix to description
-- Renames file with `-CANCELED-` prefix (e.g., `YYMMDD-hhmmss-CANCELED-slug.md`)
-- Moves ticket to `tickets/done/` folder
+- Moves the ticket directory to `tickets/done/<YYMMDD-hhmmss>-CANCELED-<slug>/` (or, for legacy tickets, renames the flat `.md` file with `-CANCELED-`)
 - Switches back to default branch (feature branch is kept)
-- Removes current-ticket.md / current-note.md symlinks
+- Removes all active-ticket symlinks
 
 ### List View
 ```bash
@@ -164,16 +186,29 @@ Displays ticket status list (default: todo+doing, excludes canceled)
 
 ```
 project-root/
-├── tickets/                    # All ticket files (configurable)
-│   ├── 240628-153245-foo.md    # Active/todo tickets
-│   └── done/                   # Completed tickets (auto-created)
-│       └── 240627-142030-bar.md
-├── current-ticket.md           # Symlink to working ticket (.gitignore'd)
-├── current-note.md             # Symlink to working note (.gitignore'd, optional)
-├── ticket.sh                   # Main script
-├── .ticket-config.yaml         # Configuration file
-└── .gitignore                  # Contains current-ticket.md and current-note.md
+├── tickets/                             # All ticket directories (configurable)
+│   ├── 240628-153245-foo/               # Active/todo per-ticket directory
+│   │   ├── ticket.md                    #   ticket body
+│   │   ├── note.md                      #   working notes / log
+│   │   ├── tests/                       #   ticket-local tests (on demand)
+│   │   └── tmp/                         #   ticket-local temp helpers (on demand)
+│   └── done/                            # Completed/cancelled tickets (auto-created)
+│       └── 240627-142030-bar/           #   moved here as a whole directory
+│           ├── ticket.md
+│           └── note.md
+├── current-ticket/                      # Directory symlink to active ticket dir (.gitignore'd)
+├── current-ticket.md                    # Compat file symlink to current-ticket/ticket.md (.gitignore'd)
+├── current-note.md                      # Compat file symlink to current-ticket/note.md (.gitignore'd)
+├── ticket.sh                            # Main script
+├── .ticket-config.yaml                  # Configuration file
+└── .gitignore                           # Contains current-ticket, current-ticket.md, current-note.md
 ```
+
+**Legacy compatibility.** Tickets from earlier versions using the flat layout
+(`tickets/<TICKETNAME>.md` + `tickets/<TICKETNAME>-note.md`) still work with
+every command. `list`, `start`, `close`, `cancel`, `restore`, `check` all
+recognize either layout automatically. The two layouts can coexist in the same
+`tickets/` directory during the transition period.
 
 ---
 
@@ -305,7 +340,7 @@ Performs system initialization:
 
 1. Creates `.ticket-config.yaml` with default values (if not exists)
 2. Creates `{tickets_dir}/` directory
-3. Creates `.gitignore` file (if not exists) and adds `current-ticket.md` and `current-note.md` (with duplicate check)
+3. Creates `.gitignore` file (if not exists) and adds `current-ticket.md`, `current-note.md`, and `current-ticket` (the directory symlink for per-ticket layout) with duplicate check
 
 **Note**: This command only skips configuration file existence check
 
@@ -452,8 +487,9 @@ Starts ticket work:
 
 1. Sets current time to specified ticket's `started_at`
 2. Creates Git branch as `{branch_prefix}<basename>`
-3. Creates symlink to `current-ticket.md` and optionally `current-note.md`
-4. Displays executed Git commands and output in detail
+3. Creates active-ticket symlinks: `current-ticket/` (dir symlink, new layout only), `current-ticket.md`, and `current-note.md`
+4. Emits an `Active ticket paths:` block listing the resolved paths (layout, ticket, note, ticket_dir/tests_dir/tmp_dir for new layout, and every symlink correspondence)
+5. Displays executed Git commands and output in detail
 
 **Options:**
 - `--worktree`: Creates a separate git worktree instead of switching branches. The main repository stays on the default branch. Worktree is created at `../<project>.worktrees/<ticket-name>/` (or custom `worktree_dir` if configured)
@@ -550,10 +586,11 @@ Note: Branch not pushed to remote. Use 'git push -u origin feature/240628-153245
   ```
 
 ### `restore`
-Restores current-ticket link:
+Rebuilds the active-ticket symlinks:
 
-- Searches for corresponding ticket file from current Git branch
-- Deletes existing `current-ticket.md` and creates new symlink
+- Searches for the corresponding ticket file from the current Git branch (both per-ticket-directory and legacy flat layouts are probed)
+- Deletes any stale `current-ticket/`, `current-ticket.md`, and `current-note.md` symlinks and recreates the correct ones for the resolved ticket
+- Emits an `Active ticket paths:` block (same contract as `start`) so downstream agents can act on the output alone
 - Cannot execute from non-`{branch_prefix}*` branches
 
 **Error Cases:**
@@ -590,15 +627,14 @@ Completes ticket and merge process:
 
 **Execution Flow:**
 1. **Check working directory**: Ensures no uncommitted changes (unless `--force` is used)
-2. **Update ticket**: Sets current time to `closed_at` of ticket referenced by current-ticket.md
+2. **Update ticket**: Sets current time to `closed_at` of the ticket resolved via the `current-ticket.md` symlink
 3. **Commit**: Commits with `"Close ticket"` message
 4. **Push (conditional)**: Pushes feature branch only when `auto_push: true` and `--no-push` not specified
 5. **Squash Merge**: Squash merges feature branch to target branch (ticket's `base_branch` field if set, otherwise `{default_branch}`)
 6. **Push (conditional)**: Pushes `{default_branch}` only when `auto_push: true` and `--no-push` not specified
-7. **Move to done folder**: Moves ticket file to `tickets/done/` directory
-8. **Commit move**: Commits the file move with `"Move completed ticket to done folder"` message
-9. **Push move (conditional)**: Pushes the move commit when `auto_push: true` and `--no-push` not specified
-10. Displays executed Git commands and output in detail
+7. **Move to done folder**: For per-ticket-directory tickets, `git mv tickets/<TICKETNAME> tickets/done/<TICKETNAME>` moves the whole directory in one step; for legacy flat tickets, moves the `.md` file (and `-note.md` sibling if present). The rename plus the `closed_at` edit go into the SAME final commit (an explicit `git add` after `git mv` re-stages the moved ticket body so the pre-edit blob problem is avoided).
+8. **Push move (conditional)**: Pushes the final commit when `auto_push: true` and `--no-push` not specified
+9. Displays executed Git commands and output in detail
 
 **Git Operation Details:**
 ```bash
@@ -778,13 +814,13 @@ Cancels the current ticket without merging:
 
 **Execution Flow:**
 1. **Check working directory**: Ensures no uncommitted changes (unless `--force` is used)
-2. **Update ticket**: Sets current time to `canceled_at` of ticket referenced by current-ticket.md
+2. **Update ticket**: Sets current time to `canceled_at` on the active ticket (resolved via the `current-ticket.md` symlink)
 3. **Update description**: Adds `[CANCELED]` prefix to the `description` field
-4. **Rename file**: Renames ticket file with `-CANCELED-` prefix before slug (e.g., `YYMMDD-hhmmss-CANCELED-slug.md`)
-5. **Move to done folder**: Moves renamed ticket file to `tickets/done/` directory
+4. **Rename**: For per-ticket-directory tickets, the whole `tickets/<TICKETNAME>/` directory is renamed with `-CANCELED-` inserted after the timestamp prefix (e.g. `tickets/<YYMMDD-hhmmss>-CANCELED-<slug>/`). For legacy flat tickets, the `.md` file (and `-note.md` sibling if present) is renamed the same way.
+5. **Move to done folder**: The renamed directory / files are moved into `tickets/done/`.
 6. **Commit**: Commits the changes
 7. **Switch branch**: Checks out default branch without merging
-8. **Cleanup**: Removes `current-ticket.md` and `current-note.md` symlinks
+8. **Cleanup**: Removes all active-ticket symlinks (`current-ticket/`, `current-ticket.md`, `current-note.md`)
 9. Feature branch is kept (not deleted)
 
 **Example Output:**
@@ -796,7 +832,7 @@ Switched to branch 'develop'
 ```
 
 **Error Cases:**
-- Same as `close` command: requires current-ticket.md, must be on feature branch, ticket must be started, working directory must be clean (unless `--force`)
+- Same as `close` command: requires the active-ticket symlink (`current-ticket.md`) to point at a valid ticket, must be on a feature branch, ticket must be started, working directory must be clean (unless `--force`)
 
 ---
 
@@ -847,7 +883,7 @@ USAGE:
   ./ticket.sh new <slug>               Create new ticket file (slug: lowercase, numbers, hyphens only)
   ./ticket.sh list [--status STATUS] [--count N]  List tickets (default: todo + doing, count: 20)
   ./ticket.sh start <ticket-name> [--no-push]     Start working on ticket (creates feature branch)
-  ./ticket.sh restore                  Restore current-ticket.md symlink from branch name
+  ./ticket.sh restore                  Rebuild active-ticket symlinks (current-ticket/, current-ticket.md, current-note.md) from branch name
   ./ticket.sh close [--no-push]       Complete current ticket (squash merge to default branch)
   ./ticket.sh cancel [--force|-f]    Cancel current ticket without merging
 
@@ -873,19 +909,20 @@ PUSH CONTROL:
 - Git commands and outputs are displayed for transparency
 
 WORKFLOW:
-1. Create ticket: ./ticket.sh new feature-name
-2. Edit ticket content and description
+1. Create ticket: ./ticket.sh new feature-name (creates tickets/<TICKETNAME>/{ticket.md,note.md})
+2. Edit ticket content in tickets/<TICKETNAME>/ticket.md
 3. Start work: ./ticket.sh start 241225-143502-feature-name
-4. Develop on feature branch (current-ticket.md shows active ticket)
-5. Complete: ./ticket.sh close
+4. Develop on feature branch (reference active ticket via current-ticket/ticket.md or compat current-ticket.md)
+5. Complete: ./ticket.sh close (moves tickets/<TICKETNAME>/ to tickets/done/<TICKETNAME>/)
 
 TROUBLESHOOTING:
 - Run from project root (where .git and config file exist)
-- Use 'restore' if current-ticket.md is missing after clone/pull
+- Use 'restore' if the active-ticket symlinks are missing after clone/pull
 - Check 'list' to see available tickets and their status
 - Ensure Git working directory is clean before start/close
 
-Note: current-ticket.md is git-ignored and needs 'restore' after clone/pull.
+Note: current-ticket/, current-ticket.md, and current-note.md are git-ignored
+and need 'restore' after clone/pull.
 ```
 
 ---

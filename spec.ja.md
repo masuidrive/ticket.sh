@@ -37,11 +37,30 @@
 - チケット名は `YYMMDD-hhmmss-<slug>` 形式
 - これがファイル名のベースおよびブランチ名に使用される
 
-#### ファイルベース管理
-- `tickets/<チケット名>.md` の1ファイルでチケットが完結
-- オプション: `tickets/<チケット名>-note.md` 作業ノートファイル（`note_content`設定時）
-- YAML Front Matter部分にメタ情報を格納
-- Markdownボディ部分にチケット詳細を記述
+#### per-ticket ディレクトリレイアウト
+
+各チケットは `tickets/` 配下の自分専用ディレクトリに置く：
+
+```
+tickets/
+  <TICKETNAME>/
+    ticket.md   # チケット本体（YAML frontmatter + Markdown）
+    note.md     # 作業ノート／ログ
+    tests/      # ticket-local test（必要時に作成）
+    tmp/        # ticket-local 一時 helper（必要時に作成）
+  done/
+    <TICKETNAME>/   # close/cancel されたチケット — ディレクトリごと移動
+```
+
+- メタ情報は `ticket.md` の YAML frontmatter に格納。
+- チケット詳細・タスク・受け入れ条件は `ticket.md` の Markdown 本文に書く。
+- `note.md` は同一ディレクトリの自由記述ログ（進捗、デバッグ、調査ノート）。初期内容は config の `note_content` テンプレートから生成される。
+- `tests/` と `tmp/` はチケットが必要とした時のみ作成する。
+- `close` / `cancel` は `tickets/<TICKETNAME>/` を `tickets/done/<TICKETNAME>/` へディレクトリごと移動（`cancel` はディレクトリ名に `-CANCELED-` を挿入）。この rename と `closed_at`／`cancelled_at` 追記は単一 Git commit にまとまる。
+
+**レガシー互換**: 旧版で作られたフラット形式チケット
+(`tickets/<TICKETNAME>.md` + `tickets/<TICKETNAME>-note.md`) はすべての
+コマンドで従来どおり動作する。自動移行は行わない。
 
 #### 最小YAML構成
 ```yaml
@@ -60,9 +79,12 @@ canceled_at: null  # Do not modify manually
 - **canceled**: `canceled_at` 設定済み
 
 #### ブランチ連携
-- 作業は `feature/チケット名` ブランチで実施
-- current-ticket.md による現在作業チケットの可視化
-- current-note.md による作業ノートの可視化（note_content設定時）
+- 作業は `feature/<チケット名>` ブランチで実施
+- `start` はリポジトリ直下に 3 本の symlink を作成してアクティブチケットを指す：
+  - `current-ticket/` → `tickets/<TICKETNAME>/`（dir symlink）
+  - `current-ticket.md` → `tickets/<TICKETNAME>/ticket.md`（互換 file symlink）
+  - `current-note.md` → `tickets/<TICKETNAME>/note.md`（互換 file symlink）
+- レガシーフラット形式チケットの場合、file symlink 2 本のみ作成（指すべき per-ticket ディレクトリが無いため）。
 
 ---
 
@@ -88,37 +110,37 @@ canceled_at: null  # Do not modify manually
 # worktree使用（別ディレクトリを作成）
 ./ticket.sh start --worktree <ticket-file>
 ```
-- 対応するfeatureブランチに移動（`--worktree`指定時はworktreeを作成）
-- current-ticket.md にsymlinkを作成
-- current-note.md にsymlinkを作成（ノートファイル存在時）
-- 作業中は current-ticket.md と current-note.md を参照して開発
-- `--worktree`使用時: 別作業ディレクトリを作成し、メインリポジトリはデフォルトブランチのまま
+- 対応する feature ブランチに移動（`--worktree` 指定時は worktree を作成）
+- アクティブチケット symlink 群（`current-ticket/`、`current-ticket.md`、`current-note.md`）を作成
+- `Active ticket paths:` ブロックを emit（layout・ticket・note・新形式なら ticket_dir/tests_dir/tmp_dir・すべての symlink 対応）— 下流エージェントが出力だけで解決可能
+- 作業中は `current-ticket/ticket.md`・`current-ticket/note.md`（または互換 `current-ticket.md`／`current-note.md`）を参照して開発
+- `--worktree` 使用時: 別作業ディレクトリを作成し、メインリポジトリはデフォルトブランチのまま
 
 ### リンク復元
 ```bash
 ./ticket.sh restore
 ```
-clone/pull後など、current-ticket.mdが失われた際にブランチ名から自動復元
+現在の feature ブランチ名からアクティブチケット symlink 群（`current-ticket/`、`current-ticket.md`、`current-note.md`）を再構築する — clone／pull／手動ブランチ切り替え後に有用。`start` と同じ `Active ticket paths:` ブロックも emit する。
 
 ### 作業完了
 ```bash
 ./ticket.sh close [--no-push] [--force|-f]
 ```
-- コミットをsquashして整理
-- default_branchにマージ
-- チケット状態を完了に更新
-- チケットファイルを `tickets/done/` フォルダに移動
+- コミットを squash して整理
+- default_branch にマージ
+- チケット状態を完了に更新（同一 commit で `closed_at` を stamp）
+- `tickets/<TICKETNAME>/` ディレクトリを `tickets/done/<TICKETNAME>/` へ丸ごと移動（レガシーフラット形式チケットの場合は `.md` と、存在すれば `-note.md` を移動）
+- すべてのアクティブチケット symlink を削除
 
 ### 作業キャンセル
 ```bash
 ./ticket.sh cancel [--force|-f]
 ```
 - マージせずにチケットをキャンセル
-- `canceled_at` タイムスタンプを設定し、descriptionに `[CANCELED]` プレフィックスを追加
-- ファイル名に `-CANCELED-` プレフィックスを付与（例: `YYMMDD-hhmmss-CANCELED-slug.md`）
-- チケットを `tickets/done/` フォルダに移動
-- デフォルトブランチに切り替え（featureブランチは保持）
-- current-ticket.md / current-note.md シンボリックリンクを削除
+- `canceled_at` タイムスタンプを設定し、description に `[CANCELED]` プレフィックスを追加
+- チケットディレクトリを `tickets/done/<YYMMDD-hhmmss>-CANCELED-<slug>/` へ移動（レガシー形式は `.md` ファイル名を `-CANCELED-` プレフィックスで rename）
+- デフォルトブランチに切り替え（feature ブランチは保持）
+- すべてのアクティブチケット symlink を削除
 
 ### 一覧表示
 ```bash
@@ -164,15 +186,28 @@ clone/pull後など、current-ticket.mdが失われた際にブランチ名か�
 
 ```
 project-root/
-├── tickets/                    # 全チケットファイル（設定可能）
-│   ├── 240628-153245-foo.md    # アクティブ/todoチケット
-│   └── done/                   # 完了済みチケット（自動作成）
-│       └── 240627-142030-bar.md
-├── current-ticket.md           # 作業中チケットへのsymlink (.gitignore対象)
-├── ticket.sh                   # メインスクリプト
-├── .ticket-config.yaml         # 設定ファイル
-└── .gitignore                  # current-ticket.md を含む
+├── tickets/                             # 全チケットディレクトリ（設定可能）
+│   ├── 240628-153245-foo/               # アクティブ／todo per-ticket ディレクトリ
+│   │   ├── ticket.md                    #   チケット本体
+│   │   ├── note.md                      #   作業ノート／ログ
+│   │   ├── tests/                       #   ticket-local test（必要時）
+│   │   └── tmp/                         #   ticket-local 一時 helper（必要時）
+│   └── done/                            # 完了／キャンセル済みチケット（自動作成）
+│       └── 240627-142030-bar/           #   ディレクトリごと移動
+│           ├── ticket.md
+│           └── note.md
+├── current-ticket/                      # アクティブチケット dir symlink (.gitignore 対象)
+├── current-ticket.md                    # 互換 file symlink → current-ticket/ticket.md (.gitignore 対象)
+├── current-note.md                      # 互換 file symlink → current-ticket/note.md (.gitignore 対象)
+├── ticket.sh                            # メインスクリプト
+├── .ticket-config.yaml                  # 設定ファイル
+└── .gitignore                           # current-ticket, current-ticket.md, current-note.md を含む
 ```
+
+**レガシー互換**: 旧版のフラット形式 (`tickets/<TICKETNAME>.md` +
+`tickets/<TICKETNAME>-note.md`) は `list`／`start`／`close`／`cancel`／
+`restore`／`check` すべてで従来どおり認識される。両レイアウトは
+`tickets/` 内で同居してよい。
 
 ---
 
@@ -304,7 +339,7 @@ canceled_at: null
 
 1. `.ticket-config.yaml` をデフォルト値で作成（存在しない場合）
 2. `{tickets_dir}/` ディレクトリを作成
-3. `.gitignore` ファイルを作成（存在しない場合）し、`current-ticket.md` を追加（重複チェック）
+3. `.gitignore` ファイルを作成（存在しない場合）し、`current-ticket.md`、`current-note.md`、`current-ticket`（per-ticket レイアウトの dir symlink）を追加（重複チェック）
 
 **注意**: このコマンドのみ設定ファイルの存在チェックをスキップ
 
@@ -451,7 +486,7 @@ Additional notes or requirements.
 
 1. 指定チケットの `started_at` に現在時刻を設定
 2. Gitブランチを `{branch_prefix}<basename>` として作成
-3. `current-ticket.md` にsymlinkを作成
+3. アクティブチケット symlink 群を作成: `current-ticket/`（dir symlink、新形式のみ）、`current-ticket.md`、`current-note.md`。加えて `Active ticket paths:` ブロックを emit（下流エージェントが解決済みパスを消費できる）
 4. 実行したGitコマンドと出力を詳細表示
 
 **オプション:**
@@ -776,13 +811,13 @@ Note: Changes not pushed to remote. Use 'git push origin develop' and 'git push 
 
 **実行フロー:**
 1. **作業ディレクトリチェック**: `--force` 未指定時のみ、コミットされていない変更がないか確認
-2. **チケット更新**: current-ticket.md の参照先チケットの `canceled_at` に現在時刻を設定
+2. **チケット更新**: アクティブチケット（`current-ticket.md` symlink の参照先）の `canceled_at` に現在時刻を設定
 3. **description更新**: `description` フィールドに `[CANCELED]` プレフィックスを追加
-4. **ファイルリネーム**: チケットファイルをslugの前に `-CANCELED-` プレフィックス付きにリネーム（例: `YYMMDD-hhmmss-CANCELED-slug.md`）
-5. **doneフォルダに移動**: リネームしたチケットファイルを `tickets/done/` ディレクトリに移動
+4. **リネーム**: per-ticket ディレクトリ形式チケットは、`tickets/<TICKETNAME>/` ディレクトリを丸ごと `-CANCELED-` 挿入で rename（例: `tickets/<YYMMDD-hhmmss>-CANCELED-<slug>/`）。レガシーフラット形式は `.md` ファイル（および `-note.md` があればそれも）を同様に rename。
+5. **doneフォルダに移動**: rename 後のディレクトリ／ファイルを `tickets/done/` に移動
 6. **コミット**: 変更をコミット
 7. **ブランチ切り替え**: マージせずにデフォルトブランチにチェックアウト
-8. **クリーンアップ**: `current-ticket.md` と `current-note.md` シンボリックリンクを削除
+8. **クリーンアップ**: すべてのアクティブチケット symlink（`current-ticket/`、`current-ticket.md`、`current-note.md`）を削除
 9. featureブランチは保持（削除しない）
 
 **実行例出力:**
@@ -794,7 +829,7 @@ Switched to branch 'develop'
 ```
 
 **エラーケース:**
-- `close` コマンドと同様: current-ticket.mdが必要、featureブランチ上で実行、チケットが開始済みである必要あり、作業ディレクトリがクリーンである必要あり（`--force` 使用時を除く）
+- `close` コマンドと同様: アクティブチケット symlink（`current-ticket.md`）が有効なチケットを指している必要あり、feature ブランチ上で実行、チケットが開始済みである必要あり、作業ディレクトリがクリーンである必要あり（`--force` 使用時を除く）
 
 ---
 
@@ -845,7 +880,7 @@ USAGE:
   ./ticket.sh new <slug>               Create new ticket file (slug: lowercase, numbers, hyphens only)
   ./ticket.sh list [--status STATUS] [--count N]  List tickets (default: todo + doing, count: 20)
   ./ticket.sh start <ticket-name> [--no-push]     Start working on ticket (creates feature branch)
-  ./ticket.sh restore                  Restore current-ticket.md symlink from branch name
+  ./ticket.sh restore                  Rebuild active-ticket symlinks (current-ticket/, current-ticket.md, current-note.md) from branch name
   ./ticket.sh close [--no-push] [--force|-f]  Complete current ticket (squash merge to default branch)
   ./ticket.sh cancel [--force|-f]            Cancel current ticket without merging
 
@@ -871,19 +906,20 @@ PUSH CONTROL:
 - Git commands and outputs are displayed for transparency
 
 WORKFLOW:
-1. Create ticket: ./ticket.sh new feature-name
-2. Edit ticket content and description
+1. Create ticket: ./ticket.sh new feature-name (creates tickets/<TICKETNAME>/{ticket.md,note.md})
+2. Edit ticket content in tickets/<TICKETNAME>/ticket.md
 3. Start work: ./ticket.sh start 241225-143502-feature-name
-4. Develop on feature branch (current-ticket.md shows active ticket)
-5. Complete: ./ticket.sh close
+4. Develop on feature branch (reference active ticket via current-ticket/ticket.md or compat current-ticket.md)
+5. Complete: ./ticket.sh close (moves tickets/<TICKETNAME>/ to tickets/done/<TICKETNAME>/)
 
 TROUBLESHOOTING:
 - プロジェクトルートから実行 (.git と設定ファイルが存在する場所)
-- Use 'restore' if current-ticket.md is missing after clone/pull
+- Use 'restore' if the active-ticket symlinks are missing after clone/pull
 - Check 'list' to see available tickets and their status
 - Ensure Git working directory is clean before start/close
 
-Note: current-ticket.md is git-ignored and needs 'restore' after clone/pull.
+Note: current-ticket/, current-ticket.md, and current-note.md are git-ignored
+and need 'restore' after clone/pull.
 ```
 
 ---
