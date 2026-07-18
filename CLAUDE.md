@@ -21,8 +21,7 @@ Each ticket is a **per-ticket directory** under `tickets/`:
 tickets/<TICKETNAME>/
   ticket.md   # ticket body (YAML frontmatter + Markdown)
   note.md     # working notes / log
-  tests/      # ticket-local tests (created on demand)
-  tmp/        # ticket-local temp helpers (created on demand)
+  tmp/        # ticket-local temp helpers (auto-created on start/restore; git-ignored via tickets/.gitignore)
 ```
 
 While a ticket is active, three symlinks in the repo root point at it:
@@ -65,7 +64,7 @@ explicit user instruction.
 
 1. Check available tickets: `./ticket.sh list` (both new and legacy layouts are listed).
 2. Start work: `./ticket.sh start 241225-143502-feature-name`.
-3. Read the `Active ticket paths:` block that `start` emits — it lists the resolved paths for `ticket`, `note`, `ticket_dir`, `tests_dir`, `tmp_dir`, and every symlink correspondence, so you never need to guess the layout.
+3. Read the `Active ticket paths:` block that `start` emits — it lists the resolved paths for `ticket`, `note`, `ticket_dir`, `tmp_dir`, and every symlink correspondence, so you never need to guess the layout.
 4. Develop on the feature branch.
 5. Reference work files via the active-ticket symlinks:
    - `current-ticket/ticket.md` — the ticket body with tasks

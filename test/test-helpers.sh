@@ -213,8 +213,12 @@ EOF
     fi
     
     echo "      Initializing ticket system..."
-    # Initialize ticket system with timeout protection
-    timeout 5 ./ticket.sh init
+    # Initialize ticket system with timeout protection. Redirect output to
+    # /dev/null: init's post-init "Next Steps" section is verbose (~90 lines)
+    # and streaming that through docker's tty can push the whole call past a
+    # tight timeout budget on slower runners. We don't need the output here —
+    # tests that need to inspect init output invoke ./ticket.sh init directly.
+    timeout 10 ./ticket.sh init >/dev/null 2>&1
     
     echo "      Finalizing setup..."
     # Commit .gitignore changes from init

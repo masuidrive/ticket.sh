@@ -46,8 +46,7 @@ tickets/
   <TICKETNAME>/
     ticket.md   # チケット本体（YAML frontmatter + Markdown）
     note.md     # 作業ノート／ログ
-    tests/      # ticket-local test（必要時に作成）
-    tmp/        # ticket-local 一時 helper（必要時に作成）
+    tmp/        # ticket-local 一時 helper（start/restore で自動作成、tickets/.gitignore で git 除外）
   done/
     <TICKETNAME>/   # close/cancel されたチケット — ディレクトリごと移動
 ```
@@ -55,7 +54,7 @@ tickets/
 - メタ情報は `ticket.md` の YAML frontmatter に格納。
 - チケット詳細・タスク・受け入れ条件は `ticket.md` の Markdown 本文に書く。
 - `note.md` は同一ディレクトリの自由記述ログ（進捗、デバッグ、調査ノート）。初期内容は config の `note_content` テンプレートから生成される。
-- `tests/` と `tmp/` はチケットが必要とした時のみ作成する。
+- `tmp/` は `start` / `restore` で自動的に作成され、その中身は `<tickets_dir>/.gitignore`（`init` が生成）で git 除外される。ticket-local な scratch ファイル、agent の作業用 script、コミットしたくない一時 helper の置き場に使う。
 - `close` / `cancel` は `tickets/<TICKETNAME>/` を `tickets/done/<TICKETNAME>/` へディレクトリごと移動（`cancel` はディレクトリ名に `-CANCELED-` を挿入）。この rename と `closed_at`／`cancelled_at` 追記は単一 Git commit にまとまる。
 
 **レガシー互換**: 旧版で作られたフラット形式チケット
@@ -112,7 +111,7 @@ canceled_at: null  # Do not modify manually
 ```
 - 対応する feature ブランチに移動（`--worktree` 指定時は worktree を作成）
 - アクティブチケット symlink 群（`current-ticket/`、`current-ticket.md`、`current-note.md`）を作成
-- `Active ticket paths:` ブロックを emit（layout・ticket・note・新形式なら ticket_dir/tests_dir/tmp_dir・すべての symlink 対応）— 下流エージェントが出力だけで解決可能
+- `Active ticket paths:` ブロックを emit（layout・ticket・note・新形式なら ticket_dir/tmp_dir・すべての symlink 対応）— 下流エージェントが出力だけで解決可能
 - 作業中は `current-ticket/ticket.md`・`current-ticket/note.md`（または互換 `current-ticket.md`／`current-note.md`）を参照して開発
 - `--worktree` 使用時: 別作業ディレクトリを作成し、メインリポジトリはデフォルトブランチのまま
 
@@ -190,8 +189,7 @@ project-root/
 │   ├── 240628-153245-foo/               # アクティブ／todo per-ticket ディレクトリ
 │   │   ├── ticket.md                    #   チケット本体
 │   │   ├── note.md                      #   作業ノート／ログ
-│   │   ├── tests/                       #   ticket-local test（必要時）
-│   │   └── tmp/                         #   ticket-local 一時 helper（必要時）
+│   │   └── tmp/                         #   ticket-local 一時 helper（自動作成、git 除外）
 │   └── done/                            # 完了／キャンセル済みチケット（自動作成）
 │       └── 240627-142030-bar/           #   ディレクトリごと移動
 │           ├── ticket.md

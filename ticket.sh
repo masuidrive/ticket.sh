@@ -12,7 +12,7 @@ fi
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20260718.152631
+# Version: 20260718.162006
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -1178,7 +1178,7 @@ if [ -z "${BASH_VERSION:-}" ]; then
 fi
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20260718.152631
+# Version: 20260718.162006
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -1270,7 +1270,7 @@ SCRIPT_COMMAND=$(get_script_command)
 
 
 # Global variables
-VERSION="20260718.152631"  # This will be replaced during build
+VERSION="20260718.162006"  # This will be replaced during build
 CONFIG_FILE=""  # Will be set dynamically by get_config_file()
 CURRENT_TICKET_LINK="current-ticket.md"
 CURRENT_NOTE_LINK="current-note.md"
@@ -1349,8 +1349,7 @@ tickets/
   <TICKETNAME>/
     ticket.md     # ticket body (YAML frontmatter + Markdown)
     note.md       # working notes / log
-    tests/        # ticket-local tests (created on demand)
-    tmp/          # ticket-local temp helpers (created on demand)
+    tmp/          # ticket-local temp helpers (auto-created; ignored via tickets/.gitignore)
   done/<TICKETNAME>/    # closed / cancelled tickets (moved as a whole directory)
 \`\`\`
 
@@ -1652,8 +1651,7 @@ tickets/
   <TICKETNAME>/
     ticket.md   # the ticket body (YAML frontmatter + Markdown)
     note.md     # working notes / log
-    tests/      # ticket-local tests (created on demand)
-    tmp/        # ticket-local temp helpers (created on demand)
+    tmp/        # ticket-local temp helpers (auto-created; ignored via tickets/.gitignore)
   done/
     <TICKETNAME>/    # closed / canceled tickets, moved here as a whole directory
 \`\`\`
@@ -1697,6 +1695,28 @@ EOF
                 echo "Added to .gitignore: $_entry"
             else
                 echo ".gitignore already contains: $_entry"
+            fi
+        done
+    fi
+
+    # Also generate <tickets_dir>/.gitignore so the per-ticket temp-helper
+    # directories (tickets/<TICKETNAME>/tmp/ and tickets/done/<TICKETNAME>/tmp/)
+    # are ignored. tmp/ is created at start/restore time as a scratch space and
+    # its contents are never part of the ticket contract, so they must not be
+    # committed.
+    local _tickets_gi="${tickets_dir}/.gitignore"
+    local _tickets_gi_entries=("*/tmp/" "done/*/tmp/")
+    if [[ ! -f "$_tickets_gi" ]]; then
+        printf '%s\n' "${_tickets_gi_entries[@]}" > "$_tickets_gi"
+        echo "Created $_tickets_gi with: ${_tickets_gi_entries[*]}"
+    else
+        local _tentry
+        for _tentry in "${_tickets_gi_entries[@]}"; do
+            if ! grep -Fxq "$_tentry" "$_tickets_gi"; then
+                echo "$_tentry" >> "$_tickets_gi"
+                echo "Added to $_tickets_gi: $_tentry"
+            else
+                echo "$_tickets_gi already contains: $_tentry"
             fi
         done
     fi
@@ -1747,8 +1767,7 @@ EOF
     echo "    tickets/<TICKETNAME>/"
     echo "      ticket.md   # ticket body (YAML frontmatter + Markdown)"
     echo "      note.md     # working notes / log"
-    echo "      tests/      # ticket-local tests (created on demand)"
-    echo "      tmp/        # ticket-local temp helpers (created on demand)"
+    echo "      tmp/        # ticket-local temp helpers (auto-created; ignored via tickets/.gitignore)"
     echo ""
     echo "While a ticket is active, three symlinks in the repo root point at it:"
     echo ""
@@ -1783,7 +1802,7 @@ EOF
     echo ""
     echo "1. Check available tickets: \`$SCRIPT_COMMAND list\` (both new and legacy layouts are shown)"
     echo "2. Start work: \`$SCRIPT_COMMAND start 241225-143502-feature-name\`"
-    echo "3. Read the \"Active ticket paths:\" block that \`start\` emits to get the resolved paths (ticket, note, ticket_dir, tests_dir, tmp_dir, and every symlink correspondence)"
+    echo "3. Read the \"Active ticket paths:\" block that \`start\` emits to get the resolved paths (ticket, note, ticket_dir, tmp_dir, and every symlink correspondence)"
     echo "4. Develop on the feature branch. Reference files via the symlinks:"
     echo "   - \`current-ticket/ticket.md\` - the active ticket with tasks"
     echo "   - \`current-ticket/note.md\` - working notes for this ticket"
@@ -1894,8 +1913,7 @@ cmd_new() {
     # New-format per-ticket directory layout:
     #   tickets/<TICKETNAME>/ticket.md
     #   tickets/<TICKETNAME>/note.md
-    #   tickets/<TICKETNAME>/tests/  (ticket-local tests, created lazily)
-    #   tickets/<TICKETNAME>/tmp/    (ticket-local temp helpers, created lazily)
+    #   tickets/<TICKETNAME>/tmp/    (ticket-local temp helpers, auto-created on start/restore)
     local ticket_dir="${tickets_dir}/${ticket_name}"
     local ticket_file="${ticket_dir}/ticket.md"
     local note_file="${ticket_dir}/note.md"
@@ -2104,6 +2122,36 @@ remove_current_ticket_symlinks() {
     rm -rf "${link_dir}/$CURRENT_TICKET_DIR_LINK"
 }
 
+# Ensure the per-ticket temp helper directory exists for a new-format ticket.
+# Called from start / restore so agents can drop files into
+# `current-ticket/tmp/` (or `tickets/<TICKETNAME>/tmp/`) without having to
+# mkdir it first. tmp/ contents are ignored via <tickets_dir>/.gitignore
+# (init creates that file).
+#
+# For legacy flat tickets, no per-ticket directory exists, so this is a no-op.
+#
+# Usage: ensure_ticket_tmp_dir <link_dir> <tickets_dir> <ticket_name>
+ensure_ticket_tmp_dir() {
+    local link_dir="$1"
+    local tickets_dir="$2"
+    local ticket_name="$3"
+
+    local layout
+    layout=$(ticket_layout "$ticket_name" "$tickets_dir")
+    if [[ "$layout" != "new" ]]; then
+        return 0
+    fi
+
+    # Prefer the open ticket path; fall back to done/ (unusual — a done-side
+    # ticket doesn't really need tmp/, but we don't want to fail if that's
+    # where the resolver landed).
+    local ticket_dir="${tickets_dir}/${ticket_name}"
+    if [[ ! -d "${link_dir}/${ticket_dir}" ]] && [[ -d "${link_dir}/${tickets_dir}/done/${ticket_name}" ]]; then
+        ticket_dir="${tickets_dir}/done/${ticket_name}"
+    fi
+    mkdir -p "${link_dir}/${ticket_dir}/tmp" 2>/dev/null || true
+}
+
 # Emit a fixed-format "Active ticket paths" block so a downstream agent can
 # consume the output alone (without re-guessing which layout was produced) to
 # find the ticket body, note file, ticket directory (new-format only) and the
@@ -2119,7 +2167,6 @@ remove_current_ticket_symlinks() {
 #   ticket:       <path to ticket body markdown, always present>
 #   note:         <path to note markdown, always present>
 #   ticket_dir:   <path to per-ticket directory> (new layout only)
-#   tests_dir:    <path where ticket-local tests live> (new layout only)
 #   tmp_dir:      <path for ticket-local temp helpers> (new layout only)
 #   symlink_dir:  <link_dir>/current-ticket → ticket_dir (new layout only)
 #   symlink_file: <link_dir>/current-ticket.md → ticket
@@ -2142,9 +2189,8 @@ emit_active_ticket_paths() {
         [[ ! -d "$ticket_dir" ]] && ticket_dir="${tickets_dir}/done/${ticket_name}"
         echo "  ticket:       ${ticket_dir}/ticket.md"
         echo "  note:         ${ticket_dir}/note.md"
-        echo "  ticket_dir:   ${ticket_dir}/   (per-ticket root: ticket.md + note.md + tests/ + tmp/)"
-        echo "  tests_dir:    ${ticket_dir}/tests/   (ticket-local tests; run via ./scripts/test-ticket-local.sh if the project provides it)"
-        echo "  tmp_dir:      ${ticket_dir}/tmp/   (ticket-local temp helpers, not part of the ticket contract)"
+        echo "  ticket_dir:   ${ticket_dir}/   (per-ticket root: ticket.md + note.md + tmp/)"
+        echo "  tmp_dir:      ${ticket_dir}/tmp/   (ticket-local temp helpers, auto-created; ignored via ${tickets_dir}/.gitignore)"
         echo "  symlink_dir:  ${link_dir}/${CURRENT_TICKET_DIR_LINK} -> ${ticket_dir}"
         echo "  symlink_file: ${link_dir}/${CURRENT_TICKET_LINK} -> ${ticket_dir}/ticket.md"
         echo "  symlink_note: ${link_dir}/${CURRENT_NOTE_LINK} -> ${ticket_dir}/note.md"
@@ -2163,7 +2209,7 @@ emit_active_ticket_paths() {
         else
             echo "  symlink_note: (not created; legacy tickets don't get a note symlink unless the note file exists)"
         fi
-        echo "  legacy_note:  legacy flat layout — no per-ticket directory, no tests_dir/tmp_dir. Ticket body lives at the shown path; note lives as a sibling <name>-note.md file."
+        echo "  legacy_note:  legacy flat layout — no per-ticket directory, no tmp_dir. Ticket body lives at the shown path; note lives as a sibling <name>-note.md file."
     fi
     echo ""
 }
@@ -2686,6 +2732,7 @@ EOF
         # Recreate all current-* symlinks (handles both new/legacy layouts).
         # For new-format tickets this also creates the current-ticket/ dir symlink.
         create_current_ticket_symlinks "$link_dir" "$tickets_dir" "$ticket_name" || return 1
+        ensure_ticket_tmp_dir "$link_dir" "$tickets_dir" "$ticket_name"
         echo "Resumed ticket: $ticket_name"
         echo "Continuing work on existing feature branch."
         emit_active_ticket_paths "$link_dir" "$tickets_dir" "$ticket_name"
@@ -2744,7 +2791,7 @@ EOF
             git -C "$wt_path" checkout "$prev_branch" -- "$ticket_file" 2>/dev/null || true
             if [[ "$ticket_file" == "${tickets_dir}/${ticket_name}/ticket.md" ]]; then
                 # New-format layout: also fetch sibling note.md if present.
-                # tests/ and tmp/ are ticket-local and don't need to travel.
+                # tmp/ is ticket-local (agent scratch space) and doesn't need to travel.
                 git -C "$wt_path" checkout "$prev_branch" -- "${tickets_dir}/${ticket_name}/note.md" 2>/dev/null || true
             else
                 # Legacy flat layout
@@ -2776,6 +2823,7 @@ EOF
         # for new-format tickets this also sets up current-ticket/ dir symlink).
         # Resolve layout against the worktree's tree, not cwd's.
         ( cd "$wt_path" && create_current_ticket_symlinks "." "$tickets_dir" "$ticket_name" ) || return 1
+        ensure_ticket_tmp_dir "$wt_path" "$tickets_dir" "$ticket_name"
         echo "Started ticket: $ticket_name"
         # Emit resolved paths relative to the worktree (that's where the agent
         # will operate from, per the CAUTION below). The link_dir prefix in the
@@ -2815,6 +2863,7 @@ EOF
 
         # Create current-* symlinks (handles new + legacy layouts).
         create_current_ticket_symlinks "." "$tickets_dir" "$ticket_name" || return 1
+        ensure_ticket_tmp_dir "." "$tickets_dir" "$ticket_name"
         echo "Started ticket: $ticket_name"
         emit_active_ticket_paths "." "$tickets_dir" "$ticket_name"
         echo "Note: Branch created locally. Use 'git push -u $repository $branch_name' when ready to share."
@@ -2890,6 +2939,7 @@ EOF
     if [[ "$layout" == "new" ]] && [[ "$ticket_file" != */done/* ]]; then
         # Standard case: open new-format ticket. Create the dir + compat symlinks.
         create_current_ticket_symlinks "." "$tickets_dir" "$ticket_name" || return 1
+        ensure_ticket_tmp_dir "." "$tickets_dir" "$ticket_name"
         local _sink_dir="${tickets_dir}/${ticket_name}"
         echo "Restored $CURRENT_TICKET_DIR_LINK -> $_sink_dir"
     else
@@ -3647,7 +3697,7 @@ EOF
         if [[ "$is_new_format" == "true" ]]; then
             # Move the whole per-ticket directory in one shot. git-mv on a
             # directory renames every tracked entry beneath it (ticket.md,
-            # note.md, tests/, tmp/) as a single change.
+            # note.md, tmp/) as a single change.
             run_git_command "git -C $main_repo mv \"$src_ticket_dir\" \"$new_ticket_dir\"" || {
                 echo "Error: Failed to move ticket directory to done folder" >&2
                 return 1
@@ -4166,13 +4216,12 @@ Each ticket lives in its own per-ticket directory:
 tickets/<TICKETNAME>/
   ticket.md   # ticket body
   note.md     # working notes / log
-  tests/      # ticket-local tests (created on demand)
-  tmp/        # ticket-local temp helpers (created on demand)
+  tmp/        # ticket-local temp helpers (auto-created; ignored via tickets/.gitignore)
 ```
 
 When a ticket is active, three symlinks in the repo root point at it:
 
-- `current-ticket/` → the per-ticket directory (all files reachable as `current-ticket/ticket.md`, `current-ticket/note.md`, `current-ticket/tests/`, `current-ticket/tmp/`)
+- `current-ticket/` → the per-ticket directory (all files reachable as `current-ticket/ticket.md`, `current-ticket/note.md`, `current-ticket/tmp/`)
 - `current-ticket.md` → the ticket body (compat with older tooling)
 - `current-note.md` → the note file (compat with older tooling)
 

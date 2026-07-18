@@ -110,8 +110,7 @@ tickets/
   <TICKETNAME>/
     ticket.md   # チケット本体（YAML frontmatter + Markdown）
     note.md     # 作業ノート／ログ
-    tests/      # ticket-local test（必要時に作成）
-    tmp/        # ticket-local 一時 helper（必要時に作成）
+    tmp/        # ticket-local 一時 helper（start/restore で自動作成、tickets/.gitignore で git 除外）
   done/
     <TICKETNAME>/   # close/cancel されたチケット — ディレクトリごと移動
 ```

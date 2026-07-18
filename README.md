@@ -110,8 +110,7 @@ tickets/
   <TICKETNAME>/
     ticket.md   # ticket body (YAML frontmatter + Markdown)
     note.md     # working notes / log
-    tests/      # ticket-local tests (created on demand)
-    tmp/        # ticket-local temp helpers (created on demand)
+    tmp/        # ticket-local temp helpers (auto-created on start/restore; git-ignored via tickets/.gitignore)
   done/
     <TICKETNAME>/   # closed / cancelled tickets — moved here as a whole directory
 ```

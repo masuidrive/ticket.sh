@@ -3,8 +3,8 @@ priority: 2
 base_branch: default
 description: "cmd_init が <tickets_dir>/.gitignore を生成して per-ticket ディレクトリの tmp/ を ignore する。start/restore は tickets/<TICKETNAME>/tmp/ を自動作成する。"
 created_at: "2026-07-18T15:44:50Z"
-started_at: null
-closed_at: null
+started_at: 2026-07-18T15:46:50Z
+closed_at: 2026-07-18T16:21:20Z
 canceled_at: null
 ---
 
@@ -29,7 +29,8 @@ per-ticket ディレクトリ配下の `tmp/` は「ticket-local な一時 helpe
 - [x] AC 4 (start: tmp/ 自動作成 — 新形式): `./ticket.sh start <TICKETNAME>` を新形式チケットに対して実行すると `tickets/<TICKETNAME>/tmp/` ディレクトリが作成される (worktree モードでは worktree 側にも作られる)。存在しても失敗しない (`mkdir -p` 相当)。
 - [x] AC 5 (start: レガシー形式は tmp/ を作らない): レガシーフラット形式チケットに `start` しても、それに対応する per-ticket ディレクトリは存在しないので `tmp/` は作成されない (副作用なし)。
 - [x] AC 6 (restore: tmp/ 自動作成 — 新形式): `./ticket.sh restore` を新形式チケットの feature branch で実行すると `tickets/<TICKETNAME>/tmp/` が存在しなければ作成される。
-- [x] AC 7 (Active ticket paths 出力の描写と一致): `start` / `restore` の `Active ticket paths:` 出力で `tmp_dir:` が「作成済み」を暗示する記述になる (`(ticket-local temp helpers)` の一文で足りるが、"created on demand" 相当の表現があれば削除)。docs (`show_usage`, `cmd_prompt`, README.md, README.ja.md, spec.md, spec.ja.md, CLAUDE.md, tickets/README.md, cmd_init post-init echo) の `tmp/` 記述も同様に「常に存在する」表現に更新する。
+- [x] AC 7 (Active ticket paths 出力の描写と一致): `start` / `restore` の `Active ticket paths:` 出力で `tmp_dir:` が「作成済み」を暗示する記述になる。docs (`show_usage`, `cmd_prompt`, README.md, README.ja.md, spec.md, spec.ja.md, CLAUDE.md, tickets/README.md, cmd_init post-init echo) の `tmp/` 記述も同様に「常に存在する」表現に更新する。
+- [x] AC 11 (scope trim: tests/ 削除): `tests/` に関する記述と `tests_dir:` 出力は ticket.sh の scope 外として削除する (user 追加指示)。per-ticket ディレクトリ配下の canonical 要素は `ticket.md` / `note.md` / `tmp/` のみ。テストでも `tests_dir:` が出力に含まれないことを検証する。
 - [x] AC 8 (テスト): 既存 `bash test/run-all.sh` (現在 241/241) と `bash test/run-all-on-docker.sh` (Ubuntu 222/222 + Alpine 222/222) が全 pass のまま。
 - [x] AC 9 (回帰テスト追加): `test/test-per-ticket-dir.sh` に 4 assertion を追加:
   1. `init` 実行後 `tickets/.gitignore` が存在し、`*/tmp/` と `done/*/tmp/` が両方含まれる
@@ -47,14 +48,14 @@ per-ticket ディレクトリ配下の `tmp/` は「ticket-local な一時 helpe
 
 - `<tickets_dir>/.gitignore` の生成方針は repo 直下 `.gitignore` と同じ「未存在なら新規作成、存在するなら欠けている行だけ追記」パターン (既存 `cmd_init` の gitignore 処理と統一)。
 - 2 行の内容は `*/tmp/` と `done/*/tmp/` の 2 パターンで、それぞれ open ticket と done ticket 配下の tmp を ignore する。1 行 (`**/tmp/`) にまとめることも可能だが、user 指定通り 2 行に分ける (何が ignore されるか明示的に読める)。
-- `tests/` は今回 auto-create しない (user 指示は `tmp/` のみ、tests/ は ticket が必要としたら作られる想定)。
+- `tests/` は ticket.sh の scope 外とし、canonical 要素から削除する (user 追加指示: 「これはチケットシステムで持っべき範囲を逸脱してるから削除して」)。ticket-local test 機構が必要な project は、自前で任意ディレクトリを使って自 project の `scripts/test-ticket-local.sh` などから呼び出せばよい (per-ticket dir 配下でなくても機能する)。
 - `mkdir -p` を start と restore それぞれの新形式コードパス末尾で実行する。既存の `create_current_ticket_symlinks` helper には入れない (helper は symlink を張るだけの責務を保つ)。
 - worktree モードでは worktree 内の per-ticket dir に対して mkdir する (start-worktree code path)。
 - ドキュメント記述は「on demand / created on demand」→「per-ticket temp helpers directory」等、常在を前提とした表現に統一する。
 
 ### Out-of-scope
 
-- `tests/` を auto-create する変更 (user 指示外)。
+<!-- (旧 tests/ 関連 out-of-scope 項目は AC 11 で正式に削除対象になったため空きに) -->
 - `tmp/` の中身をチケット close 時に自動削除する仕組み (`git mv` されればそのまま `done/<name>/tmp/` に移動して残る、ignore されているので commit されないだけ)。
 - 上流 pdh へ PR。
 - レガシーフラット形式チケットへの `tmp/` 相当機構の追加。
