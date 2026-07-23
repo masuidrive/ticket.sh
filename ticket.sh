@@ -12,7 +12,7 @@ fi
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20260718.162006
+# Version: 20260722.092200
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -1178,7 +1178,7 @@ if [ -z "${BASH_VERSION:-}" ]; then
 fi
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20260718.162006
+# Version: 20260722.092200
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -1270,7 +1270,7 @@ SCRIPT_COMMAND=$(get_script_command)
 
 
 # Global variables
-VERSION="20260718.162006"  # This will be replaced during build
+VERSION="20260722.092200"  # This will be replaced during build
 CONFIG_FILE=""  # Will be set dynamically by get_config_file()
 CURRENT_TICKET_LINK="current-ticket.md"
 CURRENT_NOTE_LINK="current-note.md"
@@ -1366,8 +1366,9 @@ be recognized by every command; they are never auto-migrated.
 - \`$SCRIPT_COMMAND init\` - Initialize system (create config, directories, .gitignore)
 - \`$SCRIPT_COMMAND new <slug> [--epic <epic-slug>] [--created-at <YYMMDD-hhmmss>]\` - Create new ticket file (slug: lowercase, numbers, hyphens only; --created-at overrides the timestamp, used as filename prefix and UTC created_at)
 - \`$SCRIPT_COMMAND list [--status STATUS] [--count N]\` - List tickets (default: todo + doing, count: 20)
-- \`$SCRIPT_COMMAND start [--worktree] <ticket-name>\` - Start working on ticket (creates or switches to feature branch, --worktree creates a separate worktree)
+- \`$SCRIPT_COMMAND start [--worktree] [--copy-file <path>]... <ticket-name>\` - Start working on ticket (creates or switches to feature branch, --worktree creates a separate worktree)
   - With \`--worktree\`: **cd to the worktree directory after start; cd back to the main repo after close.** In environments where cwd resets each command (e.g. LLM agents), cd must be re-run every time.
+  - \`--copy-file <path>\` (repeatable) copies the given file from the main repo into the new worktree, appended to the \`worktree_copy_files\` config list. Only applied when a worktree is created. Existing files in the target are never overwritten; missing sources warn and continue. Typical use: bringing gitignored \`.env\` into the worktree.
 - \`$SCRIPT_COMMAND restore\` - Restore current-ticket.md symlink from branch name
 - \`$SCRIPT_COMMAND check\` - Check current directory and ticket/branch synchronization status
 - \`$SCRIPT_COMMAND close [--no-push] [--force|-f] [--no-delete-remote] [--keep-worktree] [--dry-run|-n]\` - Complete current ticket (squash merge to default branch)
@@ -1403,6 +1404,23 @@ be recognized by every command; they are never auto-migrated.
 - Config file: \`.ticket-config.yaml\` or \`.ticket-config.yml\` (in project root)
 - Initialize with: \`$SCRIPT_COMMAND init\`
 - Edit to customize directories, branches, templates, and success messages
+
+### Worktree extras
+
+- \`worktree_copy_files\`: list of paths (relative to the main repo root) that
+  are copied into a freshly-created worktree. Consulted only when \`start\`
+  actually creates a worktree. Existing files in the target are never
+  overwritten; missing sources emit a warning and continue. Combine with
+  \`--copy-file <path>\` (repeatable) to append entries at invocation time.
+  Typical use: bringing gitignored \`.env\` into the worktree.
+  Example (in \`.ticket-config.yaml\`):
+  \`\`\`
+  worktree_copy_files:
+    - .env
+  \`\`\`
+  Assumes the listed files are gitignored — the same secrets do not spread
+  across users, each collaborator's own \`.env\` is copied into their own
+  worktree.
 
 ### Success Messages
 
@@ -1532,6 +1550,18 @@ delete_remote_on_close: $DEFAULT_DELETE_REMOTE_ON_CLOSE
 # When true, 'start' always creates a worktree (same as --worktree flag)
 # worktree_mode: false
 # worktree_dir: ""  # Custom worktree directory (default: ../<project>.worktrees/)
+
+# Files copied from the main repo into a freshly-created worktree.
+# Only consulted when 'start' actually creates a worktree (--worktree or
+# worktree_mode: true). Existing files in the target worktree are never
+# overwritten; missing sources warn and continue. Intended for gitignored
+# helpers (e.g. .env) that a new worktree still needs.
+# Extra one-shot entries can be added at invocation via --copy-file <path>.
+# Example:
+#   worktree_copy_files:
+#     - .env
+#     - .env.local
+worktree_copy_files: []
 
 # Success messages (leave empty to disable)
 # Message displayed after creating a new ticket
@@ -2152,6 +2182,67 @@ ensure_ticket_tmp_dir() {
     mkdir -p "${link_dir}/${ticket_dir}/tmp" 2>/dev/null || true
 }
 
+# Copy configured files from the main repo working tree into a fresh worktree.
+# Behavior (per entry):
+#   - source (main repo root) missing        → warn to stderr, continue
+#   - target (worktree root) already exists  → skip (never overwrite)
+#   - both fine                              → cp -p, echo a line to stdout
+# Callers pass the resolved list already merged with any --copy-file CLI
+# overrides so this function itself has no config knowledge.
+#
+# Usage: copy_worktree_files <source_dir> <target_dir> <path1> [<path2>...]
+copy_worktree_files() {
+    local src_dir="$1"
+    local dst_dir="$2"
+    shift 2
+
+    local rel
+    for rel in "$@"; do
+        [[ -z "$rel" ]] && continue
+        local src="${src_dir}/${rel}"
+        local dst="${dst_dir}/${rel}"
+        if [[ ! -e "$src" ]]; then
+            echo "Warning: worktree_copy_files source not found, skipping: ${rel}" >&2
+            continue
+        fi
+        if [[ -e "$dst" ]]; then
+            echo "worktree_copy_files: target already exists, skipping: ${rel}"
+            continue
+        fi
+        mkdir -p "$(dirname "$dst")"
+        if cp -p "$src" "$dst" 2>/dev/null; then
+            echo "worktree_copy_files: copied ${rel}"
+        else
+            echo "Warning: worktree_copy_files failed to copy: ${rel}" >&2
+        fi
+    done
+}
+
+# Resolve the effective worktree_copy_files list from config + CLI overrides.
+# Reads yaml_list_size / yaml_get for the `worktree_copy_files` key (assumes
+# yaml_parse of the config file has already been performed by the caller),
+# then appends every path passed on the CLI. Prints one path per line so
+# callers can read via `mapfile` or a while loop.
+#
+# Usage: resolve_worktree_copy_files "<cli_extras space-separated? no — pass as
+#        additional args>"
+# Actual signature: resolve_worktree_copy_files [<cli_path> ...]
+resolve_worktree_copy_files() {
+    local size
+    size=$(yaml_list_size "worktree_copy_files" 2>/dev/null || echo 0)
+    local i=0
+    while [[ $i -lt $size ]]; do
+        local v
+        v=$(yaml_get "worktree_copy_files.${i}" || echo "")
+        [[ -n "$v" ]] && echo "$v"
+        i=$((i + 1))
+    done
+    local extra
+    for extra in "$@"; do
+        [[ -n "$extra" ]] && echo "$extra"
+    done
+}
+
 # Emit a fixed-format "Active ticket paths" block so a downstream agent can
 # consume the output alone (without re-guessing which layout was produced) to
 # find the ticket body, note file, ticket directory (new-format only) and the
@@ -2418,12 +2509,27 @@ EOF
 cmd_start() {
     local use_worktree=false
     local ticket_input=""
+    # Extra paths appended to config's worktree_copy_files via --copy-file.
+    # Repeatable; ignored entirely unless use_worktree is true.
+    local cli_copy_files=()
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --worktree)
                 use_worktree=true
+                shift
+                ;;
+            --copy-file)
+                if [[ -z "${2:-}" ]] || [[ "${2:-}" == -* ]]; then
+                    echo "Error: --copy-file requires a path argument" >&2
+                    return 1
+                fi
+                cli_copy_files+=("$2")
+                shift 2
+                ;;
+            --copy-file=*)
+                cli_copy_files+=("${1#--copy-file=}")
                 shift
                 ;;
             -*)
@@ -2441,7 +2547,7 @@ cmd_start() {
 
     if [[ -z "$ticket_input" ]]; then
         echo "Error: ticket name required" >&2
-        echo "Usage: $SCRIPT_COMMAND start [--worktree] <ticket-name>" >&2
+        echo "Usage: $SCRIPT_COMMAND start [--worktree] [--copy-file <path>]... <ticket-name>" >&2
         return 1
     fi
 
@@ -2468,6 +2574,24 @@ cmd_start() {
         use_worktree=true
     fi
     local worktree_dir=$(yaml_get "worktree_dir" || echo "$DEFAULT_WORKTREE_DIR")
+
+    # Resolve worktree_copy_files list (config entries + --copy-file CLI extras).
+    # Read into a bash array via a loop (mapfile isn't available on macOS bash 3.2).
+    # Guard the `"${cli_copy_files[@]}"` expansion: under `set -u`, expanding an
+    # empty array errors out on bash 3.2.
+    local copy_files_list=()
+    if [[ "$use_worktree" == "true" ]]; then
+        local _cf_line
+        if [[ ${#cli_copy_files[@]} -gt 0 ]]; then
+            while IFS= read -r _cf_line; do
+                [[ -n "$_cf_line" ]] && copy_files_list+=("$_cf_line")
+            done < <(resolve_worktree_copy_files "${cli_copy_files[@]}")
+        else
+            while IFS= read -r _cf_line; do
+                [[ -n "$_cf_line" ]] && copy_files_list+=("$_cf_line")
+            done < <(resolve_worktree_copy_files)
+        fi
+    fi
 
     # Get ticket file path early to determine base_branch before switching branches
     local ticket_name=$(extract_ticket_name "$ticket_input")
@@ -2733,6 +2857,11 @@ EOF
         # For new-format tickets this also creates the current-ticket/ dir symlink.
         create_current_ticket_symlinks "$link_dir" "$tickets_dir" "$ticket_name" || return 1
         ensure_ticket_tmp_dir "$link_dir" "$tickets_dir" "$ticket_name"
+        # Populate the worktree with any configured extras (idempotent — skips
+        # entries that already exist in the target).
+        if [[ "$use_worktree" == "true" ]] && [[ ${#copy_files_list[@]} -gt 0 ]]; then
+            copy_worktree_files "$main_repo" "$wt_path" "${copy_files_list[@]}"
+        fi
         echo "Resumed ticket: $ticket_name"
         echo "Continuing work on existing feature branch."
         emit_active_ticket_paths "$link_dir" "$tickets_dir" "$ticket_name"
@@ -2824,6 +2953,11 @@ EOF
         # Resolve layout against the worktree's tree, not cwd's.
         ( cd "$wt_path" && create_current_ticket_symlinks "." "$tickets_dir" "$ticket_name" ) || return 1
         ensure_ticket_tmp_dir "$wt_path" "$tickets_dir" "$ticket_name"
+        # Populate the freshly-created worktree with configured extras (e.g.
+        # gitignored .env). Idempotent — skips entries that already exist.
+        if [[ ${#copy_files_list[@]} -gt 0 ]]; then
+            copy_worktree_files "$main_repo" "$wt_path" "${copy_files_list[@]}"
+        fi
         echo "Started ticket: $ticket_name"
         # Emit resolved paths relative to the worktree (that's where the agent
         # will operate from, per the CAUTION below). The link_dir prefix in the

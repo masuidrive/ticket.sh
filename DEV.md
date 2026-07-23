@@ -122,6 +122,7 @@ The main script uses a case statement to route commands:
 - For legacy flat tickets, only the two compat file symlinks are created (there is no per-ticket directory to link to)
 - Emits an `Active ticket paths:` block listing resolved paths so a downstream agent can consume the output without guessing layout
 - Worktree mode: creates directory at `../<project>.worktrees/<ticket-name>/`
+- Worktree mode: after the worktree is ready and symlinks/`tmp/` are set up, `copy_worktree_files()` runs against the effective `worktree_copy_files` list (config entries + `--copy-file <path>` CLI extras). Each entry: skip if the target exists, warn if the source is missing, otherwise `cp -p`. Silently no-op when the resolved list is empty (default), so the feature is off unless deliberately configured.
 
 #### `close_ticket()`
 - Updates `closed_at` timestamp in `ticket.md`

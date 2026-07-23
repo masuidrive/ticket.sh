@@ -226,6 +226,15 @@ auto_push: true
 # worktree_mode: false    # trueの場合、startは常にworktreeを作成
 # worktree_dir: ""        # カスタムworktreeベースディレクトリ
 
+# start が worktree を作成した直後に main repo からコピーするファイル群。
+# target 側に同名ファイルがあれば skip、source に無ければ warn のみ。
+# gitignore 前提(各人の秘密は各人の worktree にコピーされるだけで拡散しない)。
+# CLI からは --copy-file <path>(反復可)でワンショット追加。
+worktree_copy_files: []
+# 例:
+# worktree_copy_files:
+#   - .env
+
 # チケットテンプレート
 default_content: |
   # Ticket Overview
@@ -268,7 +277,7 @@ default_content: |
 ./ticket.sh init                          # 初期化
 ./ticket.sh new <slug>                    # チケット作成 (slug: lowercase, numbers, hyphens only)
 ./ticket.sh list [--status todo|doing|done] [--count N]  # チケット一覧
-./ticket.sh start [--worktree] <ticket-name>  # チケット開始・ブランチ作成（--worktreeで別ディレクトリ）
+./ticket.sh start [--worktree] [--copy-file <path>]... <ticket-name>  # チケット開始・ブランチ作成（--worktreeで別ディレクトリ、--copy-fileでworktree_copy_filesエントリ追加）
 ./ticket.sh restore                       # current-ticketリンク復元
 ./ticket.sh close [--no-push] [--force|-f]  # チケット完了・マージ処理
 ./ticket.sh cancel [--force|-f]           # マージせずにチケットをキャンセル
@@ -479,7 +488,7 @@ Additional notes or requirements.
   2. Or omit --count to use default (20)
   ```
 
-### `start [--worktree] <ticket-name>`
+### `start [--worktree] [--copy-file <path>]... <ticket-name>`
 チケット作業を開始：
 
 1. 指定チケットの `started_at` に現在時刻を設定
@@ -489,11 +498,21 @@ Additional notes or requirements.
 
 **オプション:**
 - `--worktree`: ブランチ切り替えの代わりに別のgit worktreeを作成。メインリポジトリはデフォルトブランチのまま。worktreeは `../<プロジェクト名>.worktrees/<チケット名>/`（またはconfigの`worktree_dir`）に作成
+- `--copy-file <path>` (反復可): その呼び出し限定で `worktree_copy_files` に path を追加。worktree が実際に作成された場合のみ参照される。
 
 **Worktreeモード:**
 - configで `worktree_mode: true` を設定すると常時有効化
 - worktreeモード使用時、`close`と`cancel`コマンドがworktreeを自動検出・削除
 - `list`コマンドがアクティブなチケットのworktreeパスを表示
+
+**Worktree へのファイルコピー (`worktree_copy_files`):**
+- `start` が worktree を実際に作成した場合にのみ参照される。
+- 各エントリは main repo ワーキングツリー相対の path。
+- source が無い → stderr に warn、続行。
+- target に同名ファイルが既にある → skip(絶対に上書きしない)。
+- 上記以外 → `cp -p` でコピーし、stdout に 1 行ログを出す。
+- gitignore されたファイル前提(各人自身の `.env` が各人の worktree にコピーされるだけで secret は拡散しない)。
+- CLI からは `--copy-file <path>` (反復可) で config を触らずにワンショット追加できる。
 
 **ファイル指定の柔軟性:**
 ```bash

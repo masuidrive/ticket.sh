@@ -227,6 +227,15 @@ auto_push: true
 # worktree_mode: false    # When true, 'start' always creates a worktree
 # worktree_dir: ""        # Custom worktree base directory
 
+# Files copied from main repo into a fresh worktree (only when 'start' actually
+# creates a worktree). Skip if target exists, warn if source missing. Assumes
+# entries are gitignored (secrets stay local per user). One-shot additions via
+# --copy-file <path> (repeatable) on the command line.
+worktree_copy_files: []
+# Example:
+# worktree_copy_files:
+#   - .env
+
 # Ticket template
 default_content: |
   # Ticket Overview
@@ -269,7 +278,7 @@ default_content: |
 ./ticket.sh init                          # Initialize
 ./ticket.sh new <slug>                    # Create ticket (slug: lowercase, numbers, hyphens only)
 ./ticket.sh list [--status todo|doing|done] [--count N]  # List tickets
-./ticket.sh start [--worktree] <ticket-name>  # Start ticket/create branch (--worktree for separate directory)
+./ticket.sh start [--worktree] [--copy-file <path>]... <ticket-name>  # Start ticket/create branch (--worktree for separate directory; --copy-file appends worktree_copy_files entry)
 ./ticket.sh restore                       # Restore current-ticket link
 ./ticket.sh close [--no-push] [--force|-f]  # Complete ticket/merge process
 ./ticket.sh cancel [--force|-f]           # Cancel ticket without merging
@@ -480,7 +489,7 @@ Displays ticket list:
   2. Or omit --count to use default (20)
   ```
 
-### `start [--worktree] <ticket-name>`
+### `start [--worktree] [--copy-file <path>]... <ticket-name>`
 Starts ticket work:
 
 1. Sets current time to specified ticket's `started_at`
@@ -491,11 +500,21 @@ Starts ticket work:
 
 **Options:**
 - `--worktree`: Creates a separate git worktree instead of switching branches. The main repository stays on the default branch. Worktree is created at `../<project>.worktrees/<ticket-name>/` (or custom `worktree_dir` if configured)
+- `--copy-file <path>` (repeatable): appends the given path to `worktree_copy_files` for this invocation only. Ignored unless a worktree is actually created.
 
 **Worktree Mode:**
 - Can be enabled permanently via `worktree_mode: true` in config
 - When using worktree mode, `close` and `cancel` commands automatically detect and remove the worktree
 - `list` command shows worktree path for active tickets
+
+**Worktree file copy (`worktree_copy_files`):**
+- Consulted only when `start` actually creates a worktree.
+- Each entry is a repo-relative path resolved against the main repo working tree.
+- If source is missing → warn to stderr and continue.
+- If the target already contains the file → skip (never overwrite).
+- Otherwise copy with `cp -p` and log a line to stdout.
+- Assumes entries are gitignored so secrets stay local per user (each collaborator's own `.env` is copied into their own worktree).
+- Combine with `--copy-file <path>` on the CLI to add one-shot extras without touching config.
 
 **File Specification Flexibility:**
 ```bash

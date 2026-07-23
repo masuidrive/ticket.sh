@@ -170,7 +170,7 @@ tickets/
 - `init` - チケットシステムを初期化（冪等性、再実行安全）
 - `new <slug>` - 新しいチケットを作成
 - `list [--status todo|doing|done|canceled] [--count N]` - チケット一覧
-- `start [--worktree] <ticket>` - チケットの作業を開始（--worktreeで別ディレクトリにworktreeを作成）
+- `start [--worktree] [--copy-file <path>]... <ticket>` - チケットの作業を開始（--worktree で別ディレクトリに worktree を作成、--copy-file で `worktree_copy_files` にワンショットで path 追加）
 - `close [--no-push] [--force] [--no-delete-remote]` - チケットを完了
 - `cancel [--force|-f]` - マージせずにチケットをキャンセル
 - `restore` - アクティブチケット symlink 群 (`current-ticket/`, `current-ticket.md`, `current-note.md`) を現在ブランチ名から再構築
@@ -214,6 +214,16 @@ delete_remote_on_close: true
 # When true, 'start' always creates a worktree (same as --worktree flag)
 # worktree_mode: false
 # worktree_dir: ""  # Custom worktree base directory (default: ../<project>.worktrees/)
+
+# 新しく作成された worktree に main repo からコピーするファイル群。
+# 'start' が実際に worktree を作った場合にのみ参照される。target 側に
+# 同名ファイルが既にあれば skip(絶対に上書きしない)、source 側になければ
+# warn のみで続行。gitignore されたファイル前提(各人の秘密は各人の
+# worktree にコピーされるだけで拡散しない)。CLI からは
+# --copy-file <path>(反復可)で追加できる。
+# worktree_copy_files:
+#   - .env
+worktree_copy_files: []
 
 # Success messages (leave empty to disable)
 # Message displayed after starting work on a ticket
@@ -331,6 +341,7 @@ default_content: |
 - **自動クリーンアップ**: `close`と`cancel`コマンドがworktreeを自動削除
 - **設定モード**: configで`worktree_mode: true`を設定すると常にworktreeを使用
 - **カスタムディレクトリ**: configで`worktree_dir`を設定してworktreeの場所をカスタマイズ（デフォルト: `../<プロジェクト名>.worktrees/`）
+- **worktree 用ファイルコピー**: config の `worktree_copy_files: [".env"]` (任意の repo 相対 path のリスト)を指定すると、start が worktree を作った直後に main repo からその path 群を worktree へコピー。target 側に既にあれば上書きせず skip、source に無ければ warn のみで続行。ワンショットは `start --worktree --copy-file <path>` (反復可)。gitignore された `.env` 等を新 worktree でも即座に使うことを想定 — gitignore 前提なので、共有 config に入っていても各人自身の `.env` が各人の worktree にコピーされるだけで secret は拡散しない。
 
 ### エラー回復
 - **checkコマンド**: 問題を診断して次のステップのガイダンス提供

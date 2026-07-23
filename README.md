@@ -170,7 +170,7 @@ They are never auto-migrated to the new layout; convert on your own schedule.
 - `init` - Initialize ticket system (idempotent, safe to re-run)
 - `new <slug> [--epic <epic-slug>] [--created-at <YYMMDD-hhmmss>]` - Create new ticket (`--created-at` overrides the auto-generated timestamp; the value is used verbatim as the filename prefix and as `created_at` in UTC)
 - `list [--status todo|doing|done|canceled] [--count N]` - List tickets
-- `start [--worktree] <ticket>` - Start working on ticket (--worktree creates a separate worktree)
+- `start [--worktree] [--copy-file <path>]... <ticket>` - Start working on ticket (--worktree creates a separate worktree; --copy-file appends paths to `worktree_copy_files` at invocation time)
 - `close [--no-push] [--force] [--no-delete-remote] [--dry-run|-n] [--keep-worktree]` - Complete ticket
 - `cancel [--force|-f] [--keep-worktree]` - Cancel ticket without merging
 - `restore` - Rebuild the active-ticket symlinks (`current-ticket/`, `current-ticket.md`, `current-note.md`) from the current branch name
@@ -291,6 +291,16 @@ delete_remote_on_close: true
 # When true, 'start' always creates a worktree (same as --worktree flag)
 # worktree_mode: false
 # worktree_dir: ""  # Custom worktree base directory (default: ../<project>.worktrees/)
+
+# Files copied from the main repo into a freshly-created worktree.
+# Consulted only when 'start' actually creates a worktree. Existing files in
+# the target are never overwritten; missing sources warn and continue.
+# Assumes the listed files are gitignored (secrets stay local per user).
+# One-shot entries can be added via --copy-file <path> (repeatable) on the
+# command line.
+# worktree_copy_files:
+#   - .env
+worktree_copy_files: []
 
 # Success messages (leave empty to disable)
 # Message displayed after starting work on a ticket
@@ -413,6 +423,7 @@ default_content: |
   - You are on a feature branch with uncommitted changes (no stash, no checkout)
   - You are already inside another worktree (e.g. a previous ticket's worktree)
   - Multiple AI agents (Claude Code, etc.) are running in parallel from different worktrees
+- **Populate worktree extras**: Set `worktree_copy_files: [".env"]` (or any list of repo-relative paths) in config to copy those files from the main repo into a freshly-created worktree. Existing files in the target are never overwritten; missing sources warn and continue. One-shot additions: `start --worktree --copy-file <path>` (repeatable). Intended for gitignored helpers like `.env` — the assumption is those files are gitignored, so each collaborator's own `.env` is copied into their own worktree and secrets stay local.
 
 ### Check Command Diagnostics
 
