@@ -252,6 +252,8 @@ be recognized by every command; they are never auto-migrated.
 - Config file: \`.ticket-config.yaml\` or \`.ticket-config.yml\` (in project root)
 - Initialize with: \`$SCRIPT_COMMAND init\`
 - Edit to customize directories, branches, templates, and success messages
+- \`no_verify: true\` skips Git hooks on commits ticket.sh makes itself, such as
+  the start-time stamp. Hooks run by default.
 
 ### Worktree extras
 
@@ -280,9 +282,10 @@ be recognized by every command; they are never auto-migrated.
 
 ## Push Control
 
-- Set \`auto_push: false\` in config to disable automatic pushing for close command
-- Use \`--no-push\` flag with close command to skip pushing
-- Feature branches are always created locally (no auto-push on start)
+- Set \`auto_push: false\` in config to disable automatic pushing on start and close
+- Use \`--no-push\` with \`start\` or \`close\` to skip pushing for that invocation
+- \`start\` pushes the base branch after recording the start time. The feature
+  branch itself is always left local until you push it yourself
 - Git commands and outputs are displayed for transparency
 
 ## Workflow
