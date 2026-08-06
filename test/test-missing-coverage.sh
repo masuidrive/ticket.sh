@@ -41,26 +41,23 @@ setup_test
 git add tickets .ticket-config.yaml && git commit -q -m "add ticket"
 TICKET_NAME=$(safe_get_ticket_name "*test-file.md")
 
-# Test all three ways to specify ticket
+# Test all three ways to specify ticket. They name the same ticket, so the first
+# call starts it and the rest find the existing branch and resume.
 ./ticket.sh start "tickets/${TICKET_NAME}.md" --no-push >/dev/null 2>&1
-git add tickets current-ticket.md && git commit -q -m "start" && git checkout -q main
+git checkout -q main
 
-if timeout 5 ./ticket.sh start "${TICKET_NAME}.md" --no-push >/dev/null 2>&1; then
-    test_result 1 "Should not allow starting already started ticket"
+STARTED_BY_MD=0
+timeout 5 ./ticket.sh start "${TICKET_NAME}.md" --no-push >/dev/null 2>&1 && STARTED_BY_MD=1
+git checkout -q main
+
+STARTED_BY_NAME=0
+timeout 5 ./ticket.sh start "$TICKET_NAME" --no-push >/dev/null 2>&1 && STARTED_BY_NAME=1
+
+if [[ $STARTED_BY_MD -eq 1 ]] && [[ $STARTED_BY_NAME -eq 1 ]]; then
+    test_result 0 "All three file specification methods work correctly"
 else
-    # Try with just ticket name
-    git checkout -q "feature/$TICKET_NAME" 2>/dev/null
-    git checkout -q main
-    if [[ -f current-ticket.md ]]; then
-        rm current-ticket.md
-    fi
-    
-    # Test with just the ticket name (no .md extension)
-    if timeout 5 ./ticket.sh start "$TICKET_NAME" --no-push >/dev/null 2>&1; then
-        test_result 1 "Should not allow starting already started ticket"
-    else
-        test_result 0 "All three file specification methods work correctly"
-    fi
+    test_result 1 "All three file specification methods should resolve the ticket" \
+        "with-extension=$STARTED_BY_MD bare-name=$STARTED_BY_NAME"
 fi
 
 # Test 2: Closing unstarted ticket

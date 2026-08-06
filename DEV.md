@@ -303,6 +303,13 @@ Documentation updates should be part of the same PR as code changes.
 4. **Timezone-aware**: Converts UTC timestamps to local timezone for display
 5. **Error recovery**: Comprehensive diagnostic and recovery commands
 6. **Cross-platform**: Works consistently across different Unix-like systems
+7. **No sidecar state files**: A ticket's state lives in its YAML frontmatter and
+   nowhere else. We do not keep a `tickets/.state.json` or similar. Such a file
+   would have to be gitignored, so it would not survive a clone and would never
+   reach a collaborator, a worktree, or CI — while duplicating what the
+   frontmatter already holds, with no way to settle which copy is right once the
+   two drift. When state needs to be visible from another branch, commit it
+   there (see `record_start_on_base`), don't shadow it in an untracked file.
 
 ### Recent Enhancements
 

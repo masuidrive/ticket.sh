@@ -295,6 +295,90 @@ run_git_command() {
     return $exit_code
 }
 
+# Find the working tree that has <branch> checked out, if any.
+# Prints its path, or nothing when the branch is checked out nowhere.
+#
+# Usage: worktree_holding_branch <repo> <branch>
+worktree_holding_branch() {
+    local repo="$1"
+    local branch="$2"
+
+    git -C "$repo" worktree list --porcelain 2>/dev/null \
+        | awk -v target="branch refs/heads/${branch}" '/^worktree /{wt=$0} $0==target{print wt}' \
+        | sed 's/^worktree //'
+}
+
+# Remove <rel_path> from <wt> when it is untracked there and still hashes to
+# <expected_hash>.
+#
+# Untracked files block a fast-forward that would create them. Removing one is
+# only safe when nothing would be lost: it must still match the snapshot taken
+# before the commit was built, which rules out both an edit that exists only in
+# this tree and a change made by someone else while we worked.
+#
+# Usage: drop_untracked_if_unchanged <worktree> <rel_path> <expected_hash>
+drop_untracked_if_unchanged() {
+    local wt="$1"
+    local rel_path="$2"
+    local expected_hash="$3"
+
+    [[ -f "${wt}/${rel_path}" ]] || return 0
+    [[ -n "$expected_hash" ]] || return 1
+
+    # Tracked files are git's business: it knows how to update them, and
+    # refuses on its own when they carry local changes.
+    if git -C "$wt" ls-files --error-unmatch -- "$rel_path" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    local current_hash
+    current_hash=$(git -C "$wt" hash-object -- "${wt}/${rel_path}" 2>/dev/null) || return 1
+    [[ "$current_hash" == "$expected_hash" ]] || return 1
+
+    rm -f "${wt}/${rel_path}"
+}
+
+# Fast-forward <branch> to <commit-ish>.
+#
+# The mechanism depends on whether the branch is checked out somewhere, not on
+# worktree mode. The two cases are mutually exclusive: git refuses to fetch into
+# a checked-out branch, and a branch nobody has checked out has no working tree
+# to merge in.
+#
+# Optional <path> <hash> pairs name files that may be removed from the target
+# working tree first if they are still untracked and unchanged - see
+# drop_untracked_if_unchanged. A ticket created by 'new' (which makes no commit)
+# sits there untracked and would otherwise block the fast-forward.
+#
+# Returns non-zero when the fast-forward isn't possible - the branch moved on,
+# or the target tree has conflicting local changes. Callers are expected to warn
+# and carry on: this is bookkeeping, not the user's work.
+#
+# Usage: advance_branch_ff <repo> <branch> <commit-ish> [<path> <hash>]...
+advance_branch_ff() {
+    local repo="$1"
+    local branch="$2"
+    local commit="$3"
+    shift 3
+
+    local wt
+    wt=$(worktree_holding_branch "$repo" "$branch")
+
+    if [[ -z "$wt" ]]; then
+        # Nobody has it checked out, so move the ref directly. git rejects a
+        # non-fast-forward update here by itself.
+        git -C "$repo" fetch . "${commit}:${branch}" >/dev/null 2>&1
+        return $?
+    fi
+
+    while [[ $# -ge 2 ]]; do
+        drop_untracked_if_unchanged "$wt" "$1" "$2"
+        shift 2
+    done
+
+    git -C "$wt" merge --ff-only "$commit" >/dev/null 2>&1
+}
+
 # Format ISO 8601 UTC timestamp
 get_utc_timestamp() {
     date -u '+%Y-%m-%dT%H:%M:%SZ'

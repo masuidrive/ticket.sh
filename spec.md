@@ -77,6 +77,17 @@ canceled_at: null  # Do not modify manually
 - **done**: `closed_at` is set
 - **canceled**: `canceled_at` is set
 
+**The YAML frontmatter is the only place state lives.** ticket.sh keeps no
+sidecar state file (`tickets/.state.json` or similar) and will not grow one.
+Such a file would have to be gitignored, so it would not survive a clone, would
+not reach a collaborator, a worktree, or CI — all while duplicating what the
+frontmatter already records, with no way to decide which copy is right once the
+two drift. Anything worth knowing about a ticket is committed with the ticket.
+
+That is why `start` records `started_at` as a commit on the feature branch and
+fast-forwards the base branch onto it: the ticket then reads as `doing` from
+either branch, without a second source of truth.
+
 #### Branch Integration
 - Work performed on `feature/<ticket-name>` branches
 - `start` creates three symlinks at the repo root pointing at the active ticket:
@@ -221,7 +232,11 @@ tickets_dir: "tickets"
 default_branch: "develop" 
 branch_prefix: "feature/"
 repository: "origin"
-auto_push: true
+auto_push: true          # Push the base branch on start, and on close
+
+# Skip Git hooks (--no-verify) on commits ticket.sh makes itself, such as the
+# start-time stamp. Hooks run by default.
+no_verify: false
 
 # Worktree mode (optional)
 # worktree_mode: false    # When true, 'start' always creates a worktree
@@ -257,6 +272,7 @@ default_branch: "develop"
 branch_prefix: "feature/"
 repository: "origin"
 auto_push: true
+no_verify: false
 default_content: |
   # Ticket Overview
   
@@ -489,18 +505,36 @@ Displays ticket list:
   2. Or omit --count to use default (20)
   ```
 
-### `start [--worktree] [--copy-file <path>]... <ticket-name>`
+### `start [--worktree] [--no-push] [--copy-file <path>]... <ticket-name>`
 Starts ticket work:
 
 1. Sets current time to specified ticket's `started_at`
 2. Creates Git branch as `{branch_prefix}<basename>`
-3. Creates active-ticket symlinks: `current-ticket/` (dir symlink, new layout only), `current-ticket.md`, and `current-note.md`
-4. Emits an `Active ticket paths:` block listing the resolved paths (layout, ticket, note, ticket_dir/tmp_dir for new layout, and every symlink correspondence)
-5. Displays executed Git commands and output in detail
+3. Commits the stamp on the feature branch as `[start] {branch}` and fast-forwards the base branch onto that commit (see **Recording the start time** below)
+4. Creates active-ticket symlinks: `current-ticket/` (dir symlink, new layout only), `current-ticket.md`, and `current-note.md`
+5. Emits an `Active ticket paths:` block listing the resolved paths (layout, ticket, note, ticket_dir/tmp_dir for new layout, and every symlink correspondence)
+6. Displays executed Git commands and output in detail
 
 **Options:**
 - `--worktree`: Creates a separate git worktree instead of switching branches. The main repository stays on the default branch. Worktree is created at `../<project>.worktrees/<ticket-name>/` (or custom `worktree_dir` if configured)
+- `--no-push`: Skips pushing the base branch even when `auto_push: true`
 - `--copy-file <path>` (repeatable): appends the given path to `worktree_copy_files` for this invocation only. Ignored unless a worktree is actually created.
+
+**Recording the start time:**
+
+Without this step, `started_at` would exist only in the feature branch's working
+tree, so `list` run from the base branch would still call the ticket `todo`.
+This is not specific to worktree mode — in-place mode has the same gap whenever
+you switch back to the base branch.
+
+- The stamp is committed on the feature branch, then the **base branch** is fast-forwarded onto that commit. The base branch is the ticket's `base_branch` when set, otherwise `default_branch`.
+- Committing on the feature branch and fast-forwarding (rather than writing to the base branch directly) is what keeps `close` working: the merge base moves along with it, so close's divergence preflight sees no base-side edit to the ticket file, and its squash-merge finds no local changes to overwrite.
+- How the fast-forward happens depends on whether the base branch is checked out somewhere, not on worktree mode: a checked-out branch is advanced with `merge --ff-only` in its own working tree, one nobody holds with `fetch . <feature>:<base>`. The two cases are mutually exclusive.
+- A ticket created by `new` is untracked (`new` makes no commit). Such a file would block the fast-forward, so it is removed from the base branch's working tree first — but only when it still hashes to what `start` read, meaning nothing is lost.
+- The fast-forward is best-effort. If the base branch has moved on, or its working tree holds conflicting changes, `start` reports it and carries on; `started_at` is committed on the feature branch either way.
+- With `auto_push: true` (and no `--no-push`), the base branch is pushed afterwards. A failed push is a warning, not a failure.
+- Git hooks run on this commit. Set `no_verify: true` in config to skip them.
+- Resuming an already-started ticket does not re-stamp or re-record anything.
 
 **Worktree Mode:**
 - Can be enabled permanently via `worktree_mode: true` in config

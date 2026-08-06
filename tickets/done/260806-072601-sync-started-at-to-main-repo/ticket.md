@@ -3,8 +3,8 @@ priority: 2
 base_branch: default  # Override base branch for start/close (default: use default_branch from config)
 description: "start 時に started_at を feature branch でコミットし、base branch を ff で進めて反映する（モード非依存）。併せて「サイドカー state ファイルは使わない」設計方針を明文化する。"
 created_at: "2026-08-06T07:26:01Z"
-started_at: null  # Do not modify manually
-closed_at: null   # Do not modify manually
+started_at: 2026-08-06T07:54:24Z # Do not modify manually
+closed_at: 2026-08-06T09:23:34Z # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
 
@@ -145,31 +145,31 @@ feature 側は `closed_at` も足すので必ず同じパスを touch する →
 
 ## Tasks
 
-- [ ] base branch を ff で進めるヘルパー（`merge --ff-only` / `fetch .` の2手段）を実装する
-- [ ] ff 直前に base 側の untracked チケットファイルを安全に取り除く処理を実装する
+- [x] base branch を ff で進めるヘルパー（`merge --ff-only` / `fetch .` の2手段）を実装する
+- [x] ff 直前に base 側の untracked チケットファイルを安全に取り除く処理を実装する
       （`start` 冒頭で記録したコピー元の `git hash-object` と ff 直前の再計算が一致する場合のみ
       削除。不一致なら触らず警告してフォールバック）
-- [ ] `cmd_start` に started_at コミット + ヘルパー呼び出しを実装する（モード非依存の共通経路）
+- [x] `cmd_start` に started_at コミット + ヘルパー呼び出しを実装する（モード非依存の共通経路）
       — コミット対象は ticket.md / note.md のパス指定に限定
-- [ ] ff できない場合のフォールバック（警告のみで続行）を実装する
-- [ ] hook スキップ用の config キー（既定 `false` = verify する）を追加する
-- [ ] `auto_push` 有効時に ff 後の base branch を push する（失敗は警告に留める）
-- [ ] 対象ブランチが `default_branch` ではなく `effective_base` であることを確認する
+- [x] ff できない場合のフォールバック（警告のみで続行）を実装する
+- [x] hook スキップ用の config キー（既定 `false` = verify する）を追加する
+- [x] `auto_push` 有効時に ff 後の base branch を push する（失敗は警告に留める）
+- [x] 対象ブランチが `default_branch` ではなく `effective_base` であることを確認する
       （ticket に `base_branch:` 指定があるケース）
-- [ ] worktree / 非 worktree の両方で同じ結果になることを確認する
-- [ ] base branch が別の worktree にチェックアウトされているケースを確認する
-- [ ] レガシー flat レイアウトでも動作することを確認する
-- [ ] `close` / `cancel` が新しい履歴形状で正常に動くことを確認する（プリフライト・squash merge）
-- [ ] epic 系コマンドに干渉しないことを確認する
-- [ ] テストを追加する（base 側 started_at 反映 / new→start の untracked 経路 / 2手段の分岐 /
+- [x] worktree / 非 worktree の両方で同じ結果になることを確認する
+- [x] base branch が別の worktree にチェックアウトされているケースを確認する
+- [x] レガシー flat レイアウトでも動作することを確認する
+- [x] `close` / `cancel` が新しい履歴形状で正常に動くことを確認する（プリフライト・squash merge）
+- [x] epic 系コマンドに干渉しないことを確認する
+- [x] テストを追加する（base 側 started_at 反映 / new→start の untracked 経路 / 2手段の分岐 /
       ff 不可時のフォールバック / base_branch 指定 / hook スキップ設定 / close 通過）
-- [ ] 新しい config キーを README.*.md / spec.*.md の設定一覧に追記する
-- [ ] Run tests before closing and pass all tests (No exceptions)
-  - [ ] `test/run-all.sh`
-  - [ ] `test/run-all-on-docker.sh`
-- [ ] Run `bash build.sh` to build the project
-- [ ] Update documentation if necessary
-  - [ ] Update README.*.md
-  - [ ] Update spec.*.md — State Management に「サイドカー state ファイルは使わない」を明記 + start の挙動
-  - [ ] Update DEV.md — Key Design Decisions に同方針を追加
+- [x] 新しい config キーを README.*.md / spec.*.md の設定一覧に追記する
+- [x] Run tests before closing and pass all tests (No exceptions)
+  - [x] `test/run-all.sh`
+  - [x] `test/run-all-on-docker.sh`
+- [x] Run `bash build.sh` to build the project
+- [x] Update documentation if necessary
+  - [x] Update README.*.md
+  - [x] Update spec.*.md — State Management に「サイドカー state ファイルは使わない」を明記 + start の挙動
+  - [x] Update DEV.md — Key Design Decisions に同方針を追加
 - [ ] Get developer approval before closing

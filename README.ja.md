@@ -101,6 +101,11 @@ cp ticket.sh /usr/local/bin/
 3. **作業開始**: `./ticket.sh start <ticket-name>`
 4. **チケット完了**: `./ticket.sh close`（または `./ticket.sh cancel` でキャンセル）
 
+`start` は開始時刻を feature branch にコミットし、base branch をそのコミットへ
+fast-forward します。そのため `list` はどちらのブランチから実行しても `doing` と表示します。
+base branch が先に進んでいる場合は fast-forward を行わず、その旨を表示して開始時刻は
+feature branch 側に残ります。
+
 ## チケットのレイアウト
 
 各チケットは **per-ticket ディレクトリ** に置かれます：
@@ -202,9 +207,13 @@ default_branch: "main"
 branch_prefix: "feature/"
 repository: "origin"
 
-# Automatically push changes to remote repository during close command
-# Set to false if you want to manually control when to push
+# start と close で base branch を remote に push する
+# 手動で push を制御したい場合は false にする
 auto_push: true
+
+# ticket.sh 自身が作るコミット（start の開始時刻記録など）で Git hook を
+# スキップする（--no-verify）。既定では hook を実行する。
+no_verify: false
 
 # Automatically delete remote feature branch after closing ticket
 # Set to false if you want to keep remote branches for history

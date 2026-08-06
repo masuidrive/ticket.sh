@@ -77,6 +77,17 @@ canceled_at: null  # Do not modify manually
 - **done**: `closed_at` 設定済み
 - **canceled**: `canceled_at` 設定済み
 
+**状態は YAML frontmatter だけに置く。** ticket.sh は状態記録用のサイドカーファイル
+（`tickets/.state.json` 等）を持たないし、今後も追加しない。この種のファイルは gitignore
+される前提になるため、clone をまたいで残らず、共同作業者にも worktree にも CI にも届かない。
+それでいて frontmatter が既に記録している内容を二重に持つことになり、両者がずれたときに
+どちらが正しいか決める手段がない。チケットについて知る価値のあることは、チケットと一緒に
+コミットする。
+
+`start` が `started_at` を feature branch のコミットとして記録し、base branch をそこへ
+fast-forward するのはこのためである。二つ目の真実を作らずに、どちらのブランチから見ても
+`doing` と読めるようにしている。
+
 #### ブランチ連携
 - 作業は `feature/<チケット名>` ブランチで実施
 - `start` はリポジトリ直下に 3 本の symlink を作成してアクティブチケットを指す：
@@ -220,7 +231,11 @@ tickets_dir: "tickets"
 default_branch: "develop" 
 branch_prefix: "feature/"
 repository: "origin"
-auto_push: true
+auto_push: true          # start と close で base branch を push する
+
+# ticket.sh 自身が作るコミット（start の開始時刻記録など）で Git hook を
+# スキップする（--no-verify）。既定では hook を実行する。
+no_verify: false
 
 # Worktreeモード（オプション）
 # worktree_mode: false    # trueの場合、startは常にworktreeを作成
@@ -256,6 +271,7 @@ default_branch: "develop"
 branch_prefix: "feature/"
 repository: "origin"
 auto_push: true
+no_verify: false
 default_content: |
   # Ticket Overview
   
@@ -488,17 +504,34 @@ Additional notes or requirements.
   2. Or omit --count to use default (20)
   ```
 
-### `start [--worktree] [--copy-file <path>]... <ticket-name>`
+### `start [--worktree] [--no-push] [--copy-file <path>]... <ticket-name>`
 チケット作業を開始：
 
 1. 指定チケットの `started_at` に現在時刻を設定
 2. Gitブランチを `{branch_prefix}<basename>` として作成
-3. アクティブチケット symlink 群を作成: `current-ticket/`（dir symlink、新形式のみ）、`current-ticket.md`、`current-note.md`。加えて `Active ticket paths:` ブロックを emit（下流エージェントが解決済みパスを消費できる）
-4. 実行したGitコマンドと出力を詳細表示
+3. その記録を feature branch に `[start] {branch}` としてコミットし、base branch をそのコミットへ fast-forward（後述の **開始時刻の記録** を参照）
+4. アクティブチケット symlink 群を作成: `current-ticket/`（dir symlink、新形式のみ）、`current-ticket.md`、`current-note.md`。加えて `Active ticket paths:` ブロックを emit（下流エージェントが解決済みパスを消費できる）
+5. 実行したGitコマンドと出力を詳細表示
 
 **オプション:**
 - `--worktree`: ブランチ切り替えの代わりに別のgit worktreeを作成。メインリポジトリはデフォルトブランチのまま。worktreeは `../<プロジェクト名>.worktrees/<チケット名>/`（またはconfigの`worktree_dir`）に作成
+- `--no-push`: `auto_push: true` でも base branch の push を行わない
 - `--copy-file <path>` (反復可): その呼び出し限定で `worktree_copy_files` に path を追加。worktree が実際に作成された場合のみ参照される。
+
+**開始時刻の記録:**
+
+この処理が無いと `started_at` は feature branch のワーキングツリーにしか存在せず、base
+branch から `list` してもチケットは `todo` のままに見える。これは worktree モード固有の
+問題ではなく、in-place モードでも base branch に戻れば同じことが起きる。
+
+- 記録は feature branch にコミットし、そのコミットへ **base branch** を fast-forward する。base branch はチケットに `base_branch` があればそれ、無ければ `default_branch`。
+- base branch に直接書くのではなく「feature branch でコミットして fast-forward」する形にしているのは `close` を壊さないため。merge base が一緒に進むので、close の差分プリフライトは base 側の ticket file 変更を検出せず、squash merge も上書き対象のローカル変更を見つけない。
+- fast-forward の方法は worktree モードかどうかではなく、**base branch がどこかにチェックアウトされているか**で決まる。チェックアウト済みならその作業ツリーで `merge --ff-only`、どこにも無ければ `fetch . <feature>:<base>`。両者は排他。
+- `new` が作ったチケットは untracked（`new` はコミットしない）。そのままでは fast-forward を妨げるため、事前に base branch 側の作業ツリーから取り除く。ただし `start` が読んだ時点と同じ内容である場合に限る（＝失われるものが無いことを確認してから消す）。
+- fast-forward は best-effort。base branch が先に進んでいたり、その作業ツリーに競合する変更があれば、その旨を報告して処理を続行する。`started_at` はいずれにせよ feature branch にコミットされている。
+- `auto_push: true`（かつ `--no-push` 未指定）なら base branch を push する。push 失敗は警告であり、`start` の失敗ではない。
+- このコミットでは Git hook が実行される。config の `no_verify: true` でスキップできる。
+- 開始済みチケットの resume では再記録は行わない。
 
 **Worktreeモード:**
 - configで `worktree_mode: true` を設定すると常時有効化

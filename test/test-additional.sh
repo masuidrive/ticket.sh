@@ -92,12 +92,18 @@ echo -e "\n2. Testing start on already started ticket..."
 git add tickets .ticket-config.yaml && git commit -q -m "add tickets"
 TICKET_NAME="$FIRST_TICKET"
 ./ticket.sh start "$TICKET_NAME" --no-push >/dev/null 2>&1
-git add tickets current-ticket.md && git commit -q -m "update"
 git checkout -q main
+# 'start' commits started_at and fast-forwards the base branch onto it, so main
+# is clean here. The second start finds the existing branch and resumes.
 if timeout 5 ./ticket.sh start "$TICKET_NAME" --no-push >/dev/null 2>&1; then
-    test_result 1 "Should not allow starting already started ticket"
+    CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+    if [[ "$CURRENT_BRANCH" == "feature/$TICKET_NAME" ]]; then
+        test_result 0 "Re-starting an already started ticket resumes it"
+    else
+        test_result 1 "Resume should return to the feature branch" "on $CURRENT_BRANCH"
+    fi
 else
-    test_result 0 "Correctly prevents starting already started ticket"
+    test_result 1 "Re-starting an already started ticket should resume, not fail"
 fi
 
 # Test 3: Close from wrong branch

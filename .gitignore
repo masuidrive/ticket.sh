@@ -4,6 +4,8 @@ current-ticket
 .DS_Store
 .claude
 tmp
-test-*
+# Scratch dirs test runs leave at the repo root. Anchored with a leading slash
+# so they don't also swallow the suite itself under test/.
+/test-*
 test*.yml
 test_*.sh

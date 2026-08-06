@@ -101,6 +101,11 @@ cp ticket.sh /usr/local/bin/
 3. **Start work**: `./ticket.sh start <ticket-name>`
 4. **Close ticket**: `./ticket.sh close` (or `./ticket.sh cancel` to abandon)
 
+`start` commits the start time on the feature branch and fast-forwards the base
+branch onto that commit, so `list` reports the ticket as `doing` from either
+branch. If the base branch has moved on, the fast-forward is skipped with a note
+and the start time stays on the feature branch.
+
 ## Ticket Layout
 
 Each ticket lives in its own **per-ticket directory**:
@@ -279,9 +284,13 @@ default_branch: "main"
 branch_prefix: "feature/"
 repository: "origin"
 
-# Automatically push changes to remote repository during close command
+# Automatically push changes to remote repository during start and close
 # Set to false if you want to manually control when to push
 auto_push: true
+
+# Skip Git hooks (--no-verify) on commits ticket.sh makes itself, such as the
+# start-time stamp. Hooks run by default.
+no_verify: false
 
 # Automatically delete remote feature branch after closing ticket
 # Set to false if you want to keep remote branches for history

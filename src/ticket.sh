@@ -135,6 +135,7 @@ DEFAULT_RESTORE_SUCCESS_MESSAGE=""
 DEFAULT_CLOSE_SUCCESS_MESSAGE=""
 DEFAULT_WORKTREE_MODE="false"
 DEFAULT_WORKTREE_DIR=""  # Empty means auto: ../<project-name>.worktrees
+DEFAULT_NO_VERIFY="false"  # Run Git hooks on commits ticket.sh makes itself
 DEFAULT_CONTENT='# Ticket Overview
 
 Write the overview and tasks for this ticket here.
@@ -212,8 +213,9 @@ be recognized by every command; they are never auto-migrated.
 - \`$SCRIPT_COMMAND init\` - Initialize system (create config, directories, .gitignore)
 - \`$SCRIPT_COMMAND new <slug> [--epic <epic-slug>] [--created-at <YYMMDD-hhmmss>]\` - Create new ticket file (slug: lowercase, numbers, hyphens only; --created-at overrides the timestamp, used as filename prefix and UTC created_at)
 - \`$SCRIPT_COMMAND list [--status STATUS] [--count N]\` - List tickets (default: todo + doing, count: 20)
-- \`$SCRIPT_COMMAND start [--worktree] [--copy-file <path>]... <ticket-name>\` - Start working on ticket (creates or switches to feature branch, --worktree creates a separate worktree)
+- \`$SCRIPT_COMMAND start [--worktree] [--no-push] [--copy-file <path>]... <ticket-name>\` - Start working on ticket (creates or switches to feature branch, --worktree creates a separate worktree)
   - With \`--worktree\`: **cd to the worktree directory after start; cd back to the main repo after close.** In environments where cwd resets each command (e.g. LLM agents), cd must be re-run every time.
+  - \`start\` commits \`started_at\` on the feature branch and fast-forwards the base branch onto that commit, so the ticket shows as \`doing\` from the base branch too. With \`auto_push\` enabled the base branch is pushed; \`--no-push\` skips that. If the base branch has moved on, the fast-forward is skipped with a note and the start time stays on the feature branch.
   - \`--copy-file <path>\` (repeatable) copies the given file from the main repo into the new worktree, appended to the \`worktree_copy_files\` config list. Only applied when a worktree is created. Existing files in the target are never overwritten; missing sources warn and continue. Typical use: bringing gitignored \`.env\` into the worktree.
 - \`$SCRIPT_COMMAND restore\` - Restore current-ticket.md symlink from branch name
 - \`$SCRIPT_COMMAND check\` - Check current directory and ticket/branch synchronization status
@@ -384,9 +386,14 @@ default_branch: "$default_branch_value"
 branch_prefix: "$DEFAULT_BRANCH_PREFIX"
 repository: "$DEFAULT_REPOSITORY"
 
-# Automatically push changes to remote repository during close command
+# Automatically push changes to remote repository during start and close
 # Set to false if you want to manually control when to push
 auto_push: $DEFAULT_AUTO_PUSH
+
+# Skip Git hooks (--no-verify) on commits ticket.sh makes itself, such as the
+# start-time stamp. Hooks run by default; set to true if a slow or strict
+# pre-commit hook gets in the way of ticket bookkeeping.
+no_verify: $DEFAULT_NO_VERIFY
 
 # Automatically delete remote feature branch after closing ticket
 # Set to false if you want to keep remote branches for history
@@ -623,7 +630,8 @@ EOF
     echo "   - tickets_dir: Where tickets are stored (default: \"tickets\")"
     echo "   - default_branch: Main development branch (default: \"develop\")"
     echo "   - branch_prefix: Feature branch naming (default: \"feature/\")"
-    echo "   - auto_push: Push on close (default: true)"
+    echo "   - auto_push: Push on start and close (default: true)"
+    echo "   - no_verify: Skip Git hooks on ticket.sh's own commits (default: false)"
     echo "   - default_content: Template for new tickets"
     echo ""
     echo "2. **Get AI assistant instructions for your coding agent:**"
@@ -1328,7 +1336,7 @@ EOF
             fi
             local _branch_prefix=$(yaml_get "branch_prefix" || echo "$DEFAULT_BRANCH_PREFIX")
             local _branch="${_branch_prefix}${_ticket_basename}"
-            local _wt_path=$(git worktree list --porcelain 2>/dev/null | awk -v branch="branch refs/heads/$_branch" '/^worktree /{wt=$0} $0==branch{print wt}' | sed 's/^worktree //')
+            local _wt_path=$(worktree_holding_branch "." "$_branch")
             if [[ -n "$_wt_path" ]]; then
                 echo "  worktree: $_wt_path"
             fi
@@ -1351,10 +1359,95 @@ EOF
     return 0
 }
 
+# Record the ticket's start time on the base branch.
+#
+# 'start' stamps started_at into the feature branch's working tree only, so the
+# base branch keeps showing the ticket as todo: 'list' run from there cannot
+# tell that anyone is working on it. Commit the stamp on the feature branch and
+# fast-forward the base branch onto that commit, so both views agree.
+#
+# Committing on the feature branch and fast-forwarding (rather than writing to
+# the base branch directly) is what keeps 'close' working: the merge base moves
+# with it, so close's divergence preflight sees no base-side edit to the ticket
+# file and its squash-merge finds no local changes to overwrite.
+#
+# The fast-forward is best-effort. When the base branch has moved on - a
+# concurrent start, say - we leave it alone and carry on: started_at is on the
+# feature branch either way, and this is bookkeeping, not the user's work.
+#
+# Usage: record_start_on_base <work_tree> <repo> <base_branch> <feature_branch>
+#                             <ticket_rel> <note_rel> <ticket_hash> <note_hash>
+#                             <no_verify> <auto_push> <repository>
+record_start_on_base() {
+    local work_tree="$1"
+    local repo="$2"
+    local base_branch="$3"
+    local feature_branch="$4"
+    local ticket_rel="$5"
+    local note_rel="$6"
+    local ticket_hash="$7"
+    local note_hash="$8"
+    local no_verify="$9"
+    local auto_push="${10}"
+    local repository="${11}"
+
+    # Stage by path. The tree also holds the current-* symlinks, the ticket's
+    # tmp/, and anything worktree_copy_files brought in; those are meant to be
+    # gitignored, but an older .gitignore would let 'add -A' swallow them.
+    local commit_paths=("$ticket_rel")
+    [[ -f "${work_tree}/${note_rel}" ]] && commit_paths+=("$note_rel")
+
+    if ! git -C "$work_tree" add -- "${commit_paths[@]}" 2>/dev/null; then
+        echo "Warning: Could not stage ticket files to record the start time" >&2
+        return 0
+    fi
+
+    if git -C "$work_tree" diff --cached --quiet -- "${commit_paths[@]}" 2>/dev/null; then
+        # Nothing to record - the stamp is already committed.
+        return 0
+    fi
+
+    local verify_flag=""
+    [[ "$no_verify" == "true" ]] && verify_flag=" --no-verify"
+
+    # Commit those paths explicitly, so an unrelated staged change already
+    # sitting in the index doesn't ride along.
+    local paths_arg="" _path
+    for _path in "${commit_paths[@]}"; do
+        paths_arg="${paths_arg} \"${_path}\""
+    done
+
+    if ! run_git_command "git -C \"$work_tree\" commit${verify_flag} -m \"[start] $feature_branch\" --${paths_arg}"; then
+        echo "Warning: Could not commit the start time on '$feature_branch'" >&2
+        echo "  started_at is written to the ticket file but left uncommitted." >&2
+        return 0
+    fi
+
+    if ! advance_branch_ff "$repo" "$base_branch" "$feature_branch" \
+            "$ticket_rel" "$ticket_hash" "$note_rel" "$note_hash"; then
+        echo "Note: Could not fast-forward '$base_branch' to record the start time." >&2
+        echo "  '$base_branch' has moved on, or its working tree holds conflicting changes." >&2
+        echo "  The start time is recorded on '$feature_branch'; nothing is lost." >&2
+        return 0
+    fi
+
+    echo "Recorded start time on '$base_branch'."
+
+    if [[ "$auto_push" == "true" ]]; then
+        run_git_command "git -C \"$repo\" push $repository $base_branch" || {
+            echo "Warning: Failed to push '$base_branch' after recording the start time" >&2
+            echo "  Push manually later: git -C $repo push $repository $base_branch" >&2
+        }
+    fi
+
+    return 0
+}
+
 # Start working on a ticket
 cmd_start() {
     local use_worktree=false
     local ticket_input=""
+    local no_push=false
     # Extra paths appended to config's worktree_copy_files via --copy-file.
     # Repeatable; ignored entirely unless use_worktree is true.
     local cli_copy_files=()
@@ -1364,6 +1457,10 @@ cmd_start() {
         case "$1" in
             --worktree)
                 use_worktree=true
+                shift
+                ;;
+            --no-push)
+                no_push=true
                 shift
                 ;;
             --copy-file)
@@ -1393,7 +1490,7 @@ cmd_start() {
 
     if [[ -z "$ticket_input" ]]; then
         echo "Error: ticket name required" >&2
-        echo "Usage: $SCRIPT_COMMAND start [--worktree] [--copy-file <path>]... <ticket-name>" >&2
+        echo "Usage: $SCRIPT_COMMAND start [--worktree] [--no-push] [--copy-file <path>]... <ticket-name>" >&2
         return 1
     fi
 
@@ -1412,6 +1509,8 @@ cmd_start() {
     local branch_prefix=$(yaml_get "branch_prefix" || echo "$DEFAULT_BRANCH_PREFIX")
     local repository=$(yaml_get "repository" || echo "$DEFAULT_REPOSITORY")
     local auto_push=$(yaml_get "auto_push" || echo "$DEFAULT_AUTO_PUSH")
+    [[ "$no_push" == "true" ]] && auto_push="false"
+    local no_verify=$(yaml_get "no_verify" || echo "$DEFAULT_NO_VERIFY")
     local start_success_message=$(yaml_get "start_success_message" || echo "$DEFAULT_START_SUCCESS_MESSAGE")
 
     # Check if worktree mode is enabled by config
@@ -1492,6 +1591,28 @@ cmd_start() {
     fi
 
     # main_repo was resolved above (needed for ticket-file probe).
+
+    # The note file follows the ticket's layout: a sibling inside the per-ticket
+    # directory for new-format tickets, a flat -note.md for legacy ones.
+    local note_file_rel
+    if [[ "$ticket_file" == "${tickets_dir}/${ticket_name}/ticket.md" ]]; then
+        note_file_rel="${tickets_dir}/${ticket_name}/note.md"
+    else
+        note_file_rel="${tickets_dir}/${ticket_name}-note.md"
+    fi
+
+    # Snapshot the ticket files as they stand in whatever working tree holds the
+    # base branch. 'new' makes no commit, so they usually sit there untracked,
+    # which would block the fast-forward that records the start time. These
+    # hashes are what lets us tell "the file we are about to commit" apart from
+    # "an edit that exists only there" when clearing the way.
+    local base_ticket_hash="" base_note_hash=""
+    local _base_wt
+    _base_wt=$(worktree_holding_branch "$main_repo" "$effective_base")
+    if [[ -n "$_base_wt" ]]; then
+        base_ticket_hash=$(git -C "$_base_wt" hash-object -- "${_base_wt}/${ticket_file}" 2>/dev/null || echo "")
+        base_note_hash=$(git -C "$_base_wt" hash-object -- "${_base_wt}/${note_file_rel}" 2>/dev/null || echo "")
+    fi
 
     # Check current branch
     local current_branch=$(get_current_branch)
@@ -1611,7 +1732,7 @@ EOF
 
     # Check if branch is already checked out in another worktree.
     # Query main repo directly so we get a consistent view regardless of cwd.
-    local worktree_using_branch=$(git -C "$main_repo" worktree list --porcelain 2>/dev/null | awk -v branch="branch refs/heads/$branch_name" '/^worktree /{wt=$0} $0==branch{print wt}' | sed 's/^worktree //')
+    local worktree_using_branch=$(worktree_holding_branch "$main_repo" "$branch_name")
     if [[ -n "$worktree_using_branch" ]]; then
         local current_toplevel=$(git rev-parse --show-toplevel 2>/dev/null)
         # It's OK if the current directory IS the worktree that has this branch
@@ -1648,7 +1769,7 @@ EOF
 
         if [[ "$use_worktree" == "true" ]]; then
             # Check if worktree already exists for this branch (may already be set above)
-            local existing_wt=$(git -C "$main_repo" worktree list --porcelain 2>/dev/null | awk -v branch="branch refs/heads/$branch_name" '/^worktree /{wt=$0} $0==branch{print wt}' | sed 's/^worktree //')
+            local existing_wt=$(worktree_holding_branch "$main_repo" "$branch_name")
             if [[ -n "$existing_wt" ]]; then
                 echo "Worktree already exists at: $existing_wt"
                 wt_path="$existing_wt"
@@ -1794,6 +1915,10 @@ EOF
         local timestamp=$(get_utc_timestamp)
         update_yaml_frontmatter_field "${wt_path}/${ticket_file}" "started_at" "$timestamp"
 
+        record_start_on_base "$wt_path" "$main_repo" "$effective_base" "$branch_name" \
+            "$ticket_file" "$note_file_rel" "$base_ticket_hash" "$base_note_hash" \
+            "$no_verify" "$auto_push" "$repository"
+
         # Create symlinks in worktree directory (handles new + legacy layouts;
         # for new-format tickets this also sets up current-ticket/ dir symlink).
         # Resolve layout against the worktree's tree, not cwd's.
@@ -1840,6 +1965,10 @@ EOF
         # Update ticket started_at
         local timestamp=$(get_utc_timestamp)
         update_yaml_frontmatter_field "$ticket_file" "started_at" "$timestamp"
+
+        record_start_on_base "." "$main_repo" "$effective_base" "$branch_name" \
+            "$ticket_file" "$note_file_rel" "$base_ticket_hash" "$base_note_hash" \
+            "$no_verify" "$auto_push" "$repository"
 
         # Create current-* symlinks (handles new + legacy layouts).
         create_current_ticket_symlinks "." "$tickets_dir" "$ticket_name" || return 1
