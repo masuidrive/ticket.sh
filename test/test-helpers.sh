@@ -159,19 +159,34 @@ ticket_note_path() {
 setup_test_repo() {
     local test_dir="${1:-test-tmp}"
 
+    # Never build a repo where one stood before. Tests reuse a single TEST_DIR
+    # across sections - deleting and re-creating it each time - and on overlayfs
+    # (Docker) the re-created directory can come back as the old, already
+    # unlinked inode. `cd` then reports the right path while every git command
+    # dies with "fatal: unable to get current working directory". Numbering the
+    # path removes the reuse rather than trying to outrun it. (Callers delete
+    # TEST_DIR themselves before calling us, so a guard here would never fire.)
+    SETUP_TEST_REPO_SEQ=$((${SETUP_TEST_REPO_SEQ:-0} + 1))
+    test_dir="${test_dir}.${SETUP_TEST_REPO_SEQ}"
+    # Callers cd back to this path and clean it up, so point TEST_DIR at the
+    # directory they actually got.
+    TEST_DIR="$test_dir"
+
     echo "      Cleaning up old test directory..."
     rm -rf "$test_dir"
-    mkdir "$test_dir"
-    # Resolve the target to an absolute path BEFORE cd'ing. On Alpine
-    # (busybox), when a caller has just rm'd and re-mkdir'd the same relative
-    # path and then invokes setup_test_repo, the shell's cwd inode tracking
-    # can hand `cd <relative>` back a stale directory whose parent has been
-    # unlinked — subsequent git commands then die with "unable to get current
-    # working directory". Anchoring on an absolute path resolves the inode
-    # freshly and avoids the flake.
+    mkdir -p "$test_dir"
+    # Resolve the target to an absolute path BEFORE cd'ing, so `cd` never has to
+    # walk a relative path from a directory that may itself have been unlinked.
     local abs_test_dir
     abs_test_dir="$(cd "$(dirname "$test_dir")" && pwd -P)/$(basename "$test_dir")"
     cd "$abs_test_dir"
+
+    # With cwd safely inside the new directory, drop the one from the previous
+    # call so a long test file doesn't leave a trail of repos behind.
+    if [[ -n "${SETUP_TEST_REPO_PREV:-}" ]] && [[ "$SETUP_TEST_REPO_PREV" != "$abs_test_dir" ]]; then
+        rm -rf "$SETUP_TEST_REPO_PREV"
+    fi
+    SETUP_TEST_REPO_PREV="$abs_test_dir"
     
     echo "      Copying ticket.sh..."
     # Use existing ticket.sh without rebuild for performance
