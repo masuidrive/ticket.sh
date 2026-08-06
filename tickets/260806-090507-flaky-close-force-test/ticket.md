@@ -3,7 +3,7 @@ priority: 2
 base_branch: default  # Override base branch for start/close (default: use default_branch from config)
 description: "test-close-force.sh が約15%の確率で落ちる。落ちるアサーションは毎回異なり、直前に「Error: Not in a git repository」が出る。"
 created_at: "2026-08-06T09:05:07Z"
-started_at: null  # Do not modify manually
+started_at: 2026-08-06T09:23:53Z # Do not modify manually
 closed_at: null   # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
