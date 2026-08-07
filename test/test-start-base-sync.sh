@@ -249,8 +249,11 @@ fi
 
 # ---------------------------------------------------------------------------
 echo
-echo "7. Push follows auto_push and --no-push"
+echo "7. start never pushes, whatever auto_push says"
 # ---------------------------------------------------------------------------
+# start declares that work is beginning; it is not a request to publish the base
+# branch. Pushing there would carry along whatever unpushed commits happen to be
+# sitting on it - someone else's, in a repo where several worktrees share a base.
 REPO=$(make_repo repo5)
 cd "$REPO"
 sed_i 's/^auto_push: false/auto_push: true/' .ticket-config.yaml
@@ -258,31 +261,30 @@ git add . && git commit -q -m "Enable auto_push"
 TICKET=$(make_ticket push-choice)
 git add tickets && git commit -q -m "Add ticket"
 
-START_OUT=$(timeout 10 ./ticket.sh start --no-push "$TICKET" 2>&1)
-if echo "$START_OUT" | grep -q "push origin main"; then
-    fail "--no-push should suppress pushing the base branch" "$START_OUT"
+START_OUT=$(timeout 10 ./ticket.sh start "$TICKET" 2>&1)
+if echo "$START_OUT" | grep -q "push origin"; then
+    fail "start must not push even when auto_push is enabled" "$START_OUT"
 else
-    pass "--no-push suppresses pushing the base branch"
+    pass "start does not push the base branch when auto_push is enabled"
 fi
 
+if echo "$START_OUT" | grep -q "Recorded start time"; then
+    pass "the start time still reaches the base branch without pushing"
+else
+    fail "start should still record the start time" "$START_OUT"
+fi
+
+# --no-push was removed along with the push itself. An older invocation still
+# carrying the flag must keep working - unknown flags are ignored.
 REPO=$(make_repo repo6)
 cd "$REPO"
-sed_i 's/^auto_push: false/auto_push: true/' .ticket-config.yaml
-git add . && git commit -q -m "Enable auto_push"
-TICKET=$(make_ticket push-on)
+TICKET=$(make_ticket stale-flag)
 git add tickets && git commit -q -m "Add ticket"
 
-START_OUT=$(timeout 10 ./ticket.sh start "$TICKET" 2>&1)
-if echo "$START_OUT" | grep -q "push origin main"; then
-    pass "auto_push pushes the base branch after recording the start time"
+if timeout 10 ./ticket.sh start --no-push "$TICKET" >/dev/null 2>&1; then
+    pass "a leftover --no-push is harmlessly ignored"
 else
-    fail "auto_push should push the base branch" "$START_OUT"
-fi
-# No remote exists, so the push fails - start must survive that.
-if echo "$START_OUT" | grep -q "Started ticket"; then
-    pass "a failed push does not fail start"
-else
-    fail "start should survive a failed push" "$START_OUT"
+    fail "start should still succeed when handed a leftover --no-push"
 fi
 
 # ---------------------------------------------------------------------------

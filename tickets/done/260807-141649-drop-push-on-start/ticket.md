@@ -4,7 +4,7 @@ base_branch: default  # Override base branch for start/close (default: use defau
 description: "start が base branch を push するのをやめる。設定は追加せず落としきる（外部からの意見書 A への回答）。"
 created_at: "2026-08-07T14:16:49Z"
 started_at: 2026-08-07T14:17:48Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-08-07T14:33:35Z # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
 
@@ -48,14 +48,14 @@ Use 'git push -u ...' when ready to share.」と案内するのみ）。
 
 ## Tasks
 
-- [ ] `record_start_on_base` から push を削除し、引数を整理する
-- [ ] `start` の `--no-push` を削除する
-- [ ] ヘルプの `## Push Control` と `start` の項を更新する
-- [ ] spec.md / spec.ja.md の start セクションと設定説明を更新する
-- [ ] README.md / README.ja.md の `auto_push` コメントを close 用に戻す
-- [ ] `test/test-start-base-sync.sh` のセクション7 を「start は push しない」を検証する形に変える
-- [ ] Run tests before closing and pass all tests (No exceptions)
-  - [ ] `test/run-all.sh`
-  - [ ] `test/run-all-on-docker.sh`
-- [ ] Run `bash build.sh` to build the project
+- [x] `record_start_on_base` から push を削除し、引数を整理する
+- [x] `start` の `--no-push` を削除する
+- [x] ヘルプの `## Push Control` と `start` の項を更新する
+- [x] spec.md / spec.ja.md の start セクションと設定説明を更新する
+- [x] README.md / README.ja.md の `auto_push` コメントを close 用に戻す
+- [x] `test/test-start-base-sync.sh` のセクション7 を「start は push しない」を検証する形に変える
+- [x] Run tests before closing and pass all tests (No exceptions)
+  - [x] `test/run-all.sh`
+  - [x] `test/run-all-on-docker.sh`
+- [x] Run `bash build.sh` to build the project
 - [ ] Get developer approval before closing

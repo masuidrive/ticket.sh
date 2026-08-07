@@ -213,9 +213,9 @@ be recognized by every command; they are never auto-migrated.
 - \`$SCRIPT_COMMAND init\` - Initialize system (create config, directories, .gitignore)
 - \`$SCRIPT_COMMAND new <slug> [--epic <epic-slug>] [--created-at <YYMMDD-hhmmss>]\` - Create new ticket file (slug: lowercase, numbers, hyphens only; --created-at overrides the timestamp, used as filename prefix and UTC created_at)
 - \`$SCRIPT_COMMAND list [--status STATUS] [--count N]\` - List tickets (default: todo + doing, count: 20)
-- \`$SCRIPT_COMMAND start [--worktree] [--no-push] [--copy-file <path>]... <ticket-name>\` - Start working on ticket (creates or switches to feature branch, --worktree creates a separate worktree)
+- \`$SCRIPT_COMMAND start [--worktree] [--copy-file <path>]... <ticket-name>\` - Start working on ticket (creates or switches to feature branch, --worktree creates a separate worktree)
   - With \`--worktree\`: **cd to the worktree directory after start; cd back to the main repo after close.** In environments where cwd resets each command (e.g. LLM agents), cd must be re-run every time.
-  - \`start\` commits \`started_at\` on the feature branch and fast-forwards the base branch onto that commit, so the ticket shows as \`doing\` from the base branch too. With \`auto_push\` enabled the base branch is pushed; \`--no-push\` skips that. If the base branch has moved on, the fast-forward is skipped with a note and the start time stays on the feature branch.
+  - \`start\` commits \`started_at\` on the feature branch and fast-forwards the base branch onto that commit, so the ticket shows as \`doing\` from the base branch too. Nothing is pushed: the base branch reaches the remote on close. If the base branch has moved on, the fast-forward is skipped with a note and the start time stays on the feature branch.
   - \`--copy-file <path>\` (repeatable) copies the given file from the main repo into the new worktree, appended to the \`worktree_copy_files\` config list. Only applied when a worktree is created. Existing files in the target are never overwritten; missing sources warn and continue. Typical use: bringing gitignored \`.env\` into the worktree.
 - \`$SCRIPT_COMMAND restore\` - Restore current-ticket.md symlink from branch name
 - \`$SCRIPT_COMMAND check\` - Check current directory and ticket/branch synchronization status
@@ -282,10 +282,12 @@ be recognized by every command; they are never auto-migrated.
 
 ## Push Control
 
-- Set \`auto_push: false\` in config to disable automatic pushing on start and close
-- Use \`--no-push\` with \`start\` or \`close\` to skip pushing for that invocation
-- \`start\` pushes the base branch after recording the start time. The feature
-  branch itself is always left local until you push it yourself
+- Set \`auto_push: false\` in config to disable automatic pushing for close command
+- Use \`--no-push\` flag with close command to skip pushing
+- \`start\` never pushes. It records the start time and fast-forwards the base
+  branch locally; both reach the remote on close. Publishing the base branch
+  from \`start\` would carry along any unpushed commits already sitting there
+- Feature branches are always created locally (no auto-push on start)
 - Git commands and outputs are displayed for transparency
 
 ## Workflow
@@ -389,7 +391,7 @@ default_branch: "$default_branch_value"
 branch_prefix: "$DEFAULT_BRANCH_PREFIX"
 repository: "$DEFAULT_REPOSITORY"
 
-# Automatically push changes to remote repository during start and close
+# Automatically push changes to remote repository during close command
 # Set to false if you want to manually control when to push
 auto_push: $DEFAULT_AUTO_PUSH
 
@@ -633,7 +635,7 @@ EOF
     echo "   - tickets_dir: Where tickets are stored (default: \"tickets\")"
     echo "   - default_branch: Main development branch (default: \"develop\")"
     echo "   - branch_prefix: Feature branch naming (default: \"feature/\")"
-    echo "   - auto_push: Push on start and close (default: true)"
+    echo "   - auto_push: Push on close (default: true)"
     echo "   - no_verify: Skip Git hooks on ticket.sh's own commits (default: false)"
     echo "   - default_content: Template for new tickets"
     echo ""
@@ -1378,9 +1380,14 @@ EOF
 # concurrent start, say - we leave it alone and carry on: started_at is on the
 # feature branch either way, and this is bookkeeping, not the user's work.
 #
+# Nothing here pushes. 'start' says work is beginning; it is not a request to
+# publish the base branch, and doing so would carry along whatever unpushed
+# commits happen to be sitting there - someone else's, in a repo where several
+# worktrees share a base. The base branch reaches the remote on close.
+#
 # Usage: record_start_on_base <work_tree> <repo> <base_branch> <feature_branch>
 #                             <ticket_rel> <note_rel> <ticket_hash> <note_hash>
-#                             <no_verify> <auto_push> <repository>
+#                             <no_verify>
 record_start_on_base() {
     local work_tree="$1"
     local repo="$2"
@@ -1391,8 +1398,6 @@ record_start_on_base() {
     local ticket_hash="$7"
     local note_hash="$8"
     local no_verify="$9"
-    local auto_push="${10}"
-    local repository="${11}"
 
     # Stage by path. The tree also holds the current-* symlinks, the ticket's
     # tmp/, and anything worktree_copy_files brought in; those are meant to be
@@ -1436,13 +1441,6 @@ record_start_on_base() {
 
     echo "Recorded start time on '$base_branch'."
 
-    if [[ "$auto_push" == "true" ]]; then
-        run_git_command "git -C \"$repo\" push $repository $base_branch" || {
-            echo "Warning: Failed to push '$base_branch' after recording the start time" >&2
-            echo "  Push manually later: git -C $repo push $repository $base_branch" >&2
-        }
-    fi
-
     return 0
 }
 
@@ -1450,20 +1448,17 @@ record_start_on_base() {
 cmd_start() {
     local use_worktree=false
     local ticket_input=""
-    local no_push=false
     # Extra paths appended to config's worktree_copy_files via --copy-file.
     # Repeatable; ignored entirely unless use_worktree is true.
     local cli_copy_files=()
 
-    # Parse arguments
+    # Parse arguments. Note there is no --no-push: start never pushes, so a
+    # leftover --no-push from older invocations falls through to the
+    # ignore-unknown-flags case below and harmlessly does nothing.
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --worktree)
                 use_worktree=true
-                shift
-                ;;
-            --no-push)
-                no_push=true
                 shift
                 ;;
             --copy-file)
@@ -1511,8 +1506,6 @@ cmd_start() {
     local default_branch=$(yaml_get "default_branch" || echo "$DEFAULT_BRANCH")
     local branch_prefix=$(yaml_get "branch_prefix" || echo "$DEFAULT_BRANCH_PREFIX")
     local repository=$(yaml_get "repository" || echo "$DEFAULT_REPOSITORY")
-    local auto_push=$(yaml_get "auto_push" || echo "$DEFAULT_AUTO_PUSH")
-    [[ "$no_push" == "true" ]] && auto_push="false"
     local no_verify=$(yaml_get "no_verify" || echo "$DEFAULT_NO_VERIFY")
     local start_success_message=$(yaml_get "start_success_message" || echo "$DEFAULT_START_SUCCESS_MESSAGE")
 
@@ -1920,7 +1913,7 @@ EOF
 
         record_start_on_base "$wt_path" "$main_repo" "$effective_base" "$branch_name" \
             "$ticket_file" "$note_file_rel" "$base_ticket_hash" "$base_note_hash" \
-            "$no_verify" "$auto_push" "$repository"
+            "$no_verify"
 
         # Create symlinks in worktree directory (handles new + legacy layouts;
         # for new-format tickets this also sets up current-ticket/ dir symlink).
@@ -1971,7 +1964,7 @@ EOF
 
         record_start_on_base "." "$main_repo" "$effective_base" "$branch_name" \
             "$ticket_file" "$note_file_rel" "$base_ticket_hash" "$base_note_hash" \
-            "$no_verify" "$auto_push" "$repository"
+            "$no_verify"
 
         # Create current-* symlinks (handles new + legacy layouts).
         create_current_ticket_symlinks "." "$tickets_dir" "$ticket_name" || return 1

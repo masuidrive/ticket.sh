@@ -284,7 +284,7 @@ default_branch: "main"
 branch_prefix: "feature/"
 repository: "origin"
 
-# Automatically push changes to remote repository during start and close
+# Automatically push changes to remote repository during close command
 # Set to false if you want to manually control when to push
 auto_push: true
 

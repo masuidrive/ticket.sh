@@ -231,7 +231,7 @@ tickets_dir: "tickets"
 default_branch: "develop" 
 branch_prefix: "feature/"
 repository: "origin"
-auto_push: true          # start と close で base branch を push する
+auto_push: true          # close で push する
 
 # ticket.sh 自身が作るコミット（start の開始時刻記録など）で Git hook を
 # スキップする（--no-verify）。既定では hook を実行する。
@@ -504,7 +504,7 @@ Additional notes or requirements.
   2. Or omit --count to use default (20)
   ```
 
-### `start [--worktree] [--no-push] [--copy-file <path>]... <ticket-name>`
+### `start [--worktree] [--copy-file <path>]... <ticket-name>`
 チケット作業を開始：
 
 1. 指定チケットの `started_at` に現在時刻を設定
@@ -515,7 +515,6 @@ Additional notes or requirements.
 
 **オプション:**
 - `--worktree`: ブランチ切り替えの代わりに別のgit worktreeを作成。メインリポジトリはデフォルトブランチのまま。worktreeは `../<プロジェクト名>.worktrees/<チケット名>/`（またはconfigの`worktree_dir`）に作成
-- `--no-push`: `auto_push: true` でも base branch の push を行わない
 - `--copy-file <path>` (反復可): その呼び出し限定で `worktree_copy_files` に path を追加。worktree が実際に作成された場合のみ参照される。
 
 **開始時刻の記録:**
@@ -529,7 +528,7 @@ branch から `list` してもチケットは `todo` のままに見える。こ
 - fast-forward の方法は worktree モードかどうかではなく、**base branch がどこかにチェックアウトされているか**で決まる。チェックアウト済みならその作業ツリーで `merge --ff-only`、どこにも無ければ `fetch . <feature>:<base>`。両者は排他。
 - `new` が作ったチケットは untracked（`new` はコミットしない）。そのままでは fast-forward を妨げるため、事前に base branch 側の作業ツリーから取り除く。ただし `start` が読んだ時点と同じ内容である場合に限る（＝失われるものが無いことを確認してから消す）。
 - fast-forward は best-effort。base branch が先に進んでいたり、その作業ツリーに競合する変更があれば、その旨を報告して処理を続行する。`started_at` はいずれにせよ feature branch にコミットされている。
-- `auto_push: true`（かつ `--no-push` 未指定）なら base branch を push する。push 失敗は警告であり、`start` の失敗ではない。
+- **push は一切行わない。** `start` は作業の開始を宣言するものであって base branch を publish する操作ではない。そこに未 push の commit があれば巻き込んで出てしまう（複数 worktree が base を共有する repo では他人の commit を含みうる）。base branch がリモートに出るのは `close` のとき。
 - このコミットでは Git hook が実行される。config の `no_verify: true` でスキップできる。
 - 開始済みチケットの resume では再記録は行わない。
 
@@ -559,7 +558,7 @@ branch から `list` してもチケットは `todo` のままに見える。こ
 - ファイル: `240628-153245-create-api.md`
 - ブランチ: `feature/240628-153245-create-api`
 
-**実行例出力 (auto_push: true):**
+**実行例出力:**
 ```bash
 $ ./ticket.sh start 240628-153245-implement-auth
 
@@ -568,27 +567,13 @@ git checkout -b feature/240628-153245-implement-auth
 Switched to a new branch 'feature/240628-153245-implement-auth'
 
 # run command
-git push -u origin feature/240628-153245-implement-auth
-Total 0 (delta 0), reused 0 (delta 0), pack-reused 0
-To github.com:user/repo.git
- * [new branch]      feature/240628-153245-implement-auth -> feature/240628-153245-implement-auth
-Branch 'feature/240628-153245-implement-auth' set up to track remote branch 'feature/240628-153245-implement-auth' from 'origin'.
+git -C "." commit -m "[start] feature/240628-153245-implement-auth" -- "tickets/240628-153245-implement-auth/ticket.md" "tickets/240628-153245-implement-auth/note.md"
+[feature/240628-153245-implement-auth 059de0d] [start] feature/240628-153245-implement-auth
 
+Recorded start time on 'main'.
 Started ticket: 240628-153245-implement-auth
-Current ticket linked: current-ticket.md -> tickets/240628-153245-implement-auth.md
-```
-
-**実行例出力 (auto_push: false or --no-push):**
-```bash
-$ ./ticket.sh start 240628-153245-implement-auth --no-push
-
-# run command
-git checkout -b feature/240628-153245-implement-auth
-Switched to a new branch 'feature/240628-153245-implement-auth'
-
-Started ticket: 240628-153245-implement-auth
-Current ticket linked: current-ticket.md -> tickets/240628-153245-implement-auth.md
-Note: Branch not pushed to remote. Use 'git push -u origin feature/240628-153245-implement-auth' when ready.
+Current ticket linked: current-ticket.md -> tickets/240628-153245-implement-auth/ticket.md
+Note: Branch created locally. Use 'git push -u origin feature/240628-153245-implement-auth' when ready to share.
 ```
 
 **エラーケース:**
@@ -929,7 +914,7 @@ USAGE:
   ./ticket.sh init                     Initialize system (create config, directories, .gitignore)
   ./ticket.sh new <slug>               Create new ticket file (slug: lowercase, numbers, hyphens only)
   ./ticket.sh list [--status STATUS] [--count N]  List tickets (default: todo + doing, count: 20)
-  ./ticket.sh start <ticket-name> [--no-push]     Start working on ticket (creates feature branch)
+  ./ticket.sh start <ticket-name>      Start working on ticket (creates feature branch)
   ./ticket.sh restore                  Rebuild active-ticket symlinks (current-ticket/, current-ticket.md, current-note.md) from branch name
   ./ticket.sh close [--no-push] [--force|-f]  Complete current ticket (squash merge to default branch)
   ./ticket.sh cancel [--force|-f]            Cancel current ticket without merging

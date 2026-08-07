@@ -232,7 +232,7 @@ tickets_dir: "tickets"
 default_branch: "develop" 
 branch_prefix: "feature/"
 repository: "origin"
-auto_push: true          # Push the base branch on start, and on close
+auto_push: true          # Push on close
 
 # Skip Git hooks (--no-verify) on commits ticket.sh makes itself, such as the
 # start-time stamp. Hooks run by default.
@@ -505,7 +505,7 @@ Displays ticket list:
   2. Or omit --count to use default (20)
   ```
 
-### `start [--worktree] [--no-push] [--copy-file <path>]... <ticket-name>`
+### `start [--worktree] [--copy-file <path>]... <ticket-name>`
 Starts ticket work:
 
 1. Sets current time to specified ticket's `started_at`
@@ -517,7 +517,6 @@ Starts ticket work:
 
 **Options:**
 - `--worktree`: Creates a separate git worktree instead of switching branches. The main repository stays on the default branch. Worktree is created at `../<project>.worktrees/<ticket-name>/` (or custom `worktree_dir` if configured)
-- `--no-push`: Skips pushing the base branch even when `auto_push: true`
 - `--copy-file <path>` (repeatable): appends the given path to `worktree_copy_files` for this invocation only. Ignored unless a worktree is actually created.
 
 **Recording the start time:**
@@ -532,7 +531,7 @@ you switch back to the base branch.
 - How the fast-forward happens depends on whether the base branch is checked out somewhere, not on worktree mode: a checked-out branch is advanced with `merge --ff-only` in its own working tree, one nobody holds with `fetch . <feature>:<base>`. The two cases are mutually exclusive.
 - A ticket created by `new` is untracked (`new` makes no commit). Such a file would block the fast-forward, so it is removed from the base branch's working tree first — but only when it still hashes to what `start` read, meaning nothing is lost.
 - The fast-forward is best-effort. If the base branch has moved on, or its working tree holds conflicting changes, `start` reports it and carries on; `started_at` is committed on the feature branch either way.
-- With `auto_push: true` (and no `--no-push`), the base branch is pushed afterwards. A failed push is a warning, not a failure.
+- **Nothing is pushed.** `start` declares that work is beginning; it is not a request to publish the base branch, and doing so would carry along any unpushed commits already sitting there (someone else's, in a repo where several worktrees share a base). The base branch reaches the remote on close.
 - Git hooks run on this commit. Set `no_verify: true` in config to skip them.
 - Resuming an already-started ticket does not re-stamp or re-record anything.
 
@@ -562,7 +561,7 @@ you switch back to the base branch.
 - File: `240628-153245-create-api.md`
 - Branch: `feature/240628-153245-create-api`
 
-**Example Output (auto_push: true):**
+**Example Output:**
 ```bash
 $ ./ticket.sh start 240628-153245-implement-auth
 
@@ -571,27 +570,13 @@ git checkout -b feature/240628-153245-implement-auth
 Switched to a new branch 'feature/240628-153245-implement-auth'
 
 # run command
-git push -u origin feature/240628-153245-implement-auth
-Total 0 (delta 0), reused 0 (delta 0), pack-reused 0
-To github.com:user/repo.git
- * [new branch]      feature/240628-153245-implement-auth -> feature/240628-153245-implement-auth
-Branch 'feature/240628-153245-implement-auth' set up to track remote branch 'feature/240628-153245-implement-auth' from 'origin'.
+git -C "." commit -m "[start] feature/240628-153245-implement-auth" -- "tickets/240628-153245-implement-auth/ticket.md" "tickets/240628-153245-implement-auth/note.md"
+[feature/240628-153245-implement-auth 059de0d] [start] feature/240628-153245-implement-auth
 
+Recorded start time on 'main'.
 Started ticket: 240628-153245-implement-auth
-Current ticket linked: current-ticket.md -> tickets/240628-153245-implement-auth.md
-```
-
-**Example Output (auto_push: false or --no-push):**
-```bash
-$ ./ticket.sh start 240628-153245-implement-auth --no-push
-
-# run command
-git checkout -b feature/240628-153245-implement-auth
-Switched to a new branch 'feature/240628-153245-implement-auth'
-
-Started ticket: 240628-153245-implement-auth
-Current ticket linked: current-ticket.md -> tickets/240628-153245-implement-auth.md
-Note: Branch not pushed to remote. Use 'git push -u origin feature/240628-153245-implement-auth' when ready.
+Current ticket linked: current-ticket.md -> tickets/240628-153245-implement-auth/ticket.md
+Note: Branch created locally. Use 'git push -u origin feature/240628-153245-implement-auth' when ready to share.
 ```
 
 **Error Cases:**
@@ -933,7 +918,7 @@ USAGE:
   ./ticket.sh init                     Initialize system (create config, directories, .gitignore)
   ./ticket.sh new <slug>               Create new ticket file (slug: lowercase, numbers, hyphens only)
   ./ticket.sh list [--status STATUS] [--count N]  List tickets (default: todo + doing, count: 20)
-  ./ticket.sh start <ticket-name> [--no-push]     Start working on ticket (creates feature branch)
+  ./ticket.sh start <ticket-name>      Start working on ticket (creates feature branch)
   ./ticket.sh restore                  Rebuild active-ticket symlinks (current-ticket/, current-ticket.md, current-note.md) from branch name
   ./ticket.sh close [--no-push]       Complete current ticket (squash merge to default branch)
   ./ticket.sh cancel [--force|-f]    Cancel current ticket without merging

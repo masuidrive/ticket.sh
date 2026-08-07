@@ -207,7 +207,7 @@ default_branch: "main"
 branch_prefix: "feature/"
 repository: "origin"
 
-# start と close で base branch を remote に push する
+# close で remote に push する
 # 手動で push を制御したい場合は false にする
 auto_push: true
 
