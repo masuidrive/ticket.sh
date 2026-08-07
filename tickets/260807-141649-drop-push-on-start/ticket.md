@@ -3,7 +3,7 @@ priority: 1
 base_branch: default  # Override base branch for start/close (default: use default_branch from config)
 description: "start が base branch を push するのをやめる。設定は追加せず落としきる（外部からの意見書 A への回答）。"
 created_at: "2026-08-07T14:16:49Z"
-started_at: null  # Do not modify manually
+started_at: 2026-08-07T14:17:48Z # Do not modify manually
 closed_at: null   # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
