@@ -3,7 +3,7 @@ priority: 1
 base_branch: default  # Override base branch for start/close (default: use default_branch from config)
 description: "fast-forward できなかったチケットを list が feature branch から拾って doing 表示する。base 未反映の印も付ける（外部からの意見書 B への回答）。"
 created_at: "2026-08-07T14:16:49Z"
-started_at: null  # Do not modify manually
+started_at: 2026-08-07T14:33:49Z # Do not modify manually
 closed_at: null   # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
