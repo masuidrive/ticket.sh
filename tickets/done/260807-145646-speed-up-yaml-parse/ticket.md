@@ -4,7 +4,7 @@ base_branch: default  # Override base branch for start/close (default: use defau
 description: "yaml_parse が1行につき4プロセス起動しているのをパラメータ展開に置き換える。list が100チケットで7秒かかる主因。"
 created_at: "2026-08-07T14:56:46Z"
 started_at: 2026-08-07T14:57:13Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-08-07T15:17:48Z # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
 
@@ -61,12 +61,12 @@ local type="${rest%% *}"; rest="${rest#* }"
 
 ## Tasks
 
-- [ ] `yaml_parse` の行分解をパラメータ展開に置き換える（`:324-327`, `:331`）
-- [ ] 分割の意味が変わっていないことを確認する（値に連続空白・タブ・記号を含むケース）
-- [ ] 100 チケットで `list` を再計測し、改善幅を記録する
-- [ ] yaml-sh のテストが通ることを確認する
-- [ ] Run tests before closing and pass all tests (No exceptions)
-  - [ ] `test/run-all.sh`
-  - [ ] `test/run-all-on-docker.sh`
-- [ ] Run `bash build.sh` to build the project
+- [x] `yaml_parse` の行分解をパラメータ展開に置き換える（`:324-327`, `:331`）
+- [x] 分割の意味が変わっていないことを確認する（値に連続空白・タブ・記号を含むケース）
+- [x] 100 チケットで `list` を再計測し、改善幅を記録する
+- [x] yaml-sh のテストが通ることを確認する
+- [x] Run tests before closing and pass all tests (No exceptions)
+  - [x] `test/run-all.sh`
+  - [x] `test/run-all-on-docker.sh`
+- [x] Run `bash build.sh` to build the project
 - [ ] Get developer approval before closing

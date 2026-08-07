@@ -320,15 +320,26 @@ yaml_parse() {
             fi
         fi
         
-        # Parse the line
-        local type=$(echo "$line" | awk '{print $1}')
-        local indent=$(echo "$line" | awk '{print $2}')
-        local key=$(echo "$line" | awk '{print $3}')
-        local value=$(echo "$line" | cut -d' ' -f4-)
-        
+        # Parse the line. _yaml_parse_awk always emits four fields
+        # ("<type> <indent> <key> <value>", the last possibly empty), so peeling
+        # them off one space at a time splits exactly where `cut -d' '` would -
+        # including a value that carries its own leading or repeated spaces.
+        #
+        # This used to shell out four times per line. That is 28 processes for a
+        # single ticket's frontmatter, and it dominated the cost of every
+        # command that reads YAML: listing 100 tickets spent 5.8s of its 7s here.
+        local type indent key value rest
+        rest="$line"
+        type="${rest%% *}"
+        rest="${rest#* }"
+        indent="${rest%% *}"
+        rest="${rest#* }"
+        key="${rest%% *}"
+        value="${rest#* }"
+
         # For LIST/ILIST entries, key contains the full list item (may have spaces)
         if [[ "$type" == "LIST" ]] || [[ "$type" == "ILIST" ]]; then
-            key=$(echo "$line" | cut -d' ' -f3-)
+            key="$rest"
         fi
         
         case "$type" in

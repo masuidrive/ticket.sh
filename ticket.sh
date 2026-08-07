@@ -12,7 +12,7 @@ fi
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20260807.144539
+# Version: 20260807.150302
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -359,15 +359,26 @@ yaml_parse() {
             fi
         fi
         
-        # Parse the line
-        local type=$(echo "$line" | awk '{print $1}')
-        local indent=$(echo "$line" | awk '{print $2}')
-        local key=$(echo "$line" | awk '{print $3}')
-        local value=$(echo "$line" | cut -d' ' -f4-)
-        
+        # Parse the line. _yaml_parse_awk always emits four fields
+        # ("<type> <indent> <key> <value>", the last possibly empty), so peeling
+        # them off one space at a time splits exactly where `cut -d' '` would -
+        # including a value that carries its own leading or repeated spaces.
+        #
+        # This used to shell out four times per line. That is 28 processes for a
+        # single ticket's frontmatter, and it dominated the cost of every
+        # command that reads YAML: listing 100 tickets spent 5.8s of its 7s here.
+        local type indent key value rest
+        rest="$line"
+        type="${rest%% *}"
+        rest="${rest#* }"
+        indent="${rest%% *}"
+        rest="${rest#* }"
+        key="${rest%% *}"
+        value="${rest#* }"
+
         # For LIST/ILIST entries, key contains the full list item (may have spaces)
         if [[ "$type" == "LIST" ]] || [[ "$type" == "ILIST" ]]; then
-            key=$(echo "$line" | cut -d' ' -f3-)
+            key="$rest"
         fi
         
         case "$type" in
@@ -1298,7 +1309,7 @@ if [ -z "${BASH_VERSION:-}" ]; then
 fi
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20260807.144539
+# Version: 20260807.150302
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -1390,7 +1401,7 @@ SCRIPT_COMMAND=$(get_script_command)
 
 
 # Global variables
-VERSION="20260807.144539"  # This will be replaced during build
+VERSION="20260807.150302"  # This will be replaced during build
 CONFIG_FILE=""  # Will be set dynamically by get_config_file()
 CURRENT_TICKET_LINK="current-ticket.md"
 CURRENT_NOTE_LINK="current-note.md"
