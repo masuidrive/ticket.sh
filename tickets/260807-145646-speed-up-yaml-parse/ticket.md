@@ -3,7 +3,7 @@ priority: 2
 base_branch: default  # Override base branch for start/close (default: use default_branch from config)
 description: "yaml_parse が1行につき4プロセス起動しているのをパラメータ展開に置き換える。list が100チケットで7秒かかる主因。"
 created_at: "2026-08-07T14:56:46Z"
-started_at: null  # Do not modify manually
+started_at: 2026-08-07T14:57:13Z # Do not modify manually
 closed_at: null   # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
