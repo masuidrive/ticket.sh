@@ -88,6 +88,15 @@ That is why `start` records `started_at` as a commit on the feature branch and
 fast-forwards the base branch onto it: the ticket then reads as `doing` from
 either branch, without a second source of truth.
 
+**When only the feature branch has the stamp.** The fast-forward can be skipped
+(see `start`), leaving `started_at` on the feature branch alone. A ticket the
+base branch calls `todo` is therefore checked against `{branch_prefix}<name>`
+before being believed: if that branch exists and its copy of the ticket carries
+a `started_at`, the ticket is `doing`, and `list` prints
+`started_at_only_on: <branch>` to say where the timestamp lives and that the
+base branch's own file still reads `null`. This keeps git the single source of
+truth - the fallback reads a branch, not a state file kept beside it.
+
 #### Branch Integration
 - Work performed on `feature/<ticket-name>` branches
 - `start` creates three symlinks at the repo root pointing at the active ticket:
@@ -530,7 +539,7 @@ you switch back to the base branch.
 - Committing on the feature branch and fast-forwarding (rather than writing to the base branch directly) is what keeps `close` working: the merge base moves along with it, so close's divergence preflight sees no base-side edit to the ticket file, and its squash-merge finds no local changes to overwrite.
 - How the fast-forward happens depends on whether the base branch is checked out somewhere, not on worktree mode: a checked-out branch is advanced with `merge --ff-only` in its own working tree, one nobody holds with `fetch . <feature>:<base>`. The two cases are mutually exclusive.
 - A ticket created by `new` is untracked (`new` makes no commit). Such a file would block the fast-forward, so it is removed from the base branch's working tree first — but only when it still hashes to what `start` read, meaning nothing is lost.
-- The fast-forward is best-effort. If the base branch has moved on, or its working tree holds conflicting changes, `start` reports it and carries on; `started_at` is committed on the feature branch either way.
+- The fast-forward is best-effort. If the base branch has moved on, or its working tree holds conflicting changes, `start` reports it and carries on; `started_at` is committed on the feature branch either way. `list` falls back to reading the feature branch (see below), so a skipped fast-forward costs the ticket file on the base branch, not the ticket's visibility. Note that a fast-forward the base branch has outrun cannot be retried into success: the feature branch does not contain the base branch's newer commits, so it is no longer a fast-forward at all.
 - **Nothing is pushed.** `start` declares that work is beginning; it is not a request to publish the base branch, and doing so would carry along any unpushed commits already sitting there (someone else's, in a repo where several worktrees share a base). The base branch reaches the remote on close.
 - Git hooks run on this commit. Set `no_verify: true` in config to skip them.
 - Resuming an already-started ticket does not re-stamp or re-record anything.

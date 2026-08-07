@@ -88,6 +88,14 @@ canceled_at: null  # Do not modify manually
 fast-forward するのはこのためである。二つ目の真実を作らずに、どちらのブランチから見ても
 `doing` と読めるようにしている。
 
+**feature branch にしか記録が無い場合。** fast-forward はスキップされることがあり
+（`start` を参照）、その場合 `started_at` は feature branch にしか載らない。そのため
+base branch 上で `todo` と判定されたチケットは、`{branch_prefix}<name>` を確認してから
+判断する。そのブランチが存在し、そちらの ticket ファイルに `started_at` があれば `doing` と
+して扱い、`list` は `started_at_only_on: <branch>` を出力して、時刻がどこにあるか、そして
+base branch 側のファイルはまだ `null` であることを示す。この fallback が読むのはブランチで
+あって傍らに置いた state ファイルではないので、真実が git の中だけにある構造は保たれる。
+
 #### ブランチ連携
 - 作業は `feature/<チケット名>` ブランチで実施
 - `start` はリポジトリ直下に 3 本の symlink を作成してアクティブチケットを指す：
@@ -527,7 +535,7 @@ branch から `list` してもチケットは `todo` のままに見える。こ
 - base branch に直接書くのではなく「feature branch でコミットして fast-forward」する形にしているのは `close` を壊さないため。merge base が一緒に進むので、close の差分プリフライトは base 側の ticket file 変更を検出せず、squash merge も上書き対象のローカル変更を見つけない。
 - fast-forward の方法は worktree モードかどうかではなく、**base branch がどこかにチェックアウトされているか**で決まる。チェックアウト済みならその作業ツリーで `merge --ff-only`、どこにも無ければ `fetch . <feature>:<base>`。両者は排他。
 - `new` が作ったチケットは untracked（`new` はコミットしない）。そのままでは fast-forward を妨げるため、事前に base branch 側の作業ツリーから取り除く。ただし `start` が読んだ時点と同じ内容である場合に限る（＝失われるものが無いことを確認してから消す）。
-- fast-forward は best-effort。base branch が先に進んでいたり、その作業ツリーに競合する変更があれば、その旨を報告して処理を続行する。`started_at` はいずれにせよ feature branch にコミットされている。
+- fast-forward は best-effort。base branch が先に進んでいたり、その作業ツリーに競合する変更があれば、その旨を報告して処理を続行する。`started_at` はいずれにせよ feature branch にコミットされている。`list` は feature branch を読みにいく（後述）ので、fast-forward の失敗で失われるのは base branch 側の ticket ファイルの内容であって、チケットの見え方ではない。なお base branch に追い越された fast-forward は retry しても成功しない。feature branch は base branch の新しい commit を含まないため、そもそも fast-forward ではなくなっているからである。
 - **push は一切行わない。** `start` は作業の開始を宣言するものであって base branch を publish する操作ではない。そこに未 push の commit があれば巻き込んで出てしまう（複数 worktree が base を共有する repo では他人の commit を含みうる）。base branch がリモートに出るのは `close` のとき。
 - このコミットでは Git hook が実行される。config の `no_verify: true` でスキップできる。
 - 開始済みチケットの resume では再記録は行わない。

@@ -295,6 +295,42 @@ run_git_command() {
     return $exit_code
 }
 
+# Derive a ticket's name from the path to its file, for either layout:
+#   tickets/<name>/ticket.md -> <name>
+#   tickets/<name>.md        -> <name>
+#
+# Usage: ticket_name_from_path <path>
+ticket_name_from_path() {
+    local path="$1"
+    local base="${path##*/}"
+
+    if [[ "$base" == "ticket.md" ]]; then
+        local parent="${path%/*}"
+        echo "${parent##*/}"
+    else
+        echo "${base%.md}"
+    fi
+}
+
+# Read started_at out of a ticket file as it stands on <branch>, without
+# checking anything out. Prints nothing when the branch has no such file, or
+# when the value is null.
+#
+# Usage: started_at_on_branch <branch> <ticket_path>
+started_at_on_branch() {
+    local branch="$1"
+    local ticket_path="$2"
+
+    git show "${branch}:${ticket_path}" 2>/dev/null | awk '
+        /^---[[:space:]]*$/ { fence++; if (fence > 1) exit; next }
+        fence == 1 && /^started_at:/ {
+            sub(/^started_at:[[:space:]]*/, "")
+            sub(/[[:space:]]*#.*$/, "")
+            print
+            exit
+        }'
+}
+
 # Find the working tree that has <branch> checked out, if any.
 # Prints its path, or nothing when the branch is checked out nowhere.
 #

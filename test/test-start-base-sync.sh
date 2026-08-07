@@ -218,6 +218,47 @@ else
     pass "the start time is still committed on the feature branch"
 fi
 
+# The point of the fallback: a skipped fast-forward must not make work in
+# progress read as untouched.
+git checkout -q -- "tickets/${TICKET}/ticket.md" 2>/dev/null || true
+LIST_OUT=$(timeout 10 ./ticket.sh list 2>&1)
+if echo "$LIST_OUT" | grep -q "status: doing"; then
+    pass "list reports doing even though the fast-forward was skipped"
+else
+    fail "list should read the feature branch when the base branch has no stamp" "$LIST_OUT"
+fi
+
+if echo "$LIST_OUT" | grep -q "started_at_only_on: feature/${TICKET}"; then
+    pass "list marks which branch the start time came from"
+else
+    fail "list should mark a start time that only exists on the feature branch" "$LIST_OUT"
+fi
+
+# The base branch really is missing it - that is what the mark is for.
+if started_at_on main "$TICKET" | grep -q "null"; then
+    pass "the base branch's ticket file is indeed still null"
+else
+    fail "expected the base branch to lack the start time in this scenario"
+fi
+
+if timeout 10 ./ticket.sh list --status doing 2>&1 | grep -q "$TICKET"; then
+    pass "--status doing includes a ticket recovered from its feature branch"
+else
+    fail "--status doing should include the recovered ticket"
+fi
+
+# An untouched ticket must stay todo: the fallback only fires when a branch
+# exists and carries a stamp.
+UNTOUCHED=$(make_ticket never-started)
+git add tickets && git commit -q -m "Add untouched ticket"
+LIST_OUT=$(timeout 10 ./ticket.sh list 2>&1)
+if echo "$LIST_OUT" | grep -A1 "ticket_path: tickets/${UNTOUCHED}/ticket.md" >/dev/null &&
+   echo "$LIST_OUT" | grep -B2 "ticket_path: tickets/${UNTOUCHED}/ticket.md" | grep -q "status: todo"; then
+    pass "a ticket that was never started stays todo"
+else
+    fail "an unstarted ticket should still read as todo" "$LIST_OUT"
+fi
+
 # ---------------------------------------------------------------------------
 echo
 echo "6. The ticket's base_branch override is the branch that advances"
@@ -316,6 +357,35 @@ if [[ "$LEGACY_STAMP" == "MISSING" ]] || echo "$LEGACY_STAMP" | grep -q "null"; 
     fail "legacy flat tickets should record started_at on the base branch" "got: $LEGACY_STAMP"
 else
     pass "legacy flat tickets record started_at on the base branch"
+fi
+
+# The feature-branch fallback has to resolve the flat layout's name too.
+REPO=$(make_repo repo8)
+cd "$REPO"
+LEGACY2="250101-130000-legacy-blocked"
+cat > "tickets/${LEGACY2}.md" <<'EOF'
+---
+priority: 2
+description: "legacy flat ticket, blocked fast-forward"
+created_at: "2025-01-01T13:00:00Z"
+started_at: null
+closed_at: null
+---
+
+# Legacy
+
+Body.
+EOF
+git add tickets && git commit -q -m "Add legacy ticket"
+echo "# edited in the main repo" >> "tickets/${LEGACY2}.md"
+timeout 20 ./ticket.sh start --worktree "$LEGACY2" >/dev/null 2>&1
+git checkout -q -- "tickets/${LEGACY2}.md" 2>/dev/null || true
+
+LIST_OUT=$(timeout 10 ./ticket.sh list 2>&1)
+if echo "$LIST_OUT" | grep -q "started_at_only_on: feature/${LEGACY2}"; then
+    pass "the feature-branch fallback works for legacy flat tickets"
+else
+    fail "legacy flat tickets should also be recovered from their branch" "$LIST_OUT"
 fi
 
 # ---------------------------------------------------------------------------

@@ -4,7 +4,7 @@ base_branch: default  # Override base branch for start/close (default: use defau
 description: "fast-forward できなかったチケットを list が feature branch から拾って doing 表示する。base 未反映の印も付ける（外部からの意見書 B への回答）。"
 created_at: "2026-08-07T14:16:49Z"
 started_at: 2026-08-07T14:33:49Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-08-07T14:47:59Z # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
 
@@ -80,17 +80,17 @@ ff の成否に関わらず表示が正しくなるため、「ff に失敗し�
 
 ## Tasks
 
-- [ ] `cmd_list` に、todo のチケットについて feature branch の `started_at` を読む処理を追加する
-- [ ] base 未反映であることを示す表示を決めて実装する
-- [ ] `--status` によるフィルタが新しい doing 判定と整合することを確認する
-- [ ] レガシー flat レイアウトでも動作することを確認する
-- [ ] 性能: チケット数が多い repo で `list` が実用的な速度に留まることを確認する
-- [ ] `advance_branch_ff` 失敗時の警告文を「表示には影響しない」旨に更新する
-- [ ] テストを追加する（ff 失敗後に list が doing + 印を出す / 未 start は todo のまま /
+- [x] `cmd_list` に、todo のチケットについて feature branch の `started_at` を読む処理を追加する
+- [x] base 未反映であることを示す表示を決めて実装する
+- [x] `--status` によるフィルタが新しい doing 判定と整合することを確認する
+- [x] レガシー flat レイアウトでも動作することを確認する
+- [x] 性能: チケット数が多い repo で `list` が実用的な速度に留まることを確認する
+- [x] `advance_branch_ff` 失敗時の警告文を「表示には影響しない」旨に更新する
+- [x] テストを追加する（ff 失敗後に list が doing + 印を出す / 未 start は todo のまま /
       レガシーレイアウト）
-- [ ] ドキュメント更新（spec.*.md の状態判定、ヘルプ）
-- [ ] Run tests before closing and pass all tests (No exceptions)
-  - [ ] `test/run-all.sh`
-  - [ ] `test/run-all-on-docker.sh`
-- [ ] Run `bash build.sh` to build the project
+- [x] ドキュメント更新（spec.*.md の状態判定、ヘルプ）
+- [x] Run tests before closing and pass all tests (No exceptions)
+  - [x] `test/run-all.sh`
+  - [x] `test/run-all-on-docker.sh`
+- [x] Run `bash build.sh` to build the project
 - [ ] Get developer approval before closing

@@ -12,7 +12,7 @@ fi
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20260807.142613
+# Version: 20260807.144539
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -1083,6 +1083,42 @@ run_git_command() {
     return $exit_code
 }
 
+# Derive a ticket's name from the path to its file, for either layout:
+#   tickets/<name>/ticket.md -> <name>
+#   tickets/<name>.md        -> <name>
+#
+# Usage: ticket_name_from_path <path>
+ticket_name_from_path() {
+    local path="$1"
+    local base="${path##*/}"
+
+    if [[ "$base" == "ticket.md" ]]; then
+        local parent="${path%/*}"
+        echo "${parent##*/}"
+    else
+        echo "${base%.md}"
+    fi
+}
+
+# Read started_at out of a ticket file as it stands on <branch>, without
+# checking anything out. Prints nothing when the branch has no such file, or
+# when the value is null.
+#
+# Usage: started_at_on_branch <branch> <ticket_path>
+started_at_on_branch() {
+    local branch="$1"
+    local ticket_path="$2"
+
+    git show "${branch}:${ticket_path}" 2>/dev/null | awk '
+        /^---[[:space:]]*$/ { fence++; if (fence > 1) exit; next }
+        fence == 1 && /^started_at:/ {
+            sub(/^started_at:[[:space:]]*/, "")
+            sub(/[[:space:]]*#.*$/, "")
+            print
+            exit
+        }'
+}
+
 # Find the working tree that has <branch> checked out, if any.
 # Prints its path, or nothing when the branch is checked out nowhere.
 #
@@ -1262,7 +1298,7 @@ if [ -z "${BASH_VERSION:-}" ]; then
 fi
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20260807.142613
+# Version: 20260807.144539
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -1354,7 +1390,7 @@ SCRIPT_COMMAND=$(get_script_command)
 
 
 # Global variables
-VERSION="20260807.142613"  # This will be replaced during build
+VERSION="20260807.144539"  # This will be replaced during build
 CONFIG_FILE=""  # Will be set dynamically by get_config_file()
 CURRENT_TICKET_LINK="current-ticket.md"
 CURRENT_NOTE_LINK="current-note.md"
@@ -1451,6 +1487,7 @@ be recognized by every command; they are never auto-migrated.
 - \`$SCRIPT_COMMAND init\` - Initialize system (create config, directories, .gitignore)
 - \`$SCRIPT_COMMAND new <slug> [--epic <epic-slug>] [--created-at <YYMMDD-hhmmss>]\` - Create new ticket file (slug: lowercase, numbers, hyphens only; --created-at overrides the timestamp, used as filename prefix and UTC created_at)
 - \`$SCRIPT_COMMAND list [--status STATUS] [--count N]\` - List tickets (default: todo + doing, count: 20)
+  - A ticket the current branch calls \`todo\` is checked against \`{branch_prefix}<name>\` before being believed. If that branch carries a \`started_at\`, the ticket is \`doing\` and the line \`started_at_only_on: <branch>\` says the timestamp lives only there - which happens when \`start\`'s fast-forward onto the base branch was skipped.
 - \`$SCRIPT_COMMAND start [--worktree] [--copy-file <path>]... <ticket-name>\` - Start working on ticket (creates or switches to feature branch, --worktree creates a separate worktree)
   - With \`--worktree\`: **cd to the worktree directory after start; cd back to the main repo after close.** In environments where cwd resets each command (e.g. LLM agents), cd must be re-run every time.
   - \`start\` commits \`started_at\` on the feature branch and fast-forwards the base branch onto that commit, so the ticket shows as \`doing\` from the base branch too. Nothing is pushed: the base branch reaches the remote on close. If the base branch has moved on, the fast-forward is skipped with a note and the start time stays on the feature branch.
@@ -2458,7 +2495,11 @@ EOF
         return 1
     fi
     local tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
-    
+    # Read this now, while yaml_get still holds the config: the loop below
+    # re-parses yaml_get for every ticket's frontmatter, and asking afterwards
+    # would silently fall back to the default.
+    local branch_prefix=$(yaml_get "branch_prefix" || echo "$DEFAULT_BRANCH_PREFIX")
+
     # Check if tickets directory exists
     if [[ ! -d "$tickets_dir" ]]; then
         cat >&2 << EOF
@@ -2483,7 +2524,11 @@ EOF
     
     local displayed=0
     local temp_file=$(mktemp)
-    
+
+    # List the feature branches once. The todo fallback below needs to know
+    # which ones exist, and asking git per ticket would mean a process apiece.
+    local feature_branches=$(git for-each-ref --format='%(refname:short)' "refs/heads/${branch_prefix}*" 2>/dev/null)
+
     # Collect all tickets with their metadata.
     # Enumerate both layouts:
     #   legacy: tickets/<name>.md, tickets/done/<name>.md
@@ -2516,6 +2561,23 @@ EOF
         # Determine status
         local status=$(get_ticket_status "$started_at" "$closed_at" "$canceled_at")
 
+        # A start whose fast-forward didn't land leaves started_at on the
+        # feature branch alone, so reading only the base branch would call work
+        # in progress 'todo' - the very thing recording the start time was meant
+        # to fix. Check the branch before believing it.
+        local started_on_branch=""
+        if [[ "$status" == "todo" ]]; then
+            local _branch="${branch_prefix}$(ticket_name_from_path "$ticket_file")"
+            if [[ $'\n'"${feature_branches}"$'\n' == *$'\n'"${_branch}"$'\n'* ]]; then
+                local _branch_started=$(started_at_on_branch "$_branch" "${ticket_file#./}")
+                if ! is_null_or_empty "$_branch_started"; then
+                    started_at="$_branch_started"
+                    status="doing"
+                    started_on_branch="$_branch"
+                fi
+            fi
+        fi
+
         # Apply filter
         if [[ -n "$filter_status" ]] && [[ "$status" != "$filter_status" ]]; then
             continue
@@ -2530,8 +2592,8 @@ EOF
         local ticket_path="${ticket_file#./}"
         
         # Store in temp file for sorting
-        # Format: status|priority|ticket_path|description|created_at|started_at|closed_at|canceled_at
-        echo "${status}|${priority}|${ticket_path}|${description}|${created_at}|${started_at}|${closed_at}|${canceled_at}" >> "$temp_file"
+        # Format: status|priority|ticket_path|description|created_at|started_at|closed_at|canceled_at|started_on_branch
+        echo "${status}|${priority}|${ticket_path}|${description}|${created_at}|${started_at}|${closed_at}|${canceled_at}|${started_on_branch}" >> "$temp_file"
     done
     
     # Sort and display
@@ -2549,7 +2611,7 @@ EOF
         sort -t'|' -k1,1 -k2,2n "$temp_file" | sed 's/^doing|/0|/; s/^todo|/1|/; s/^done|/2|/; s/^canceled|/3|/' | sort -t'|' -k1,1n -k2,2n | sed 's/^0|/doing|/; s/^1|/todo|/; s/^2|/done|/; s/^3|/canceled|/' > "$sorted_file"
     fi
 
-    while IFS='|' read -r status priority ticket_path description created_at started_at closed_at canceled_at; do
+    while IFS='|' read -r status priority ticket_path description created_at started_at closed_at canceled_at started_on_branch; do
         [[ $displayed -ge $count ]] && break
 
         # Convert timestamps to local timezone
@@ -2564,21 +2626,16 @@ EOF
         echo "  priority: $priority"
         echo "  created_at: $created_at_local"
         [[ "$status" != "todo" ]] && echo "  started_at: $started_at_local"
+        # Only the feature branch carries this start time - the fast-forward
+        # onto the base branch didn't happen, so the ticket file there still
+        # says null.
+        [[ -n "$started_on_branch" ]] && echo "  started_at_only_on: $started_on_branch"
         [[ "$status" == "done" ]] && [[ "$closed_at" != "null" ]] && echo "  closed_at: $closed_at_local"
         [[ "$status" == "canceled" ]] && [[ "$canceled_at" != "null" ]] && echo "  canceled_at: $canceled_at_local"
 
         # Show worktree info for doing tickets
         if [[ "$status" == "doing" ]]; then
-            local _ticket_basename
-            if [[ "$(basename "$ticket_path")" == "ticket.md" ]]; then
-                # new-format: <parent_dir>/ticket.md -> parent_dir name
-                local _parent="${ticket_path%/*}"
-                _ticket_basename="${_parent##*/}"
-            else
-                _ticket_basename=$(basename "$ticket_path" .md)
-            fi
-            local _branch_prefix=$(yaml_get "branch_prefix" || echo "$DEFAULT_BRANCH_PREFIX")
-            local _branch="${_branch_prefix}${_ticket_basename}"
+            local _branch="${branch_prefix}$(ticket_name_from_path "$ticket_path")"
             local _wt_path=$(worktree_holding_branch "." "$_branch")
             if [[ -n "$_wt_path" ]]; then
                 echo "  worktree: $_wt_path"
@@ -2617,6 +2674,8 @@ EOF
 # The fast-forward is best-effort. When the base branch has moved on - a
 # concurrent start, say - we leave it alone and carry on: started_at is on the
 # feature branch either way, and this is bookkeeping, not the user's work.
+# 'list' falls back to reading the feature branch, so a skipped fast-forward
+# costs the ticket file on the base branch, not the ticket's visibility.
 #
 # Nothing here pushes. 'start' says work is beginning; it is not a request to
 # publish the base branch, and doing so would carry along whatever unpushed
@@ -2673,7 +2732,8 @@ record_start_on_base() {
             "$ticket_rel" "$ticket_hash" "$note_rel" "$note_hash"; then
         echo "Note: Could not fast-forward '$base_branch' to record the start time." >&2
         echo "  '$base_branch' has moved on, or its working tree holds conflicting changes." >&2
-        echo "  The start time is recorded on '$feature_branch'; nothing is lost." >&2
+        echo "  The start time is committed on '$feature_branch', and 'list' reads it from" >&2
+        echo "  there, so the ticket still shows as doing." >&2
         return 0
     fi
 
