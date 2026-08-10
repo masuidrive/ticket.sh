@@ -3,7 +3,7 @@ priority: 2
 base_branch: default  # Override base branch for start/close (default: use default_branch from config)
 description: "close の commit message から YAML frontmatter を除き、echo -e による本文破壊と複数行 description による subject 混入も直す"
 created_at: "2026-08-10T09:40:07Z"
-started_at: null  # Do not modify manually
+started_at: 2026-08-10T09:40:49Z # Do not modify manually
 closed_at: null   # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
