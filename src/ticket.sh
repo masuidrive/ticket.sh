@@ -222,6 +222,7 @@ be recognized by every command; they are never auto-migrated.
 - \`$SCRIPT_COMMAND check\` - Check current directory and ticket/branch synchronization status
 - \`$SCRIPT_COMMAND close [--no-push] [--force|-f] [--no-delete-remote] [--keep-worktree] [--dry-run|-n]\` - Complete current ticket (squash merge to default branch)
   - \`--dry-run\` (\`-n\`) runs all preflight checks (clean working dir, branch, ticket state, base_branch existence, worktree main repo state) and exits before any commit/merge. Useful for catching format mistakes or stale state before the real close. Note: pre-commit hooks are NOT executed by --dry-run.
+  - The squash commit's subject is \`[<ticket-name>] <description>\` (description folded onto one line), and its body is the ticket's **Markdown body only** - the YAML frontmatter is never included. This is fixed behavior with no config key. Keeping the body in the message is what lets \`git blame\` reach the reasoning without opening \`tickets/done/\`.
   - From a worktree, close refuses to merge if the main repo is on a non-default branch or has uncommitted changes (protects parallel workers).
   - **Coding agents (Claude Code / Codex / etc.) must pass \`--keep-worktree\`**: without it, the worker's worktree is deleted and the agent's shell cwd points to a removed directory → every subsequent Bash tool call fails.
   - \`--no-merge [--closed-at <ISO8601-UTC>] <ticket-name>\` - Skip the squash-merge (assume the ticket's changes are already on the base branch, e.g. after a GitHub PR merge). Only set closed_at, move the ticket/note to done/, commit and push. Requires \`<ticket-name>\`. \`--closed-at\` overrides closed_at with a full ISO8601 UTC value (default: now).
@@ -2771,7 +2772,21 @@ EOF
     else
         ticket_name="$(basename "$ticket_file" .md)"
     fi
-    local ticket_content=$(cat "$ticket_file")
+    # The Markdown body only - never the YAML frontmatter. The frontmatter is
+    # metadata this script writes for whoever edits the ticket ("# Do not modify
+    # manually"), not for whoever reads the history later, and dropping it loses
+    # nothing: the same commit carries tickets/done/<name>/ticket.md with the
+    # frontmatter intact, closed_at duplicates the commit's author date, and
+    # description duplicates the subject. Embedding the body itself is
+    # deliberate - it is what lets `git blame` reach the "why" without opening
+    # tickets/done/. extract_markdown_body returns the whole file when there is
+    # no frontmatter, so hand-written and legacy tickets still work.
+    local ticket_content=$(extract_markdown_body "$ticket_file")
+    # Strip the blank line that sits between the frontmatter fence and the first
+    # heading, so the subject is followed by exactly one blank line.
+    while [[ "$ticket_content" == $'\n'* ]]; do
+        ticket_content="${ticket_content#$'\n'}"
+    done
 
     # Push feature branch if auto_push
     if [[ "$auto_push" == "true" ]] && [[ "$no_push" == "false" ]]; then
@@ -2781,11 +2796,24 @@ EOF
     fi
 
     # Create commit message (used by both merge paths below)
-    local commit_msg="[${ticket_name}] ${description}"
-    if [[ -z "$description" ]]; then
+    # A block-scalar description ("description: |") comes back from yaml_get with
+    # embedded newlines and a trailing blank line. Left alone it would silently
+    # spill the subject across several lines. Fold it onto one line - how long
+    # the description is stays the ticket author's call, but its shape is ours.
+    local subject_desc="${description//$'\n'/ }"
+    subject_desc="${subject_desc#"${subject_desc%%[![:space:]]*}"}"
+    subject_desc="${subject_desc%"${subject_desc##*[![:space:]]}"}"
+
+    local commit_msg="[${ticket_name}] ${subject_desc}"
+    if [[ -z "$subject_desc" ]]; then
         commit_msg="[${ticket_name}] Ticket completed"
     fi
-    commit_msg="${commit_msg}\n\n${ticket_content}"
+    # $'\n\n', not a literal "\n\n" - the message is written with plain `echo`
+    # below, so `echo -e` is not needed and must not be used: it would also
+    # expand any backslash escape the ticket body happens to contain.
+    if [[ -n "$ticket_content" ]]; then
+        commit_msg="${commit_msg}"$'\n\n'"${ticket_content}"
+    fi
 
     local tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
     local done_dir="${tickets_dir}/done"
@@ -2844,7 +2872,7 @@ EOF
             fi
         fi
 
-        echo -e "$commit_msg" | run_git_command "git -C $main_repo commit -F -" || {
+        echo "$commit_msg" | run_git_command "git -C $main_repo commit -F -" || {
             echo "Error: Failed to commit final merge" >&2
             return 1
         }
@@ -2927,7 +2955,7 @@ EOF
             fi
         fi
 
-        echo -e "$commit_msg" | run_git_command "git commit -F -" || {
+        echo "$commit_msg" | run_git_command "git commit -F -" || {
             echo "Error: Failed to commit final merge" >&2
             echo "Squash merge is staged but not committed" >&2
             echo "You can commit manually with: git commit" >&2

@@ -4,7 +4,7 @@ base_branch: default  # Override base branch for start/close (default: use defau
 description: "close の commit message から YAML frontmatter を除き、echo -e による本文破壊と複数行 description による subject 混入も直す"
 created_at: "2026-08-10T09:40:07Z"
 started_at: 2026-08-10T09:40:49Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-08-10T10:53:11Z # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
 
@@ -108,17 +108,17 @@ git は長い subject を拒否しない。
 
 ## Tasks
 
-- [ ] `src/ticket.sh:2774` の `cat "$ticket_file"` を `extract_markdown_body` に差し替え、body 先頭の空行を落とす
-- [ ] body が空の ticket で message が余計な空行で終わらないことを確認
-- [ ] `:2788` の組み立てを `$'\n\n'` に変え、`:2847` / `:2930` の `echo -e` から `-e` を外す
-- [ ] subject 用に description の改行をスペースへ正規化し、末尾空白を落とす
-- [ ] `yaml-sh/yaml-sh.sh` の `local` 宣言を while ループ外へ移す
-- [ ] テストを追加 — frontmatter が body に出ないこと / バックスラッシュを含む本文が保たれること / 複数行 description が 1 行 subject になること / frontmatter 無しファイルのフォールバック / レガシー flat ticket
-- [ ] Run tests before closing and pass all tests (No exceptions)
-- [ ] Run `bash build.sh` to build the project
-- [ ] Update documentation if necessary
-  - [ ] Update README.*.md
-  - [ ] Update spec.*.md（`spec.md:701` / `spec.ja.md:694` の commit message 例）
-  - [ ] Update DEV.md
+- [x] `src/ticket.sh:2774` の `cat "$ticket_file"` を `extract_markdown_body` に差し替え、body 先頭の空行を落とす
+- [x] body が空の ticket で message が余計な空行で終わらないことを確認
+- [x] `:2788` の組み立てを `$'\n\n'` に変え、`:2847` / `:2930` の `echo -e` から `-e` を外す
+- [x] subject 用に description の改行をスペースへ正規化し、末尾空白を落とす
+- [x] `yaml-sh/yaml-sh.sh` の `local` 宣言を while ループ外へ移す
+- [x] テストを追加 — frontmatter が body に出ないこと / バックスラッシュを含む本文が保たれること / 複数行 description が 1 行 subject になること / frontmatter 無しファイルのフォールバック / レガシー flat ticket
+- [x] Run tests before closing and pass all tests (No exceptions)
+- [x] Run `bash build.sh` to build the project
+- [x] Update documentation if necessary
+  - [x] Update README.*.md（確認したが commit message の書式に触れた記述が無く、変更不要）
+  - [x] Update spec.*.md（`spec.md:701` / `spec.ja.md:694` の commit message 例）
+  - [x] Update DEV.md
 - [ ] Get developer approval before closing
 - [ ] issue #2 に対応内容を返信して close

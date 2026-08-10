@@ -310,6 +310,13 @@ Documentation updates should be part of the same PR as code changes.
    frontmatter already holds, with no way to settle which copy is right once the
    two drift. When state needs to be visible from another branch, commit it
    there (see `record_start_on_base`), don't shadow it in an untracked file.
+8. **Commit messages carry the ticket body, not its frontmatter**: `close` embeds
+   the ticket's Markdown into the squash commit so `git blame` reaches the "why"
+   without opening `tickets/done/`. The YAML frontmatter is deliberately left
+   out — it is written for whoever edits the ticket, not whoever reads the
+   history, and the same commit already carries the ticket file itself. Build the
+   message with `$'\n\n'` and plain `echo`, never `echo -e`: the body is
+   arbitrary Markdown and may contain backslash escapes that `-e` would expand.
 
 ### Recent Enhancements
 

@@ -674,6 +674,26 @@ Permission denied creating symlink. Please:
 6. **Push (条件付き)**: `auto_push: true` かつ `--no-push` 未指定時のみ `{default_branch}` をpush
 7. 実行したGitコマンドと出力を詳細表示
 
+**Squash コミットメッセージ:**
+
+squash コミットはチケットを埋め込む。`tickets/done/` を開かずに `git blame` から
+変更の理由に辿り着けるようにするため。内訳は次のとおり。
+
+- **subject** — `[<ticket-name>] <description>`。`description` が空または空白のみの
+  場合は `[<ticket-name>] Ticket completed`。description は1行に畳まれる（改行は
+  スペースになり、前後の空白は落ちる）ため、YAML の block scalar でも subject が
+  複数行に割れることはない。長さには手を入れない。意味を保って短くできるのは
+  チケットの書き手だけだから。
+- **body** — チケットの Markdown 本文、つまり閉じ `---` より後ろ。**YAML frontmatter は
+  含まれない。** frontmatter はチケットを**編集する人**に向けて本スクリプトが書く
+  メタデータ（`# Do not modify manually`）であって履歴の読み手向けではなく、外しても
+  情報は失われない。同じコミットが frontmatter 込みの
+  `tickets/done/<TICKETNAME>/ticket.md` を含んでおり、`closed_at` はコミットの
+  author date と、`description` は subject と重複しているため。frontmatter の無い
+  チケットは全文が入り、本文の無いチケットは subject だけのメッセージになる。
+
+これを変える設定キーは無い。常にこの挙動。
+
 **Git操作詳細:**
 ```bash
 # 1. チケット更新
@@ -691,7 +711,9 @@ fi
 # 4. squash merge
 git checkout {default_branch}
 git merge --squash current-branch
-git commit -m "[ticket-name] description\n\n$(cat ticket-file)"
+# subject: description を1行に畳んだもの
+# body: ticket の Markdown 本文。YAML frontmatter は入らない
+git commit -m "[ticket-name] description\n\n$(markdown body of ticket-file)"
 
 # 5. Push (条件付き)
 if [[ $auto_push == true && $no_push != true ]]; then

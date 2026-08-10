@@ -681,6 +681,27 @@ Completes ticket and merge process:
 8. **Push move (conditional)**: Pushes the final commit when `auto_push: true` and `--no-push` not specified
 9. Displays executed Git commands and output in detail
 
+**Squash Commit Message:**
+
+The squash commit embeds the ticket, so `git blame` reaches the reasoning behind
+a change without anyone opening `tickets/done/`. What goes where:
+
+- **Subject** — `[<ticket-name>] <description>`, or `[<ticket-name>] Ticket completed`
+  when `description` is empty or whitespace only. The description is folded onto
+  a single line (newlines become spaces, surrounding whitespace is trimmed), so a
+  YAML block scalar cannot spill the subject across several lines. Its length is
+  left alone: only the ticket's author can shorten it meaningfully.
+- **Body** — the ticket's Markdown body, the part after the closing `---` fence.
+  The **YAML frontmatter is never included**. It is metadata this script writes
+  for whoever edits the ticket (`# Do not modify manually`), not for whoever reads
+  the history, and omitting it loses nothing: the same commit carries
+  `tickets/done/<TICKETNAME>/ticket.md` with the frontmatter intact, `closed_at`
+  duplicates the commit's author date, and `description` duplicates the subject.
+  A ticket with no frontmatter contributes its whole file; a ticket with no body
+  contributes nothing, leaving a subject-only message.
+
+There is no configuration key for this — it is the only behavior.
+
 **Git Operation Details:**
 ```bash
 # 1. Update ticket
@@ -698,7 +719,9 @@ fi
 # 4. squash merge
 git checkout {default_branch}
 git merge --squash current-branch
-git commit -m "[ticket-name] description\n\n$(cat ticket-file)"
+# Subject: the description, folded onto one line.
+# Body: the ticket's Markdown body - never its YAML frontmatter.
+git commit -m "[ticket-name] description\n\n$(markdown body of ticket-file)"
 
 # 5. Push (conditional)
 if [[ $auto_push == true && $no_push != true ]]; then

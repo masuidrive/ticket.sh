@@ -286,6 +286,11 @@ yaml_parse() {
     local line
     local multiline_value=""
     local reading_multiline=0
+
+    # Declared here rather than inside the read loop below: re-running `local` on
+    # the same names every iteration makes zsh dump the parameter list to stdout,
+    # which corrupts the output for anyone sourcing this into zsh.
+    local type indent key value rest
     
     # Use temporary file to avoid process substitution (bash 3.2 compatibility)
     local temp_yaml_output="/tmp/yaml_parse_$$.tmp"
@@ -328,7 +333,6 @@ yaml_parse() {
         # This used to shell out four times per line. That is 28 processes for a
         # single ticket's frontmatter, and it dominated the cost of every
         # command that reads YAML: listing 100 tickets spent 5.8s of its 7s here.
-        local type indent key value rest
         rest="$line"
         type="${rest%% *}"
         rest="${rest#* }"
