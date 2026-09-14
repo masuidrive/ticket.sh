@@ -3,7 +3,7 @@ priority: 2
 base_branch: default  # Override base branch for start/close (default: use default_branch from config)
 description: "GitHub issues #6 / #7 / #8 を実装する（ticket_files, append_only_files, frontmatter branch:）"
 created_at: "2026-09-14T10:07:59Z"
-started_at: null  # Do not modify manually
+started_at: 2026-09-14T10:08:26Z # Do not modify manually
 closed_at: null   # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
