@@ -115,6 +115,7 @@ tickets/
   <TICKETNAME>/
     ticket.md   # チケット本体（YAML frontmatter + Markdown）
     note.md     # 作業ノート／ログ
+    ...         # config の ticket_files に挙げた追加ファイル（progress.md など）
     tmp/        # ticket-local 一時 helper（start/restore で自動作成、tickets/.gitignore で git 除外）
   done/
     <TICKETNAME>/   # close/cancel されたチケット — ディレクトリごと移動
@@ -176,7 +177,7 @@ tickets/
 
 ### コアコマンド
 - `init` - チケットシステムを初期化（冪等性、再実行安全）
-- `new <slug>` - 新しいチケットを作成
+- `new <slug> [--branch <name>]` - 新しいチケットを作成（`--branch` はこの ticket の feature branch 名を `{branch_prefix}<ticket-name>` の代わりに指定する）
 - `list [--status todo|doing|done|canceled] [--count N]` - チケット一覧
 - `start [--worktree] [--copy-file <path>]... <ticket>` - チケットの作業を開始（--worktree で別ディレクトリに worktree を作成、--copy-file で `worktree_copy_files` にワンショットで path 追加）
 - `close [--no-push] [--force] [--no-delete-remote]` - チケットを完了
@@ -238,6 +239,25 @@ require_checklist: false
 # 止める。既定は空で、require_checklist とは独立（この一覧自体が opt-in）。
 # require_checklist_groups:
 #   - "Required Probes"
+
+# new が ticket dir に作る、note.md 以外の追加ファイル。各要素は ticket dir 相対の
+# path（サブディレクトリ可）と、その初期内容 content。content では note_content と
+# 同じく $$TICKET_NAME$$ / $$NOTE_PATH$$ が置換される。既存ファイルは上書きしない。
+# note.md の要素は note_content より優先される。flat（旧形式）の ticket には作らない。
+# 実在するものは start / restore の "Active ticket paths:" に 1 行ずつ出る。
+# ticket_files:
+#   - path: progress.md
+#     content: |
+#       # Progress: $$TICKET_NAME$$
+#
+#       経緯は追記のみ。現在値は $$NOTE_PATH$$ に置く。
+
+# ticket dir の中で「追記しかしてはいけない」ファイル（ticket dir 相対の path）。
+# かつてそのファイルにあった行が今そこに無ければ close が止まり、消した commit を
+# 名指しする。直し方はその行を新しい commit で追記し直すこと（履歴は書き換えない）。
+# plain check は同じ内容を表示するだけで落ちない。--force では迂回できない。既定は空。
+# append_only_files:
+#   - progress.md
 
 # Worktree mode: create a separate git worktree for each ticket
 # When true, 'start' always creates a worktree (same as --worktree flag)
@@ -353,6 +373,7 @@ default_content: |
 - **既存ブランチ**: 失敗する代わりに自動的にチェックアウトして復元
 - **クリーンブランチ**: 変更がない場合はデフォルトブランチから新ブランチを作成
 - **競合検出**: クローズ時のマージ競合処理のガイダンス提供
+- **チケットごとの branch 名**: frontmatter の `branch:`（`new --branch <name>` で設定）があれば、`{branch_prefix}<ticket-name>` ではなくその branch を使う。`start` は既にあれば checkout、無ければ作成し、`check` / `restore` / `list` / `close` / `cancel` もすべてその branch と ticket を対応付ける。branch 名の由来が外にあるケース — issue 番号から `agent/issue-12` を組み立て、ticket ができる前に checkout してしまう CI bot など — を、コマンドを迂回せずに通常どおり扱うためのもの。
 
 ### 自動整理
 - **doneフォルダ**: 完了チケットを自動的に `tickets/done/<TICKETNAME>/` にディレクトリごと移動
@@ -363,6 +384,18 @@ default_content: |
 - **テンプレート指定可**: config の `note_content` で新チケット作成時の `note.md` 初期内容を設定
 - **自動管理**: close/cancel でチケットディレクトリと一緒に `note.md` も移動、互換 `current-note.md` symlink も自動で作成／削除
 - **git-ignore 対象**: `init` が `current-ticket`, `current-ticket.md`, `current-note.md` を `.gitignore` に追加し、誤コミットを防ぐ
+
+### 追加ファイル（`ticket_files`）
+- **付属ファイルを 2 つ以上**: `note_content` が作れるのは `note.md` ただ 1 つ。`ticket_files` に `(path, content)` の組を列挙すると、`new` がそのすべてを ticket dir に作る。置換は `note_content` と同じ（`$$TICKET_NAME$$` / `$$NOTE_PATH$$`）。サブディレクトリは必要に応じて作成し、ticket dir の外に出る path は警告して skip。
+- **上書きしない**: 既存ファイルはそのまま。`note.md` の要素は `note_content` より優先される。
+- **在処が分かる**: 実在するファイルは `start` / `restore` の `Active ticket paths:` に出るので、そのブロックだけ読んだ agent もファイルの場所が分かる — 覚えるべき規則も、自分で作るべきファイルも無い。
+- **新レイアウトのみ**: flat（旧形式）の ticket には置く先のディレクトリが無い。
+
+### 追記のみのファイル（`append_only_files`）
+- **記録として残すファイル向け**: 経緯ログが価値を持つのは、誰も後から回り道を消して整えなかったから。その path を `append_only_files` に挙げると、かつてそのファイルにあった行が今そこに無い間 `close` が止まり、ファイル名・消した commit・その行を名指しする。
+- **履歴を書き換えずに直せる**: 判定するのは「行が**今**ファイルにあるか」であって「どれかの commit が消したか」ではないので、新しい commit で追記し直せば解消する。行の**変更**も削除に数える（変更前の文字列は失われているため）。
+- **表示だけでなく拒否する**: `--force` では迂回できず（修復の方が記録を読める形で残るため）、`--dry-run` でも見える。plain `check` は同じ内容を表示して exit 0 のままなので、branch がまだ自分のもので追記できるうちに気づける。
+- **opt-in で範囲は狭い**: 既定は空。ファイルを持たない ticket は対象外。
 
 ### Worktreeサポート（オプション）
 - **並行作業**: `start`に`--worktree`フラグを付けてチケット毎に別のgit worktreeを作成

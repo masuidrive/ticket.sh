@@ -90,7 +90,8 @@ either branch, without a second source of truth.
 
 **When only the feature branch has the stamp.** The fast-forward can be skipped
 (see `start`), leaving `started_at` on the feature branch alone. A ticket the
-base branch calls `todo` is therefore checked against `{branch_prefix}<name>`
+base branch calls `todo` is therefore checked against its branch (the `branch:`
+field when the ticket has one, otherwise `{branch_prefix}<name>`)
 before being believed: if that branch exists and its copy of the ticket carries
 a `started_at`, the ticket is `doing`, and `list` prints
 `started_at_only_on: <branch>` to say where the timestamp lives and that the
@@ -98,7 +99,7 @@ base branch's own file still reads `null`. This keeps git the single source of
 truth - the fallback reads a branch, not a state file kept beside it.
 
 #### Branch Integration
-- Work performed on `feature/<ticket-name>` branches
+- Work performed on `feature/<ticket-name>` branches, or on the branch the ticket's `branch:` frontmatter field names
 - `start` creates three symlinks at the repo root pointing at the active ticket:
   - `current-ticket/` → `tickets/<TICKETNAME>/` (directory symlink)
   - `current-ticket.md` → `tickets/<TICKETNAME>/ticket.md` (compat file symlink)
@@ -261,6 +262,21 @@ require_checklist: false
 # require_checklist_groups:
 #   - "Required Probes"
 
+# Extra files 'new' creates in the ticket directory, beyond note.md. Each entry
+# is a path (relative to the ticket directory) plus the content to seed it with;
+# $$TICKET_NAME$$ / $$NOTE_PATH$$ are substituted as in note_content. Existing
+# files are never overwritten. An entry for note.md wins over note_content.
+# ticket_files:
+#   - path: progress.md
+#     content: |
+#       # Progress: $$TICKET_NAME$$
+
+# Files inside the ticket directory that may only ever grow. close refuses while
+# a line one of them used to hold is missing from it; plain 'check' shows the
+# same thing without failing. Not bypassed by --force. Empty by default.
+# append_only_files:
+#   - progress.md
+
 # Worktree mode (optional)
 # worktree_mode: false    # When true, 'start' always creates a worktree
 # worktree_dir: ""        # Custom worktree base directory
@@ -298,6 +314,8 @@ auto_push: true
 no_verify: false
 require_checklist: false
 require_checklist_groups: []
+ticket_files: []
+append_only_files: []
 default_content: |
   # Ticket Overview
   
@@ -317,7 +335,7 @@ default_content: |
 
 ```bash
 ./ticket.sh init                          # Initialize
-./ticket.sh new <slug>                    # Create ticket (slug: lowercase, numbers, hyphens only)
+./ticket.sh new <slug> [--branch <name>]  # Create ticket (slug: lowercase, numbers, hyphens only); --branch overrides the feature branch name
 ./ticket.sh list [--status todo|doing|done] [--count N]  # List tickets
 ./ticket.sh start [--worktree] [--copy-file <path>]... <ticket-name>  # Start ticket/create branch (--worktree for separate directory; --copy-file appends worktree_copy_files entry)
 ./ticket.sh restore                       # Restore current-ticket link
@@ -341,6 +359,7 @@ Example: 240628-153245-create-post-handler.md
 ---
 priority: 2
 base_branch: default  # Override base branch for start/close (default: use default_branch from config)
+branch: agent/issue-12  # Optional. Override the feature branch name for this ticket
 description: ""
 created_at: "2025-06-28 15:32:45 UTC"
 started_at: null
@@ -352,6 +371,17 @@ canceled_at: null
 
 Ticket details...
 ```
+
+**`branch`** is written only when asked for (`new --branch <name>`, or by hand);
+a ticket without it uses `{branch_prefix}<ticket-name>` exactly as before. With
+it set, `start` checks the branch out when it already exists and creates it
+otherwise, and `check`, `restore`, `list`, `close` and `cancel` all pair the
+ticket with that branch. `branch_prefix` keeps its meaning as the default for
+tickets that do not name a branch.
+
+This is what lets a branch whose name comes from outside — a CI bot that derives
+`agent/issue-12` from an issue number and checks it out before any ticket
+exists — be worked on with the ordinary commands instead of around them.
 
 ### State Determination Logic
 - **todo**: `started_at` is null
@@ -410,7 +440,7 @@ Performs system initialization:
   3. Choose a different location for tickets_dir in config
   ```
 
-### `new <slug>`
+### `new <slug> [--branch <name>]`
 Creates a new ticket:
 
 - **slug constraints**: Only lowercase letters, numbers, hyphens (-) allowed
@@ -418,7 +448,47 @@ Creates a new ticket:
 - Auto-inserts initial YAML Front Matter values
 - Sets current time (ISO 8601 UTC) to `created_at`
 - Inserts `default_content` from config to Markdown body
+- Creates the files declared in `ticket_files` (see below)
 - Displays edit prompt message on completion
+
+**`--branch <name>`** writes `branch: <name>` into the frontmatter, making that
+the ticket's feature branch instead of `{branch_prefix}<ticket-name>`. The name
+is validated with `git check-ref-format --branch`, plus a refusal of names
+starting with `-` or containing `@{`, which that command resolves rather than
+rejects. An invalid name is refused before anything is created.
+
+**Extra files (`ticket_files`)**
+
+`note_content` produces exactly one companion file, `note.md`. A project that
+wants a second one — a progress log kept apart from the note, say — declares it
+in `ticket_files`:
+
+```yaml
+ticket_files:
+  - path: progress.md
+    content: |
+      # Progress: $$TICKET_NAME$$
+
+      Append-only record of how the work went. Current state lives in $$NOTE_PATH$$.
+  - path: docs/design.md
+    content: |
+      # Design: $$TICKET_NAME$$
+```
+
+- `path` is relative to the ticket directory; subdirectories are created as
+  needed. A path that would escape the directory (absolute, or containing `..`)
+  is skipped with a warning.
+- `content` takes the same `$$TICKET_NAME$$` / `$$NOTE_PATH$$` substitution as
+  `note_content`.
+- An existing file is never overwritten.
+- An entry for `note.md` takes precedence over `note_content`, and is written
+  once, through the same path as the note.
+- Legacy flat-layout tickets get nothing: they have no directory to put the
+  files in.
+- `start` and `restore` list the files that exist under `Active ticket paths:`,
+  so an agent reading that block alone knows they are there and where.
+
+With `ticket_files` undefined, `new` behaves exactly as it did.
 
 **Example:**
 ```bash
@@ -535,10 +605,10 @@ Displays ticket list:
 Starts ticket work:
 
 1. Sets current time to specified ticket's `started_at`
-2. Creates Git branch as `{branch_prefix}<basename>`
+2. Creates Git branch as `{branch_prefix}<basename>` — or, when the ticket's frontmatter has a `branch:` field, as that branch. Either way, a branch that already exists is checked out rather than re-created (see **Resuming** below), which is what lets a branch someone else made first be adopted.
 3. Commits the stamp on the feature branch as `[start] {branch}` and fast-forwards the base branch onto that commit (see **Recording the start time** below)
 4. Creates active-ticket symlinks: `current-ticket/` (dir symlink, new layout only), `current-ticket.md`, and `current-note.md`
-5. Emits an `Active ticket paths:` block listing the resolved paths (layout, ticket, note, ticket_dir/tmp_dir for new layout, and every symlink correspondence)
+5. Emits an `Active ticket paths:` block listing the resolved paths (layout, ticket, note, any `ticket_files` entries that exist, ticket_dir/tmp_dir for new layout, and every symlink correspondence)
 6. Displays executed Git commands and output in detail
 
 **Options:**
@@ -651,17 +721,18 @@ Note: Branch created locally. Use 'git push -u origin feature/240628-153245-impl
 Rebuilds the active-ticket symlinks:
 
 - Searches for the corresponding ticket file from the current Git branch (both per-ticket-directory and legacy flat layouts are probed)
+- Resolves the branch two ways: strip `{branch_prefix}` first, and if no ticket answers to the result, look for a ticket whose frontmatter `branch:` names this branch
 - Deletes any stale `current-ticket/`, `current-ticket.md`, and `current-note.md` symlinks and recreates the correct ones for the resolved ticket
 - Emits an `Active ticket paths:` block (same contract as `start`) so downstream agents can act on the output alone
-- Cannot execute from non-`{branch_prefix}*` branches
+- Cannot execute from a branch that neither carries `{branch_prefix}` nor is claimed by a ticket's `branch:` field
 
 **Error Cases:**
 ```
 Error: Not on a feature branch
 Current branch '{current_branch}' is not a feature branch. Please:
 1. Switch to a feature branch (feature/*)
-2. Or start a new ticket: ticket.sh start <ticket-name>
-3. Feature branches should start with '{branch_prefix}'
+2. Or set 'branch: {current_branch}' in the ticket's frontmatter to claim it
+3. Or start a new ticket: ticket.sh start <ticket-name>
 ```
 
 ```
@@ -775,6 +846,19 @@ Required groups
     Review             1 / 1  done
 ```
 
+When `append_only_files` is set, `check` also reports any line one of those
+files used to hold and no longer does, and still exits 0:
+
+```
+✗ Append-only file is missing lines it used to have: tickets/<name>/progress.md
+    a1b2c3d  1 line(s) gone  progress: tidy up the false start
+        - tried the obvious thing, it did not work
+```
+
+Seeing it here is what lets you append the lines again while the branch is still
+yours to add to; `close` is where it is refused. When the declared files are all
+intact, one line says so.
+
 **What `check` deliberately does not do**
 
 Left to the caller, on purpose:
@@ -839,6 +923,62 @@ the very failure this check exists to end. Set to `false`, it only warns.
 `- [-] ... - skip: <reason>`, which leaves the reason in the note where a reader
 can weigh it. An escape hatch that recorded nothing would put the checklist back
 where it started: present, and never looked at. `--dry-run` runs the check too.
+
+**Append-only files** (`append_only_files`)
+
+Some per-ticket files are a record of how the work went rather than a
+description of where it stands. A progress log is worth keeping precisely
+because nobody went back and tidied the wrong turns out of it, and nothing
+enforced that. A project can run such a check in its own test suite, but the
+runs that most need it are the ones that stop at a human gate before the tests
+ever run — `close` is the command that always happens.
+
+```yaml
+append_only_files:
+  - progress.md
+```
+
+Paths are relative to the ticket directory. What is judged is **whether a line
+the file used to hold is missing from it now**, not whether some commit once
+removed one. Those come apart the moment you try to fix a violation: history is
+not to be rewritten, so the only repair available is to append the lines again —
+and a rule that looked at commits alone would go on failing after the repair,
+leaving amend-and-force-push as the sole way out. So a removal is forgiven once
+the line is back in the file.
+
+A **modified** line therefore counts as a removal: its old text is gone. That is
+the intended reading. Append-only means a line already written is not edited
+afterwards; a typo fix in yesterday's entry is exactly the small rewrite this
+catches, and the way to record a correction is a new line saying so.
+
+The refusal names the file, each offending commit, how many of its lines are
+still missing, and the first of them:
+
+```
+✗ Append-only file is missing lines it used to have: tickets/<name>/progress.md
+    a1b2c3d  1 line(s) gone  progress: tidy up the false start
+        - tried the obvious thing, it did not work
+```
+
+Commits are read from `<base>..HEAD`, where `<base>` is the ticket's
+`base_branch` (falling back to `default_branch`) resolved as
+`<repository>/<base>` if that ref exists, otherwise the local branch. On CI the
+base branch commonly exists only as a remote-tracking ref, and a gate that
+silently did nothing when its ref was missing would be worse than no gate — so
+when neither exists, close says so and skips rather than passing quietly.
+
+Only committed history is read; an uncommitted edit is still the author's to fix
+before committing. A ticket that does not have the file is unaffected —
+requiring the file to exist is a different rule and would need its own key.
+
+`close --no-merge` is not gated. It runs on the base branch *after* the feature
+branch has already been merged elsewhere, so `<base>..HEAD` is empty and there
+is no branch history left to measure. Catch it earlier: `check` reports the loss
+on the feature branch, which is where the work still is.
+Empty by default. Not bypassed by `--force`, for the same reason as the
+checklist, and visible under `--dry-run`. Plain `check` reports the same thing
+and still exits 0, so the loss surfaces while the branch is still yours to
+append to.
 
 **Execution Flow:**
 1. **Check working directory**: Ensures no uncommitted changes (unless `--force` is used)

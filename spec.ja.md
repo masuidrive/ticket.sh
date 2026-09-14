@@ -90,14 +90,14 @@ fast-forward するのはこのためである。二つ目の真実を作らず�
 
 **feature branch にしか記録が無い場合。** fast-forward はスキップされることがあり
 （`start` を参照）、その場合 `started_at` は feature branch にしか載らない。そのため
-base branch 上で `todo` と判定されたチケットは、`{branch_prefix}<name>` を確認してから
-判断する。そのブランチが存在し、そちらの ticket ファイルに `started_at` があれば `doing` と
+base branch 上で `todo` と判定されたチケットは、そのチケットの branch（`branch:` があれば
+その値、無ければ `{branch_prefix}<name>`）を確認してから判断する。そのブランチが存在し、そちらの ticket ファイルに `started_at` があれば `doing` と
 して扱い、`list` は `started_at_only_on: <branch>` を出力して、時刻がどこにあるか、そして
 base branch 側のファイルはまだ `null` であることを示す。この fallback が読むのはブランチで
 あって傍らに置いた state ファイルではないので、真実が git の中だけにある構造は保たれる。
 
 #### ブランチ連携
-- 作業は `feature/<チケット名>` ブランチで実施
+- 作業は `feature/<チケット名>` ブランチ、または frontmatter の `branch:` が指すブランチで実施
 - `start` はリポジトリ直下に 3 本の symlink を作成してアクティブチケットを指す：
   - `current-ticket/` → `tickets/<TICKETNAME>/`（dir symlink）
   - `current-ticket.md` → `tickets/<TICKETNAME>/ticket.md`（互換 file symlink）
@@ -257,6 +257,21 @@ require_checklist: false
 # require_checklist_groups:
 #   - "Required Probes"
 
+# new が ticket dir に作る、note.md 以外の追加ファイル。各要素は ticket dir 相対の
+# path と、その初期内容 content。content では note_content と同じく
+# $$TICKET_NAME$$ / $$NOTE_PATH$$ が置換される。既存ファイルは上書きしない。
+# note.md の要素を書いた場合は note_content より優先される。
+# ticket_files:
+#   - path: progress.md
+#     content: |
+#       # Progress: $$TICKET_NAME$$
+
+# ticket dir の中で「追記しかしてはいけない」ファイル。かつてそのファイルにあった行が
+# 今そこに無ければ close が止まる。plain check は同じ内容を表示するだけで落ちない。
+# --force では迂回できない。既定は空。
+# append_only_files:
+#   - progress.md
+
 # Worktreeモード（オプション）
 # worktree_mode: false    # trueの場合、startは常にworktreeを作成
 # worktree_dir: ""        # カスタムworktreeベースディレクトリ
@@ -294,6 +309,8 @@ auto_push: true
 no_verify: false
 require_checklist: false
 require_checklist_groups: []
+ticket_files: []
+append_only_files: []
 default_content: |
   # Ticket Overview
   
@@ -313,7 +330,7 @@ default_content: |
 
 ```bash
 ./ticket.sh init                          # 初期化
-./ticket.sh new <slug>                    # チケット作成 (slug: lowercase, numbers, hyphens only)
+./ticket.sh new <slug> [--branch <name>]  # チケット作成 (slug: lowercase, numbers, hyphens only); --branch overrides the feature branch name
 ./ticket.sh list [--status todo|doing|done] [--count N]  # チケット一覧
 ./ticket.sh start [--worktree] [--copy-file <path>]... <ticket-name>  # チケット開始・ブランチ作成（--worktreeで別ディレクトリ、--copy-fileでworktree_copy_filesエントリ追加）
 ./ticket.sh restore                       # current-ticketリンク復元
@@ -337,6 +354,7 @@ YYMMDD-hhmmss-<slug>.md
 ---
 priority: 2
 base_branch: default  # start/close時のベースブランチを上書き（default: configのdefault_branchを使用）
+branch: agent/issue-12  # 任意。この ticket の feature branch 名を上書きする
 description: ""
 created_at: "2025-06-28 15:32:45 UTC"
 started_at: null
@@ -348,6 +366,16 @@ canceled_at: null
 
 チケットの詳細内容...
 ```
+
+**`branch`** は明示的に指定したときだけ書かれる（`new --branch <name>`、または
+手書き）。この行が無い ticket は従来どおり `{branch_prefix}<ticket-name>` を使う。
+設定されている場合、`start` はその branch が既にあれば checkout し、無ければ作る。
+`check` / `restore` / `list` / `close` / `cancel` はいずれもその branch と ticket を
+対応付ける。`branch_prefix` の意味は変わらない（`branch:` が無いときの既定）。
+
+これは、branch 名の由来が外にあるケース — issue 番号から `agent/issue-12` を組み立て、
+ticket が存在する前に checkout してしまう CI bot など — を、コマンドを迂回せずに
+通常どおり扱うためのもの。
 
 ### 状態判定ロジック
 - **todo**: `started_at` が null
@@ -406,7 +434,7 @@ canceled_at: null
   3. Choose a different location for tickets_dir in config
   ```
 
-### `new <slug>`
+### `new <slug> [--branch <name>]`
 新しいチケットを作成：
 
 - **slug制約**: 英小文字、数字、ハイフン(-) のみ使用可能
@@ -414,7 +442,41 @@ canceled_at: null
 - YAML Front Matter の初期値を自動挿入
 - `created_at` に現在時刻（ISO 8601 UTC）を設定
 - 設定ファイルの `default_content` をMarkdownボディに挿入
+- config の `ticket_files` に挙げたファイルを ticket dir に作成（後述）
 - 完了時に編集を促すメッセージを表示
+
+**`--branch <name>`** は frontmatter に `branch: <name>` を書き込み、この ticket の
+feature branch を `{branch_prefix}<ticket-name>` ではなくその名前にする。名前は
+`git check-ref-format --branch` で検証し、加えて `-` 始まりと `@{` を含むものを拒否する
+（後者は git が拒否せず解決してしまうため）。不正な名前は何も作る前に拒否する。
+
+**追加ファイル（`ticket_files`）**
+
+`note_content` が作れる付属ファイルは `note.md` ただ 1 つ。2 つめ — note とは別に
+持つ経緯ログなど — が欲しいプロジェクトは `ticket_files` に宣言する:
+
+```yaml
+ticket_files:
+  - path: progress.md
+    content: |
+      # Progress: $$TICKET_NAME$$
+
+      経緯は追記のみ。現在値は $$NOTE_PATH$$ に置く。
+  - path: docs/design.md
+    content: |
+      # Design: $$TICKET_NAME$$
+```
+
+- `path` は ticket dir 相対。サブディレクトリは必要に応じて作る。ticket dir の外に
+  出るもの（絶対パス、`..` を含むもの）は警告して skip する。
+- `content` では `note_content` と同じ `$$TICKET_NAME$$` / `$$NOTE_PATH$$` が置換される。
+- 既存ファイルは上書きしない。
+- `note.md` の要素は `note_content` より優先され、note と同じ経路で 1 回だけ書かれる。
+- flat（旧レイアウト）の ticket には作らない。置く先のディレクトリが無いため。
+- `start` / `restore` は実在するファイルを `Active ticket paths:` に 1 行ずつ出すので、
+  そのブロックだけ読んだ agent もファイルの所在が分かる。
+
+`ticket_files` が未定義なら `new` の挙動は従来と完全に同じ。
 
 **実行例:**
 ```bash
@@ -531,9 +593,9 @@ Additional notes or requirements.
 チケット作業を開始：
 
 1. 指定チケットの `started_at` に現在時刻を設定
-2. Gitブランチを `{branch_prefix}<basename>` として作成
+2. Gitブランチを `{branch_prefix}<basename>` として作成。frontmatter に `branch:` があればその branch を使う。いずれの場合も、既に存在する branch は作り直さず checkout する（後述の **再開**）。これが、他者が先に作った branch をそのまま引き受けられる理由
 3. その記録を feature branch に `[start] {branch}` としてコミットし、base branch をそのコミットへ fast-forward（後述の **開始時刻の記録** を参照）
-4. アクティブチケット symlink 群を作成: `current-ticket/`（dir symlink、新形式のみ）、`current-ticket.md`、`current-note.md`。加えて `Active ticket paths:` ブロックを emit（下流エージェントが解決済みパスを消費できる）
+4. アクティブチケット symlink 群を作成: `current-ticket/`（dir symlink、新形式のみ）、`current-ticket.md`、`current-note.md`。加えて `Active ticket paths:` ブロックを emit（下流エージェントが解決済みパスを消費できる。実在する `ticket_files` のエントリも 1 行ずつ出る）
 5. 実行したGitコマンドと出力を詳細表示
 
 **オプション:**
@@ -645,16 +707,17 @@ Note: Branch created locally. Use 'git push -u origin feature/240628-153245-impl
 current-ticketリンクを復元：
 
 - 現在のGitブランチから対応するチケットファイルを探索
+- branch の解決は 2 段階: まず `{branch_prefix}` を剥がし、それに対応する ticket が無ければ、frontmatter の `branch:` がこの branch を名指ししている ticket を探す
 - 既存の `current-ticket.md` は削除してから新しいsymlinkを作成
-- `{branch_prefix}*` ブランチ以外からは実行不可
+- `{branch_prefix}` も付かず、どの ticket の `branch:` にも名指しされていない branch からは実行不可
 
 **エラーケース:**
 ```
 Error: Not on a feature branch
 Current branch '{current_branch}' is not a feature branch. Please:
 1. Switch to a feature branch (feature/*)
-2. Or start a new ticket: ticket.sh start <ticket-name>
-3. Feature branches should start with '{branch_prefix}'
+2. Or set 'branch: {current_branch}' in the ticket's frontmatter to claim it
+3. Or start a new ticket: ticket.sh start <ticket-name>
 ```
 
 ```
@@ -762,6 +825,18 @@ Required groups
     Review             1 / 1  done
 ```
 
+config に `append_only_files` を書くと、そこに挙げたファイルが「かつて持っていて今は
+持っていない行」も報告する（exit code は 0 のまま）:
+
+```
+✗ Append-only file is missing lines it used to have: tickets/<name>/progress.md
+    a1b2c3d  1 line(s) gone  progress: tidy up the false start
+        - tried the obvious thing, it did not work
+```
+
+ここで見えることが、branch がまだ自分のもので追記できるうちに行を戻せる理由。
+拒否するのは `close`。宣言したファイルがすべて無傷なら 1 行だけそう表示する。
+
 **`check` が意図的にやらないこと**
 
 呼ぶ側に残してある:
@@ -822,6 +897,54 @@ require_checklist_groups:
 の側にある。そちらは理由が note に残り、読む側が妥当性を判断できる。何も記録せずに
 通す抜け道を付ければ、チェックリストは元の状態 — 置いてあるが誰も見ない — に戻る。
 `--dry-run` でもこのチェックは走る。
+
+**追記のみのファイル**（`append_only_files`）
+
+ticket が持つファイルの中には、「現在どうなっているか」ではなく「どう進んだか」の
+記録であるものがある。経緯ログが価値を持つのは、誰も後から回り道を消して整えなかった
+からで、それを強制する仕組みは無かった。プロジェクト側のテストスイートで検査することは
+できるが、いちばん必要なのは human gate で止まってテストまで辿り着かない run の方
+——常に必ず走るのは `close` である。
+
+```yaml
+append_only_files:
+  - progress.md
+```
+
+path は ticket dir 相対。判定するのは「**かつてそのファイルにあった行が、今そこに無いか**」
+であって、「どれかの commit が行を消したか」ではない。この 2 つは、違反を直そうとした
+瞬間に食い違う。履歴は書き換えない前提なので、取れる修復は「行を再度追記する」だけ
+——commit だけを見る規則では修復後も落ち続け、amend と force push しか出口が無くなる。
+そこで、行がファイルに戻れば削除は許される。
+
+したがって**行の変更も削除に数える**。変更前の文字列は失われているからで、これは意図した
+読み方である。append-only とは「一度書いた行に後から手を入れない」ことであり、昨日の
+エントリの typo 修正はまさにこれが捕まえるべき小さな書き換えで、訂正の記録の仕方は
+「訂正したと書く新しい行」の方。
+
+拒否のメッセージは、ファイル名、該当 commit、その commit の行のうち今も戻っていない数、
+そしてその 1 行目を出す:
+
+```
+✗ Append-only file is missing lines it used to have: tickets/<name>/progress.md
+    a1b2c3d  1 line(s) gone  progress: tidy up the false start
+        - tried the obvious thing, it did not work
+```
+
+commit は `<base>..HEAD` から読む。`<base>` は ticket の `base_branch`（無ければ
+`default_branch`）で、`<repository>/<base>` があればそれ、無ければ local の branch を使う。
+CI では base branch が remote-tracking ref としてしか存在しないことが多く、ref が無いときに
+黙って何もしない gate は gate が無いより悪いので、どちらも無ければその旨を出して skip する。
+
+読むのは commit 済みの履歴だけ。未 commit の編集は commit 前に直せる、作者の手の内にある。
+ファイルを持たない ticket は対象外——ファイルの存在を強制するのは別の規則で、別のキーが
+必要になる。
+
+`close --no-merge` はゲートしない。これは feature branch が別の場所で merge された**後**に
+base branch 上で走るので、`<base>..HEAD` が空になり、測る対象の履歴が残っていない。
+捕まえるなら手前——作業がまだ載っている feature branch 上で `check` が報告する。既定は空。チェックリストと同じ理由で `--force` では迂回できず、`--dry-run`
+でも見える。plain `check` は同じ内容を表示して exit 0 のままなので、branch がまだ自分の
+もので追記できるうちに気づける。
 
 **実行フロー:**
 1. **作業ディレクトリチェック**: `--force` 未指定時のみ、コミットされていない変更がないか確認

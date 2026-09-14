@@ -81,6 +81,11 @@ EOF
     echo "# --- checklist.sh ---"
     tail -n +2 "$LIB_DIR/checklist.sh"
     echo ""
+
+    # Process append-only.sh
+    echo "# --- append-only.sh ---"
+    tail -n +2 "$LIB_DIR/append-only.sh"
+    echo ""
     
     # Process main script (excluding shebang and source statements)
     echo "# === Main Script ==="

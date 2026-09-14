@@ -115,6 +115,7 @@ tickets/
   <TICKETNAME>/
     ticket.md   # ticket body (YAML frontmatter + Markdown)
     note.md     # working notes / log
+    ...         # any extra files declared in config's ticket_files (e.g. progress.md)
     tmp/        # ticket-local temp helpers (auto-created on start/restore; git-ignored via tickets/.gitignore)
   done/
     <TICKETNAME>/   # closed / cancelled tickets — moved here as a whole directory
@@ -177,7 +178,7 @@ They are never auto-migrated to the new layout; convert on your own schedule.
 
 ### Core Commands
 - `init` - Initialize ticket system (idempotent, safe to re-run)
-- `new <slug> [--epic <epic-slug>] [--created-at <YYMMDD-hhmmss>]` - Create new ticket (`--created-at` overrides the auto-generated timestamp; the value is used verbatim as the filename prefix and as `created_at` in UTC)
+- `new <slug> [--epic <epic-slug>] [--branch <name>] [--created-at <YYMMDD-hhmmss>]` - Create new ticket (`--branch` sets the ticket's feature branch name instead of `{branch_prefix}<ticket-name>`; `--created-at` overrides the auto-generated timestamp, used verbatim as the filename prefix and as `created_at` in UTC)
 - `list [--status todo|doing|done|canceled] [--count N]` - List tickets
 - `start [--worktree] [--copy-file <path>]... <ticket>` - Start working on ticket (--worktree creates a separate worktree; --copy-file appends paths to `worktree_copy_files` at invocation time)
 - `close [--no-push] [--force] [--no-delete-remote] [--dry-run|-n] [--keep-worktree]` - Complete ticket
@@ -259,6 +260,7 @@ canceled_at: null
 |-------|------|-------------|
 | `priority` | integer | Priority level (1-5, higher = more urgent) |
 | `base_branch` | string | Base branch for creating the feature branch (`default` uses config default) |
+| `branch` | string | Feature branch name for this ticket (optional; default is `{branch_prefix}<ticket-name>`) |
 | `description` | string | Human-readable description of the ticket |
 | `created_at` | timestamp | ISO 8601 UTC timestamp when ticket was created |
 | `started_at` | timestamp | ISO 8601 UTC timestamp when work started (null until started) |
@@ -318,6 +320,27 @@ require_checklist: false
 # list itself is the opt-in.
 # require_checklist_groups:
 #   - "Required Probes"
+
+# Extra files 'new' creates in the ticket directory, beyond note.md. Each entry
+# is a path (relative to the ticket directory, subdirectories allowed) plus the
+# content to seed it with; $$TICKET_NAME$$ and $$NOTE_PATH$$ are substituted as
+# in note_content. Existing files are never overwritten, an entry for note.md
+# takes precedence over note_content, and legacy flat tickets get nothing.
+# 'start'/'restore' list the ones that exist under "Active ticket paths:".
+# ticket_files:
+#   - path: progress.md
+#     content: |
+#       # Progress: $$TICKET_NAME$$
+#
+#       Append-only record of how the work went. Current state lives in $$NOTE_PATH$$.
+
+# Files inside a ticket's directory that may only ever grow, as paths relative
+# to that directory. close refuses while a line one of them used to hold is
+# missing from it, naming the commit that removed it; the repair is to append
+# the line again in a new commit, with no history rewriting. Plain 'check' shows
+# the same thing without failing. Not bypassed by --force. Empty by default.
+# append_only_files:
+#   - progress.md
 
 # Worktree mode: create a separate git worktree for each ticket
 # When true, 'start' always creates a worktree (same as --worktree flag)
@@ -433,6 +456,7 @@ default_content: |
 - **Existing branches**: Automatically checkout and restore instead of failing
 - **Clean branches**: Create new branches from default branch when no changes exist
 - **Conflict detection**: Provides guidance for handling merge conflicts during close
+- **Per-ticket branch names**: A ticket can name its own branch with `branch:` in the frontmatter (set it via `new --branch <name>`) instead of taking `{branch_prefix}<ticket-name>`. `start` checks that branch out when it already exists and creates it otherwise, and `check`, `restore`, `list`, `close` and `cancel` all pair the ticket with it. This is what lets a branch whose name comes from outside — a CI bot deriving `agent/issue-12` from an issue number and checking it out before any ticket exists — be worked on with the ordinary commands instead of around them.
 
 ### Automatic Organization
 - **Done folder**: Completed tickets moved to `tickets/done/<TICKETNAME>/` automatically (whole directory rename)
@@ -443,6 +467,18 @@ default_content: |
 - **Configurable template**: `note_content` in config seeds a fresh `note.md` when a ticket is created.
 - **Automatic management**: The note file moves with the ticket directory on close/cancel; the compat `current-note.md` symlink is created/removed automatically.
 - **Git-ignored active symlinks**: `init` adds `current-ticket`, `current-ticket.md`, and `current-note.md` to `.gitignore` so they never get committed by accident.
+
+### Extra Ticket Files (`ticket_files`)
+- **More than one companion file**: `note_content` seeds exactly one file. List `(path, content)` pairs under `ticket_files` and `new` creates each of them in the ticket directory, with the same `$$TICKET_NAME$$` / `$$NOTE_PATH$$` substitution. Subdirectories are created as needed; a path that would escape the ticket directory is skipped with a warning.
+- **Never overwrites**: An existing file is left alone. An entry for `note.md` takes precedence over `note_content`.
+- **Discoverable**: `start` and `restore` list the files that exist under `Active ticket paths:`, so an agent reading that block alone knows where they are — no rule to remember, no file to invent.
+- **New layout only**: legacy flat tickets have no directory to hold them.
+
+### Append-Only Files (`append_only_files`)
+- **For files kept as a record**: A progress log is worth keeping precisely because nobody went back and tidied the wrong turns out of it. List its path under `append_only_files` and `close` refuses while a line the file used to hold is missing from it, naming the file, the commit that removed it, and the line itself.
+- **Repairable without rewriting history**: What is judged is whether the line is in the file *now*, not whether some commit once took it out — so appending it again in a new commit clears the gate. A line that was *edited* counts as removed: its old text is gone.
+- **Refused, not merely reported**: Not bypassed by `--force` (the repair leaves the record readable, which an escape hatch would not), visible under `--dry-run`. Plain `check` shows the same thing and still exits 0, so the loss surfaces while the branch is still yours to append to.
+- **Opt-in and narrow**: Empty by default; a ticket that does not have the file is unaffected.
 
 ### Worktree Support (Optional)
 - **Parallel work**: Use `--worktree` flag with `start` to create a separate git worktree per ticket
@@ -469,7 +505,9 @@ The `check` command verifies the following:
 | Current ticket | Validates the active-ticket symlinks (`current-ticket/`, `current-ticket.md`, `current-note.md`) |
 | Working directory | Reports uncommitted changes |
 | Worktree state | Shows active worktree if in use |
-| Branch alignment | Verifies current branch matches expected state |
+| Branch alignment | Verifies current branch matches expected state (honours the ticket's `branch:` override) |
+| Checklists | Reports the ticket's and note's checkboxes per file and group |
+| Append-only files | Reports any line an `append_only_files` entry used to hold and no longer does |
 
 ### Error Recovery
 - **Check command**: Diagnose issues and get guidance on next steps

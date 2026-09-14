@@ -106,11 +106,13 @@ if [[ -f "${SCRIPT_DIR}/yaml-sh/yaml-sh.sh" ]]; then
     source "${SCRIPT_DIR}/lib/yaml-frontmatter.sh"
     source "${SCRIPT_DIR}/lib/utils.sh"
     source "${SCRIPT_DIR}/lib/checklist.sh"
+    source "${SCRIPT_DIR}/lib/append-only.sh"
 elif [[ -f "${SCRIPT_DIR}/../yaml-sh/yaml-sh.sh" ]]; then
     source "${SCRIPT_DIR}/../yaml-sh/yaml-sh.sh"
     source "${SCRIPT_DIR}/../lib/yaml-frontmatter.sh"
     source "${SCRIPT_DIR}/../lib/utils.sh"
     source "${SCRIPT_DIR}/../lib/checklist.sh"
+    source "${SCRIPT_DIR}/../lib/append-only.sh"
 else
     echo "Error: Cannot find required yaml-sh.sh library" >&2
     echo "Make sure yaml-sh and lib directories are in the correct location" >&2
@@ -155,6 +157,12 @@ Write the overview and tasks for this ticket here.
 ## Notes
 
 Additional notes or requirements.'
+
+# The config's ticket_files entries, filled by config_read_ticket_files.
+# Declared here so a command that never reads the config still has an empty
+# array to walk instead of an unset name under `set -u`.
+TICKET_FILE_PATHS=()
+TICKET_FILE_CONTENTS=()
 
 # Get dynamic script command name based on how script was invoked
 get_script_command() {
@@ -214,23 +222,27 @@ be recognized by every command; they are never auto-migrated.
 ## Usage
 
 - \`$SCRIPT_COMMAND init\` - Initialize system (create config, directories, .gitignore)
-- \`$SCRIPT_COMMAND new <slug> [--epic <epic-slug>] [--created-at <YYMMDD-hhmmss>]\` - Create new ticket file (slug: lowercase, numbers, hyphens only; --created-at overrides the timestamp, used as filename prefix and UTC created_at)
+- \`$SCRIPT_COMMAND new <slug> [--epic <epic-slug>] [--branch <name>] [--created-at <YYMMDD-hhmmss>]\` - Create new ticket file (slug: lowercase, numbers, hyphens only; --created-at overrides the timestamp, used as filename prefix and UTC created_at)
+  - \`--branch <name>\` writes \`branch: <name>\` into the frontmatter, making that the ticket's feature branch instead of \`{branch_prefix}<ticket-name>\`. The name is validated with \`git check-ref-format\`. Use it when the branch name comes from outside - a bot that derives \`agent/issue-12\` from an issue number - so every command works on the ticket as usual instead of around it.
+  - With \`ticket_files\` in config, the declared files are created in the ticket directory alongside \`note.md\`.
 - \`$SCRIPT_COMMAND list [--status STATUS] [--count N]\` - List tickets (default: todo + doing, count: 20)
-  - A ticket the current branch calls \`todo\` is checked against \`{branch_prefix}<name>\` before being believed. If that branch carries a \`started_at\`, the ticket is \`doing\` and the line \`started_at_only_on: <branch>\` says the timestamp lives only there - which happens when \`start\`'s fast-forward onto the base branch was skipped.
+  - A ticket the current branch calls \`todo\` is checked against its branch (\`branch:\` if set, else \`{branch_prefix}<name>\`) before being believed. If that branch carries a \`started_at\`, the ticket is \`doing\` and the line \`started_at_only_on: <branch>\` says the timestamp lives only there - which happens when \`start\`'s fast-forward onto the base branch was skipped.
 - \`$SCRIPT_COMMAND start [--worktree] [--copy-file <path>]... <ticket-name>\` - Start working on ticket (creates or switches to feature branch, --worktree creates a separate worktree)
   - With \`--worktree\`: **cd to the worktree directory after start; cd back to the main repo after close.** In environments where cwd resets each command (e.g. LLM agents), cd must be re-run every time.
   - \`start\` commits \`started_at\` on the feature branch and fast-forwards the base branch onto that commit, so the ticket shows as \`doing\` from the base branch too. Nothing is pushed: the base branch reaches the remote on close. If the base branch has moved on, the fast-forward is skipped with a note and the start time stays on the feature branch.
   - \`--copy-file <path>\` (repeatable) copies the given file from the main repo into the new worktree, appended to the \`worktree_copy_files\` config list. Only applied when a worktree is created. Existing files in the target are never overwritten; missing sources warn and continue. Typical use: bringing gitignored \`.env\` into the worktree.
-- \`$SCRIPT_COMMAND restore\` - Restore current-ticket.md symlink from branch name
+- \`$SCRIPT_COMMAND restore\` - Restore current-ticket.md symlink from branch name (a branch named by some ticket's \`branch:\` resolves too, not only \`{branch_prefix}*\`)
 - \`$SCRIPT_COMMAND check [--require "<group name>"]\` - Check current directory and ticket/branch synchronization status
   - Also reports the checklists in **both** the ticket body (its \`## Tasks\` list) and the note, listed per file. Every checkbox is grouped by the nearest preceding heading above it. \`- [x]\` is done, \`- [ ]\` is unchecked, and \`- [-] ... - skip: <reason>\` marks an item that does not apply to this ticket (a \`[-]\` with no reason counts as unchecked). Checkboxes inside code blocks are ignored; ones merely nested under another item are not. The ticket's YAML frontmatter is skipped, so a \`- [ ]\` inside a multi-line \`description\` is not counted.
   - Plain \`check\` never fails on an unfinished checklist - mid-ticket, the later groups being empty is the normal state. With \`require_checklist_groups\` set, it also shows where those groups stand (a missing one as \`missing  (close will refuse)\`), and still exits 0.
+  - With \`append_only_files\` set, it also reports any line one of those files used to hold and no longer does, naming the commit that removed it, and still exits 0. Seeing it here is what lets you append the lines again while the branch is still yours to add to; \`close\` is where it is refused.
   - \`--require "<group name>"\` judges that one group and exits 1 if anything in it is unchecked. The name matches heading text in either file, so callers name the stage, not the file. Use it when the caller knows which stage the work is at; ticket.sh has no notion of stages. A name that matches no group is an error, not a pass, so a typo cannot become a check that always succeeds.
 - \`$SCRIPT_COMMAND close [--no-push] [--force|-f] [--no-delete-remote] [--keep-worktree] [--dry-run|-n]\` - Complete current ticket (squash merge to default branch)
   - \`--dry-run\` (\`-n\`) runs all preflight checks (clean working dir, branch, ticket state, base_branch existence, worktree main repo state) and exits before any commit/merge. Useful for catching format mistakes or stale state before the real close. Note: pre-commit hooks are NOT executed by --dry-run.
   - The squash commit's subject is \`[<ticket-name>] <description>\` (description folded onto one line), and its body is the ticket's **Markdown body only** - the YAML frontmatter is never included. This is fixed behavior with no config key. Keeping the body in the message is what lets \`git blame\` reach the reasoning without opening \`tickets/done/\`.
   - With \`require_checklist: true\` in config, close refuses while the ticket body or the note has unchecked items, and lists them per file. Off by default. \`--force\` does not bypass it: the way out is \`- [-] ... - skip: <reason>\`, which leaves the reason in the file. \`--dry-run\` surfaces it too.
   - \`require_checklist_groups\` (a list of heading names) makes close refuse when a named group is in **neither** file - or is there with no checkboxes under it - as well as when anything under it is unchecked. \`require_checklist\` alone cannot catch this: it counts unchecked boxes, so a section that is not in the file at all counts zero and reads exactly like one where everything got done. Empty by default, independent of \`require_checklist\`, and not bypassed by \`--force\`.
+  - \`append_only_files\` (a list of paths relative to the ticket directory) makes close refuse while a line one of those files used to hold is missing from it, naming the file, the commit that removed it and the count. What is judged is whether the line is in the file now, not whether some commit once took it out - so the repair is to append it again in a new commit, with no history rewriting. A line that was *edited* counts as removed: its old text is gone. Empty by default, not bypassed by \`--force\`, visible under \`--dry-run\`, and skipped for a ticket that does not have the file. Not applied to \`--no-merge\`, which runs on the base branch after the merge, where there is no branch history left to measure - \`check\` on the feature branch is where that one gets caught.
   - From a worktree, close refuses to merge if the main repo is on a non-default branch or has uncommitted changes (protects parallel workers).
   - **Coding agents (Claude Code / Codex / etc.) must pass \`--keep-worktree\`**: without it, the worker's worktree is deleted and the agent's shell cwd points to a removed directory → every subsequent Bash tool call fails.
   - \`--no-merge [--closed-at <ISO8601-UTC>] <ticket-name>\` - Skip the squash-merge (assume the ticket's changes are already on the base branch, e.g. after a GitHub PR merge). Only set closed_at, move the ticket/note to done/, commit and push. Requires \`<ticket-name>\`. \`--closed-at\` overrides closed_at with a full ISO8601 UTC value (default: now).
@@ -256,6 +268,7 @@ be recognized by every command; they are never auto-migrated.
 ## YAML Frontmatter Fields
 
 - \`base_branch\`: Override base branch for start/close per ticket (default: use default_branch from config)
+- \`branch\`: Override the feature branch name for this ticket (default: \`{branch_prefix}<ticket-name>\`). \`start\` checks the branch out when it already exists and creates it otherwise; \`check\`, \`restore\`, \`list\`, \`close\` and \`cancel\` all pair the ticket with it. Set it with \`new --branch <name>\`, or by hand. \`branch_prefix\` keeps its meaning as the default for tickets without this field.
 
 ## Configuration
 
@@ -264,6 +277,31 @@ be recognized by every command; they are never auto-migrated.
 - Edit to customize directories, branches, templates, and success messages
 - \`no_verify: true\` skips Git hooks on commits ticket.sh makes itself, such as
   the start-time stamp. Hooks run by default.
+
+### Extra ticket files
+
+- \`ticket_files\`: files \`new\` creates in the ticket directory beyond
+  \`note.md\`. Each entry has a \`path\` (relative to the ticket directory,
+  subdirectories allowed) and \`content\`, with the same \`\$\$TICKET_NAME\$\$\` /
+  \`\$\$NOTE_PATH\$\$\` substitution as \`note_content\`. An existing file is never
+  overwritten, an entry for \`note.md\` takes precedence over \`note_content\`, and
+  legacy flat-layout tickets get nothing (they have no directory). \`start\` and
+  \`restore\` list the files that exist under \`Active ticket paths:\`, so an agent
+  reading that block alone knows they are there.
+  Example (in \`.ticket-config.yaml\`):
+  \`\`\`
+  ticket_files:
+    - path: progress.md
+      content: |
+        # Progress: \$\$TICKET_NAME\$\$
+  \`\`\`
+- \`append_only_files\`: paths (relative to the ticket directory) that may only
+  ever grow. See \`close\` above for what is refused and how to repair it.
+  Example:
+  \`\`\`
+  append_only_files:
+    - progress.md
+  \`\`\`
 
 ### Worktree extras
 
@@ -435,6 +473,33 @@ require_checklist: $DEFAULT_REQUIRE_CHECKLIST
 # Independent of require_checklist - the list itself is the opt-in.
 # require_checklist_groups:
 #   - "Required Probes"
+
+# Files inside a ticket's directory that may only ever grow. Declared per path,
+# relative to the ticket directory. close refuses while a line one of them used
+# to hold is missing from it, naming the commit that removed it; plain 'check'
+# shows the same thing without failing, so the loss surfaces while the branch is
+# still yours to add to. Not bypassed by --force - the repair is to append the
+# lines again in a new commit, which leaves the record readable. A ticket that
+# does not have the file is not affected.
+# Empty by default. Intended for a progress log kept as a record of how the work
+# went, where the wrong turns are the part worth keeping.
+# append_only_files:
+#   - progress.md
+
+# Extra files 'new' creates in the ticket directory, beyond note.md. Each entry
+# is a path (relative to the ticket directory) and the content to seed it with;
+# \$\$TICKET_NAME\$\$ and \$\$NOTE_PATH\$\$ are substituted as in note_content. An
+# existing file is never overwritten, and 'start'/'restore' list the ones that
+# are there under "Active ticket paths:" so an agent does not have to guess.
+# An entry for note.md takes precedence over note_content.
+# Not applied to legacy flat-layout tickets, which have no directory to put
+# them in.
+# ticket_files:
+#   - path: progress.md
+#     content: |
+#       # Progress: \$\$TICKET_NAME\$\$
+#
+#       Append-only log of how the work went. Current state lives in \$\$NOTE_PATH\$\$.
 
 # Worktree mode: create a separate git worktree for each ticket
 # When true, 'start' always creates a worktree (same as --worktree flag)
@@ -752,11 +817,20 @@ cmd_new() {
     local slug=""
     local epic_slug=""
     local created_at_override=""
+    local branch_override=""
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --epic)
                 epic_slug="$2"; shift 2 ;;
+            --branch)
+                if [[ -z "${2:-}" ]]; then
+                    echo "Error: --branch requires a branch name" >&2
+                    return 1
+                fi
+                branch_override="$2"; shift 2 ;;
+            --branch=*)
+                branch_override="${1#--branch=}"; shift ;;
             --created-at)
                 if [[ -z "${2:-}" ]]; then
                     echo "Error: --created-at requires an argument (YYMMDD-hhmmss)" >&2
@@ -774,8 +848,26 @@ cmd_new() {
 
     if [[ -z "$slug" ]]; then
         echo "Error: slug required" >&2
-        echo "Usage: $SCRIPT_COMMAND new <slug> [--epic <epic-slug>] [--created-at <YYMMDD-hhmmss>]" >&2
+        echo "Usage: $SCRIPT_COMMAND new <slug> [--epic <epic-slug>] [--branch <name>] [--created-at <YYMMDD-hhmmss>]" >&2
         return 1
+    fi
+
+    # Validate --branch before anything is created. git check-ref-format is the
+    # authority on what a branch may be called; the two extra tests in front of
+    # it cover what it deliberately does not - a name that would be read as an
+    # option, and the @{...} revision syntax it resolves rather than rejects.
+    if [[ -n "$branch_override" ]]; then
+        if [[ "$branch_override" == -* ]] || [[ "$branch_override" == *"@{"* ]] || \
+           ! git check-ref-format --branch "$branch_override" >/dev/null 2>&1; then
+            cat >&2 << EOF
+Error: Invalid branch name
+'$branch_override' is not a usable Git branch name. Please:
+1. Avoid spaces, '~', '^', ':', '?', '*', '[', '\\', '..' and '@{'
+2. Do not begin or end a path component with '/', '.' or end with '.lock'
+3. Check it yourself with: git check-ref-format --branch '<name>'
+EOF
+            return 1
+        fi
     fi
 
     # Validate --created-at format if provided (interpreted as UTC, like auto-generated timestamps)
@@ -824,6 +916,22 @@ cmd_new() {
     local default_content=$(yaml_get "default_content" || echo "$DEFAULT_CONTENT")
     local note_content=$(yaml_get "note_content" || echo "")
     local new_success_message=$(yaml_get "new_success_message" || echo "$DEFAULT_NEW_SUCCESS_MESSAGE")
+
+    # Extra per-ticket files the config asks for. A ticket_files entry for
+    # note.md takes over note_content and is then handled by the note code
+    # below rather than a second time in the loop: one file, one code path, so
+    # the $$NOTE_PATH$$ substitution and the "Created note file:" line do not
+    # have to be kept in step in two places.
+    config_read_ticket_files
+    local _tf_note_index=-1
+    local _tf_i=0
+    while (( _tf_i < ${#TICKET_FILE_PATHS[@]} )); do
+        if [[ "${TICKET_FILE_PATHS[$_tf_i]}" == "note.md" ]]; then
+            note_content="${TICKET_FILE_CONTENTS[$_tf_i]}"
+            _tf_note_index=$_tf_i
+        fi
+        _tf_i=$((_tf_i + 1))
+    done
     
     # Generate filename
     local ticket_name
@@ -902,11 +1010,18 @@ EOF
         _base_line="base_branch: ${epic_base_branch}"
         _epic_line=$'\n'"epic_id: ${epic_id_value}"
     fi
+    # Only written when asked for. A ticket without the line behaves exactly as
+    # it always has, and an always-present `branch: default`-style placeholder
+    # would be one more field for a hand-edit to get subtly wrong.
+    local _branch_line=""
+    if [[ -n "$branch_override" ]]; then
+        _branch_line="branch: ${branch_override}"$'\n'
+    fi
     if ! cat > "$ticket_file" << EOF
 ---
 priority: 2
 ${_base_line}${_epic_line}
-description: ""
+${_branch_line}description: ""
 created_at: "$timestamp"
 started_at: null  # Do not modify manually
 closed_at: null   # Do not modify manually
@@ -932,6 +1047,9 @@ EOF
     if [[ -n "$epic_id_value" ]]; then
         echo "epic_id: $epic_id_value"
     fi
+    if [[ -n "$branch_override" ]]; then
+        echo "branch: $branch_override   (start/check/close will use this branch)"
+    fi
 
     # Create note file if note_content is defined
     if [[ -n "$note_content" ]]; then
@@ -950,7 +1068,52 @@ EOF
         fi
         echo "Created note file: $note_file"
     fi
-    
+
+    # Extra files from config's ticket_files. Same placeholders as the note.
+    # An existing file is left alone rather than replaced - `new` refuses
+    # outright when the ticket directory is already there, so anything standing
+    # here was either put here on purpose or written by an earlier entry with
+    # the same path, and neither is worth losing to a later one.
+    _tf_i=0
+    while (( _tf_i < ${#TICKET_FILE_PATHS[@]} )); do
+        local _tf_path="${TICKET_FILE_PATHS[$_tf_i]}"
+        local _tf_content="${TICKET_FILE_CONTENTS[$_tf_i]}"
+        local _tf_index=$_tf_i
+        _tf_i=$((_tf_i + 1))
+
+        # note.md was handled above, through note_content.
+        [[ "$_tf_index" -eq "$_tf_note_index" ]] && continue
+
+        if ! ticket_file_path_ok "$_tf_path"; then
+            echo "Warning: ticket_files entry '$_tf_path' is not inside the ticket directory; skipping." >&2
+            continue
+        fi
+
+        local _tf_target="${ticket_dir}/${_tf_path}"
+        if [[ -e "$_tf_target" ]]; then
+            echo "Note: ticket_files entry already exists, left as is: $_tf_target"
+            continue
+        fi
+
+        if [[ "$_tf_path" == */* ]] && ! mkdir -p "${_tf_target%/*}"; then
+            echo "Warning: Cannot create directory for ticket_files entry '$_tf_path'; skipping." >&2
+            continue
+        fi
+
+        _tf_content="${_tf_content//\$\$TICKET_NAME\$\$/$ticket_name}"
+        if [[ -n "$note_content" ]]; then
+            _tf_content="${_tf_content//\$\$NOTE_PATH\$\$/note.md}"
+        else
+            _tf_content="${_tf_content//\$\$NOTE_PATH\$\$/}"
+        fi
+
+        if ! printf '%s\n' "$_tf_content" > "$_tf_target"; then
+            echo "Warning: Cannot create ticket_files entry '$_tf_target'; skipping." >&2
+            continue
+        fi
+        echo "Created ticket file: $_tf_target"
+    done
+
     echo "Please edit $ticket_file to add title, description and details."
     echo "To start working on this ticket, you **must** run: $SCRIPT_COMMAND start $ticket_name"
     
@@ -1172,6 +1335,20 @@ emit_active_ticket_paths() {
         [[ ! -d "$ticket_dir" ]] && ticket_dir="${tickets_dir}/done/${ticket_name}"
         echo "  ticket:       ${ticket_dir}/ticket.md"
         echo "  note:         ${ticket_dir}/note.md"
+        # Extra files from config's ticket_files, so an agent reading only this
+        # block knows that progress.md - or whatever this project calls it - is
+        # there and where. Only files that actually exist are listed: a ticket
+        # created before the config gained the entry has no such file, and
+        # naming a path that is not there would send someone to read nothing.
+        local _ef_probe="$ticket_dir"
+        [[ "$link_dir" == /* ]] && _ef_probe="${link_dir}/${ticket_dir}"
+        local _ef_i=0
+        while (( _ef_i < ${#TICKET_FILE_PATHS[@]} )); do
+            local _ef="${TICKET_FILE_PATHS[$_ef_i]}"
+            _ef_i=$((_ef_i + 1))
+            [[ "$_ef" == "note.md" ]] && continue
+            [[ -f "${_ef_probe}/${_ef}" ]] && echo "  file:         ${ticket_dir}/${_ef}"
+        done
         echo "  ticket_dir:   ${ticket_dir}/   (per-ticket root: ticket.md + note.md + tmp/)"
         echo "  tmp_dir:      ${ticket_dir}/tmp/   (ticket-local temp helpers, auto-created; ignored via ${tickets_dir}/.gitignore)"
         echo "  symlink_dir:  ${link_dir}/${CURRENT_TICKET_DIR_LINK} -> ${ticket_dir}"
@@ -1250,6 +1427,53 @@ config_read_list() {
 
     item=$(_config_unquote "$(yaml_get "$key" 2>/dev/null || echo "")")
     [[ -n "$item" ]] && CONFIG_LIST[0]="$item"
+    return 0
+}
+
+# Read the ticket_files list out of the already-parsed config into two parallel
+# arrays.
+#
+# Sets: TICKET_FILE_PATHS[] and TICKET_FILE_CONTENTS[], index for index.
+# Bash 3.2 has no associative arrays, and the two are always walked together
+# anyway. Callers must guard expansion with ${ARR[@]+"${ARR[@]}"} - expanding an
+# empty array under `set -u` is an error there.
+#
+# An entry with no `path` is dropped rather than guessed at: the path is the
+# whole of what the entry says to do.
+config_read_ticket_files() {
+    TICKET_FILE_PATHS=()
+    TICKET_FILE_CONTENTS=()
+
+    local size i=0 path content
+    size=$(yaml_list_size "ticket_files" 2>/dev/null || echo 0)
+    [[ -z "$size" ]] && size=0
+
+    while (( i < size )); do
+        path=$(_config_unquote "$(yaml_get "ticket_files.${i}.path" 2>/dev/null || echo "")")
+        content=$(yaml_get "ticket_files.${i}.content" 2>/dev/null || echo "")
+        i=$((i + 1))
+        [[ -z "$path" ]] && continue
+        TICKET_FILE_PATHS[${#TICKET_FILE_PATHS[@]}]="$path"
+        TICKET_FILE_CONTENTS[${#TICKET_FILE_CONTENTS[@]}]="$content"
+    done
+    return 0
+}
+
+# Reject a ticket_files path that would write outside the ticket's directory.
+#
+# The config is the project's own file, so this is not a security boundary; it
+# is there so a typo ('/progress.md', '../progress.md') fails where it can be
+# read as a typo, rather than dropping a file at the repo root that nobody
+# connects to the ticket that made it.
+#
+# Usage: ticket_file_path_ok <path>
+ticket_file_path_ok() {
+    local p="$1"
+    [[ -n "$p" ]] || return 1
+    case "$p" in
+        /*|~*)            return 1 ;;
+        ..|../*|*/../*|*/..) return 1 ;;
+    esac
     return 0
 }
 
@@ -1373,9 +1597,11 @@ EOF
     local displayed=0
     local temp_file=$(mktemp)
 
-    # List the feature branches once. The todo fallback below needs to know
-    # which ones exist, and asking git per ticket would mean a process apiece.
-    local feature_branches=$(git for-each-ref --format='%(refname:short)' "refs/heads/${branch_prefix}*" 2>/dev/null)
+    # List the local branches once. The todo fallback below needs to know which
+    # ones exist, and asking git per ticket would mean a process apiece. Not
+    # filtered by branch_prefix any more: a ticket may name its own branch, and
+    # a prefix-filtered list would leave exactly those tickets looking untouched.
+    local feature_branches=$(git for-each-ref --format='%(refname:short)' "refs/heads/" 2>/dev/null)
 
     # Collect all tickets with their metadata.
     # Enumerate both layouts:
@@ -1405,6 +1631,14 @@ EOF
         local started_at=$(yaml_get "started_at" 2>/dev/null || echo "null")
         local closed_at=$(yaml_get "closed_at" 2>/dev/null || echo "null")
         local canceled_at=$(yaml_get "canceled_at" 2>/dev/null || echo "null")
+        # The ticket's branch, resolved from the frontmatter that is already
+        # parsed here. Reading the file again per ticket - which is what calling
+        # ticket_branch_name would do - is a process apiece, and this loop is
+        # where `list` spends its time.
+        local ticket_branch=$(yaml_get "branch" 2>/dev/null || echo "")
+        if is_null_or_empty "$ticket_branch"; then
+            ticket_branch="${branch_prefix}$(ticket_name_from_path "$ticket_file")"
+        fi
 
         # Determine status
         local status=$(get_ticket_status "$started_at" "$closed_at" "$canceled_at")
@@ -1415,13 +1649,12 @@ EOF
         # to fix. Check the branch before believing it.
         local started_on_branch=""
         if [[ "$status" == "todo" ]]; then
-            local _branch="${branch_prefix}$(ticket_name_from_path "$ticket_file")"
-            if [[ $'\n'"${feature_branches}"$'\n' == *$'\n'"${_branch}"$'\n'* ]]; then
-                local _branch_started=$(started_at_on_branch "$_branch" "${ticket_file#./}")
+            if [[ $'\n'"${feature_branches}"$'\n' == *$'\n'"${ticket_branch}"$'\n'* ]]; then
+                local _branch_started=$(started_at_on_branch "$ticket_branch" "${ticket_file#./}")
                 if ! is_null_or_empty "$_branch_started"; then
                     started_at="$_branch_started"
                     status="doing"
-                    started_on_branch="$_branch"
+                    started_on_branch="$ticket_branch"
                 fi
             fi
         fi
@@ -1440,8 +1673,8 @@ EOF
         local ticket_path="${ticket_file#./}"
         
         # Store in temp file for sorting
-        # Format: status|priority|ticket_path|description|created_at|started_at|closed_at|canceled_at|started_on_branch
-        echo "${status}|${priority}|${ticket_path}|${description}|${created_at}|${started_at}|${closed_at}|${canceled_at}|${started_on_branch}" >> "$temp_file"
+        # Format: status|priority|ticket_path|description|created_at|started_at|closed_at|canceled_at|started_on_branch|ticket_branch
+        echo "${status}|${priority}|${ticket_path}|${description}|${created_at}|${started_at}|${closed_at}|${canceled_at}|${started_on_branch}|${ticket_branch}" >> "$temp_file"
     done
     
     # Sort and display
@@ -1459,7 +1692,7 @@ EOF
         sort -t'|' -k1,1 -k2,2n "$temp_file" | sed 's/^doing|/0|/; s/^todo|/1|/; s/^done|/2|/; s/^canceled|/3|/' | sort -t'|' -k1,1n -k2,2n | sed 's/^0|/doing|/; s/^1|/todo|/; s/^2|/done|/; s/^3|/canceled|/' > "$sorted_file"
     fi
 
-    while IFS='|' read -r status priority ticket_path description created_at started_at closed_at canceled_at started_on_branch; do
+    while IFS='|' read -r status priority ticket_path description created_at started_at closed_at canceled_at started_on_branch ticket_branch; do
         [[ $displayed -ge $count ]] && break
 
         # Convert timestamps to local timezone
@@ -1483,8 +1716,7 @@ EOF
 
         # Show worktree info for doing tickets
         if [[ "$status" == "doing" ]]; then
-            local _branch="${branch_prefix}$(ticket_name_from_path "$ticket_path")"
-            local _wt_path=$(worktree_holding_branch "." "$_branch")
+            local _wt_path=$(worktree_holding_branch "." "$ticket_branch")
             if [[ -n "$_wt_path" ]]; then
                 echo "  worktree: $_wt_path"
             fi
@@ -1654,6 +1886,10 @@ cmd_start() {
     local repository=$(yaml_get "repository" || echo "$DEFAULT_REPOSITORY")
     local no_verify=$(yaml_get "no_verify" || echo "$DEFAULT_NO_VERIFY")
     local start_success_message=$(yaml_get "start_success_message" || echo "$DEFAULT_START_SUCCESS_MESSAGE")
+    # Read while yaml_get still holds the config: the ticket's own frontmatter
+    # is parsed into the same globals further down, and emit_active_ticket_paths
+    # runs after that.
+    config_read_ticket_files
 
     # Check if worktree mode is enabled by config
     local worktree_mode=$(yaml_get "worktree_mode" || echo "$DEFAULT_WORKTREE_MODE")
@@ -1853,8 +2089,31 @@ EOF
         fi
     fi
     
-    # Create branch name
-    local branch_name="${branch_prefix}${ticket_name}"
+    # Create branch name. A ticket may name its own branch, which is how a
+    # ticket whose branch already exists - created by a bot from an issue
+    # number, say - is worked on with the ordinary commands instead of around
+    # them. Resuming an existing branch is already handled below, so "the branch
+    # is already there" needs nothing extra here.
+    local branch_name
+    if [[ -f "$ticket_file" ]]; then
+        branch_name=$(ticket_branch_name "$ticket_file" "$branch_prefix" "$ticket_name")
+    else
+        # Worktree mode can reach here with the ticket only in git, never on
+        # disk in this tree. Read the override out of the object instead.
+        local _branch_override=""
+        local _probe
+        for _probe in "$(get_current_branch)" "$default_branch"; do
+            [[ -z "$_probe" ]] && continue
+            _branch_override=$(git -C "$main_repo" show "${_probe}:${ticket_file}" 2>/dev/null \
+                               | _ticket_branch_from_stream)
+            [[ -n "$_branch_override" ]] && break
+        done
+        if [[ -n "$_branch_override" ]]; then
+            branch_name="$_branch_override"
+        else
+            branch_name="${branch_prefix}${ticket_name}"
+        fi
+    fi
 
     # Determine worktree path if using worktree mode.
     # Anchor the worktree path on main_repo (not cwd's toplevel) so callers
@@ -2142,24 +2401,25 @@ cmd_restore() {
     local tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
     local branch_prefix=$(yaml_get "branch_prefix" || echo "$DEFAULT_BRANCH_PREFIX")
     local restore_success_message=$(yaml_get "restore_success_message" || echo "$DEFAULT_RESTORE_SUCCESS_MESSAGE")
+    config_read_ticket_files
     
     # Get current branch
     local current_branch=$(get_current_branch)
     
-    # Check if on feature branch
-    if [[ ! "$current_branch" =~ ^${branch_prefix} ]]; then
+    # Check if on feature branch. Either the branch carries the configured
+    # prefix, or some ticket's frontmatter names it - a ticket that says which
+    # branch it lives on is on a feature branch by its own account.
+    local ticket_name
+    if ! ticket_name=$(ticket_name_for_branch "$current_branch" "$tickets_dir" "$branch_prefix"); then
         cat >&2 << EOF
 Error: Not on a feature branch
 Current branch '$current_branch' is not a feature branch. Please:
 1. Switch to a feature branch (${branch_prefix}*)
-2. Or start a new ticket: $SCRIPT_COMMAND start <ticket-name>
-3. Feature branches should start with '$branch_prefix'
+2. Or set 'branch: $current_branch' in the ticket's frontmatter to claim it
+3. Or start a new ticket: $SCRIPT_COMMAND start <ticket-name>
 EOF
         return 1
     fi
-    
-    # Extract ticket name from branch
-    local ticket_name="${current_branch#"$branch_prefix"}"
 
     # Resolve ticket layout & path. Prefer new-format (per-ticket dir); fall
     # back to legacy flat. Check both open and done/ locations.
@@ -2295,11 +2555,14 @@ cmd_check() {
     local default_branch=$(yaml_get "default_branch" || echo "$DEFAULT_BRANCH")
     local tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
     local branch_prefix=$(yaml_get "branch_prefix" || echo "$DEFAULT_BRANCH_PREFIX")
+    local repository=$(yaml_get "repository" || echo "$DEFAULT_REPOSITORY")
     check_legacy_checklist_key || return 1
     # Read here: the yaml-sh globals get reused for the ticket's frontmatter
     # further down.
     config_read_list "require_checklist_groups"
     local _required_groups=(${CONFIG_LIST[@]+"${CONFIG_LIST[@]}"})
+    config_read_list "append_only_files"
+    local _append_only_files=(${CONFIG_LIST[@]+"${CONFIG_LIST[@]}"})
     
     # Get current branch
     local current_branch=$(get_current_branch)
@@ -2316,7 +2579,7 @@ cmd_check() {
         else
             ticket_name=$(basename "$ticket_file" .md)
         fi
-        local expected_branch="${branch_prefix}${ticket_name}"
+        local expected_branch=$(ticket_branch_name "$ticket_file" "$branch_prefix" "$ticket_name")
         
         if [[ "$current_branch" == "$expected_branch" ]]; then
             # Case 1: current-ticket.md exists and matches branch
@@ -2341,9 +2604,11 @@ cmd_check() {
             echo "You can view available tickets with: $SCRIPT_COMMAND list"
             echo "Create a new ticket with: $SCRIPT_COMMAND new <name>"
             echo "Start working on a ticket with: $SCRIPT_COMMAND start <ticket-name>"
-        elif [[ "$current_branch" =~ ^${branch_prefix} ]]; then
-            # Cases 4-5: On feature branch
-            local ticket_name="${current_branch#"$branch_prefix"}"
+        elif [[ "$current_branch" =~ ^${branch_prefix} ]] || ticket_claiming_branch "$current_branch" "$tickets_dir" >/dev/null; then
+            # Cases 4-5: On feature branch - either the configured prefix, or a
+            # ticket whose frontmatter names this branch.
+            local ticket_name
+            ticket_name=$(ticket_name_for_branch "$current_branch" "$tickets_dir" "$branch_prefix")
             # Resolve to either new-format or legacy path; prefer new-format.
             local ticket_file
             if [[ -f "${tickets_dir}/${ticket_name}/ticket.md" ]]; then
@@ -2478,6 +2743,39 @@ cmd_check() {
     checklist_ticket_file=$(get_ticket_file "$checklist_ticket" "$tickets_dir")
     checklist_note_file=$(get_note_file "$checklist_ticket" "$tickets_dir")
 
+    # --- append-only files ---
+    # Shown, never judged. `check` runs mid-ticket, and a rule that failed here
+    # would be switched off long before the close it is meant to guard; close is
+    # where a removal is refused. Printing it now is what lets someone put the
+    # lines back while the branch is still theirs to add to.
+    local _ao_dir=""
+    if [[ "${checklist_ticket_file##*/}" == "ticket.md" ]]; then
+        _ao_dir="${checklist_ticket_file%/ticket.md}"
+    fi
+    if [[ ${#_append_only_files[@]} -gt 0 ]] && [[ -n "$_ao_dir" ]]; then
+        local _ao_base_branch
+        _ao_base_branch=$(get_yaml_field "$(extract_yaml_frontmatter "$checklist_ticket_file")" "base_branch")
+        if is_null_or_empty "$_ao_base_branch" || \
+           [[ "$(echo "$_ao_base_branch" | tr '[:upper:]' '[:lower:]')" == "default" ]]; then
+            _ao_base_branch="$default_branch"
+        fi
+        # Say nothing at all when this ticket has none of the declared files:
+        # "intact" about a file that was never there reads as a pass where
+        # there was nothing to pass.
+        local _ao_present=false _ao_rel
+        for _ao_rel in ${_append_only_files[@]+"${_append_only_files[@]}"}; do
+            [[ -f "${_ao_dir}/${_ao_rel}" ]] && _ao_present=true
+        done
+        local _ao_base
+        if [[ "$_ao_present" == "true" ]] && _ao_base=$(append_only_base_ref "$_ao_base_branch" "$repository"); then
+            echo ""
+            if append_only_check "$_ao_base" "$_ao_dir" \
+                    ${_append_only_files[@]+"${_append_only_files[@]}"}; then
+                echo "✓ Append-only files intact (measured against '$_ao_base')"
+            fi
+        fi
+    fi
+
     if [[ "$require_given" == "true" ]]; then
         if [[ ! -f "$checklist_ticket_file" && ! -f "$checklist_note_file" ]]; then
             echo ""
@@ -2501,6 +2799,11 @@ cmd_check() {
 # was merged on GitHub). Only sets closed_at, moves ticket/note to done/,
 # commits on the current branch and pushes. No squash-merge, no branch
 # switching, no worktree/remote-branch operations.
+#
+# Not gated by append_only_files: this runs on the base branch after the feature
+# branch was merged elsewhere, so <base>..HEAD is empty and there is no branch
+# history left to measure. `check` on the feature branch is where that is caught.
+#
 # Usage: cmd_close_no_merge <ticket-name> <closed-at-override> <no-push>
 cmd_close_no_merge() {
     local ticket_name_arg="$1"
@@ -2788,10 +3091,16 @@ EOF
     # config.
     config_read_list "require_checklist_groups"
     local _required_groups=(${CONFIG_LIST[@]+"${CONFIG_LIST[@]}"})
+    config_read_list "append_only_files"
+    local _append_only_files=(${CONFIG_LIST[@]+"${CONFIG_LIST[@]}"})
     
-    # Check current branch
+    # Check current branch. A ticket that names its own branch is on a feature
+    # branch whatever the branch is called - the prefix is the default naming,
+    # not the definition.
     local current_branch=$(get_current_branch)
-    if [[ ! "$current_branch" =~ ^${branch_prefix} ]]; then
+    local _ticket_branch=$(ticket_branch_override "$ticket_file")
+    if [[ ! "$current_branch" =~ ^${branch_prefix} ]] && \
+       [[ -z "$_ticket_branch" || "$current_branch" != "$_ticket_branch" ]]; then
         cat >&2 << EOF
 Error: Not on a feature branch
 Must be on a feature branch to close ticket. Please:
@@ -2938,6 +3247,30 @@ EOF
         if ! checklist_gate "$ticket_file" "$_close_note_file"; then
             echo "Nothing was closed." >&2
             return 1
+        fi
+    fi
+
+    # Lines taken back out of a file the project declared append-only.
+    # Deliberately NOT bypassed by --force, for the same reason as the checklist
+    # above: --force speaks to the state of the Git tree, and the way out of
+    # this one is to append the removed lines again in a new commit, which
+    # leaves the record readable. Nothing here is measured against the working
+    # tree, so an uncommitted fix is the author's to make before committing.
+    local _ao_ticket_dir=""
+    if [[ "${ticket_file##*/}" == "ticket.md" ]]; then
+        _ao_ticket_dir="${ticket_file%/ticket.md}"
+    fi
+    if [[ ${#_append_only_files[@]} -gt 0 ]] && [[ -n "$_ao_ticket_dir" ]]; then
+        local _ao_base
+        if _ao_base=$(append_only_base_ref "$default_branch" "$repository"); then
+            if ! append_only_check "$_ao_base" "$_ao_ticket_dir" \
+                    ${_append_only_files[@]+"${_append_only_files[@]}"} >&2; then
+                echo "Nothing was closed." >&2
+                return 1
+            fi
+        else
+            echo "Warning: append_only_files: neither '${repository}/${default_branch}' nor a local" >&2
+            echo "'${default_branch}' exists, so there is nothing to measure against. Check skipped." >&2
         fi
     fi
 
@@ -3326,9 +3659,12 @@ EOF
     local default_branch=$(yaml_get "default_branch" || echo "$DEFAULT_BRANCH")
     local branch_prefix=$(yaml_get "branch_prefix" || echo "$DEFAULT_BRANCH_PREFIX")
 
-    # Check current branch
+    # Check current branch. As in close: a ticket that names its own branch is
+    # on a feature branch whatever the branch is called.
     local current_branch=$(get_current_branch)
-    if [[ ! "$current_branch" =~ ^${branch_prefix} ]]; then
+    local _ticket_branch=$(ticket_branch_override "$ticket_file")
+    if [[ ! "$current_branch" =~ ^${branch_prefix} ]] && \
+       [[ -z "$_ticket_branch" || "$current_branch" != "$_ticket_branch" ]]; then
         cat >&2 << EOF
 Error: Not on a feature branch
 Must be on a feature branch to cancel ticket. Please:
@@ -3652,7 +3988,7 @@ automatically.
 
 ## Create New Ticket
 
-1. Create ticket: `./ticket.sh new feature-name` — creates `tickets/<TICKETNAME>/{ticket.md,note.md}`.
+1. Create ticket: `./ticket.sh new feature-name` — creates `tickets/<TICKETNAME>/{ticket.md,note.md}`, plus any files the project declares in `ticket_files`.
 2. Edit ticket content and description in the generated `tickets/<TICKETNAME>/ticket.md`.
 
 ## Start Working on Ticket
@@ -3664,6 +4000,7 @@ automatically.
    - `current-ticket/ticket.md` — the ticket body
    - `current-ticket/note.md` — working notes for this ticket
    - Compat: `current-ticket.md`, `current-note.md`
+   - `start` prints an `Active ticket paths:` block. Read it: any other file this project keeps in the ticket directory (a `progress.md`, say) is listed there as a `file:` line, so there is nothing to guess and nothing to create yourself.
 
 ## Closing Tickets
 

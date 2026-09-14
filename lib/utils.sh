@@ -312,6 +312,127 @@ ticket_name_from_path() {
     fi
 }
 
+# Read a ticket's `branch:` frontmatter override off a stream.
+#
+# awk over the frontmatter rather than yaml-sh, for the same reason
+# started_at_on_branch does it: yaml_parse writes to globals that the caller is
+# usually in the middle of using for the config, and a helper that quietly
+# replaced the config under its caller would be a trap.
+#
+# Prints nothing when the field is absent, empty, or null.
+_ticket_branch_from_stream() {
+    awk '
+        /^---[[:space:]]*$/ { fence++; if (fence > 1) exit; next }
+        fence == 1 && /^branch:/ {
+            sub(/^branch:[[:space:]]*/, "")
+            sub(/[[:space:]]+#.*$/, "")
+            sub(/[[:space:]]+$/, "")
+            gsub(/^["'"'"']|["'"'"']$/, "")
+            if ($0 == "null" || $0 == "~") exit
+            print
+            exit
+        }'
+}
+
+# The branch a ticket names for itself, or nothing when it names none.
+#
+# Usage: ticket_branch_override <ticket_file>
+ticket_branch_override() {
+    local ticket_file="$1"
+    [[ -f "$ticket_file" ]] || return 0
+    _ticket_branch_from_stream < "$ticket_file"
+}
+
+# The feature branch a ticket belongs on: its `branch:` override when it has
+# one, otherwise the historical {branch_prefix}<ticket-name>.
+#
+# Every command that needs to name a ticket's branch goes through here, so a
+# ticket whose branch was created by something else - a CI bot that checked out
+# agent/issue-12 before ticket.sh ever saw it - is not a ticket ticket.sh has
+# to be talked out of managing.
+#
+# Usage: ticket_branch_name <ticket_file> <branch_prefix> <ticket_name>
+ticket_branch_name() {
+    local ticket_file="$1"
+    local branch_prefix="$2"
+    local ticket_name="$3"
+
+    local override
+    override=$(ticket_branch_override "$ticket_file")
+    if [[ -n "$override" ]]; then
+        echo "$override"
+    else
+        echo "${branch_prefix}${ticket_name}"
+    fi
+}
+
+# The name of the ticket whose frontmatter claims <branch>, if any.
+#
+# This is the reverse of ticket_branch_name, and it has to be a scan: the
+# branch name carries no trace of which ticket chose it. Only tickets with an
+# explicit `branch:` can match, so the common prefix-named ticket never pays
+# for this - callers try the prefix first and come here only when that failed.
+#
+# Usage: ticket_claiming_branch <branch> <tickets_dir>
+ticket_claiming_branch() {
+    local branch="$1"
+    local tickets_dir="$2"
+
+    [[ -n "$branch" ]] || return 1
+
+    local f
+    for f in "${tickets_dir}"/*/ticket.md \
+             "${tickets_dir}"/*.md \
+             "${tickets_dir}"/done/*/ticket.md \
+             "${tickets_dir}"/done/*.md; do
+        [[ -f "$f" ]] || continue
+        if [[ "$(ticket_branch_override "$f")" == "$branch" ]]; then
+            ticket_name_from_path "$f"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# The ticket that belongs to <branch>: the prefix stripped off when that names
+# a ticket that exists, otherwise whichever ticket claims the branch by name.
+#
+# Falls back to the bare prefix strip when neither finds a file, because the
+# callers that fail here ("no ticket found for branch X") need to name the file
+# they looked for. Returns 1 only when the branch is neither prefixed nor
+# claimed - which is a caller's cue that this is not a ticket branch at all.
+#
+# Usage: ticket_name_for_branch <branch> <tickets_dir> <branch_prefix>
+ticket_name_for_branch() {
+    local branch="$1"
+    local tickets_dir="$2"
+    local branch_prefix="$3"
+
+    local stripped=""
+    if [[ -n "$branch_prefix" ]] && [[ "$branch" == "${branch_prefix}"* ]]; then
+        stripped="${branch#"$branch_prefix"}"
+        if [[ -f "${tickets_dir}/${stripped}/ticket.md" ]] || \
+           [[ -f "${tickets_dir}/done/${stripped}/ticket.md" ]] || \
+           [[ -f "${tickets_dir}/${stripped}.md" ]] || \
+           [[ -f "${tickets_dir}/done/${stripped}.md" ]]; then
+            echo "$stripped"
+            return 0
+        fi
+    fi
+
+    local claimed
+    if claimed=$(ticket_claiming_branch "$branch" "$tickets_dir"); then
+        echo "$claimed"
+        return 0
+    fi
+
+    if [[ -n "$stripped" ]]; then
+        echo "$stripped"
+        return 0
+    fi
+    return 1
+}
+
 # Read started_at out of a ticket file as it stands on <branch>, without
 # checking anything out. Prints nothing when the branch has no such file, or
 # when the value is null.

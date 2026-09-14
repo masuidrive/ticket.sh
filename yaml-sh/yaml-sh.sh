@@ -15,12 +15,19 @@
 #   - Keep modifier (+): Keeps all trailing newlines
 # - Quoted strings: 'single quotes' and "double quotes"
 # - Comments: # comment (except in multiline strings)
-# - Flat structure only (no nested objects support)
+# - Flat structure, plus one level of map inside a dash list:
+#     items:
+#       - path: a.md
+#         content: |
+#           text
+#   is read as items.0.path / items.0.content (yaml_list_size counts items).
 #
 # Known limitations:
 # - Pipe multiline strings (|): May lose the final newline
 # - Folded strings (>): May lose the trailing space
-# - No support for nested objects or complex data structures
+# - No support for nested objects beyond the one list-item level above
+# - A list item's first key must carry an inline value ("- path: a.md");
+#   a block scalar has to sit on its own indented line below it
 # - No support for anchors, aliases, or tags
 # - No support for flow style mappings
 #
@@ -282,7 +289,16 @@ yaml_parse() {
     local current_path=""
     local list_index=0
     local in_list=0
-    
+
+    # One level of nesting under a list item: "- path: x" followed by indented
+    # "content: |" lines. yaml-sh is otherwise flat, and these three variables
+    # are the whole of the exception - they namespace such keys as
+    # <list>.<N>.<key> and are cleared the moment a key appears at or above the
+    # list's own indent.
+    local list_path=""
+    local list_indent=-1
+    local item_path=""
+
     local line
     local multiline_value=""
     local reading_multiline=0
@@ -290,7 +306,7 @@ yaml_parse() {
     # Declared here rather than inside the read loop below: re-running `local` on
     # the same names every iteration makes zsh dump the parameter list to stdout,
     # which corrupts the output for anyone sourcing this into zsh.
-    local type indent key value rest
+    local type indent key value rest item_key item_value
     
     # Use temporary file to avoid process substitution (bash 3.2 compatibility)
     local temp_yaml_output="/tmp/yaml_parse_$$.tmp"
@@ -348,11 +364,22 @@ yaml_parse() {
         
         case "$type" in
             KEY)
-                # Only reset in_list if we're changing to a different key
-                if [[ "$current_path" != "$key" ]]; then
-                    in_list=0
+                if [[ -n "$item_path" ]] && [[ "$indent" -gt "$list_indent" ]]; then
+                    # Indented key belonging to the list item we are inside.
+                    # Its value may be a multiline block, which the VALUE case
+                    # below stores against current_path - so the namespaced
+                    # path has to be in place before that line arrives.
+                    current_path="${item_path}.${key}"
+                else
+                    list_path=""
+                    list_indent=-1
+                    item_path=""
+                    # Only reset in_list if we're changing to a different key
+                    if [[ "$current_path" != "$key" ]]; then
+                        in_list=0
+                    fi
+                    current_path="$key"
                 fi
-                current_path="$key"
                 if [[ -n "$value" ]]; then
                     _YAML_KEYS+=("$current_path")
                     _YAML_VALUES+=("$value")
@@ -371,20 +398,41 @@ yaml_parse() {
                 ;;
                 
             LIST)
-                if [[ $in_list -eq 0 ]]; then
-                    list_index=0
-                    in_list=1
-                else
+                # A list item's own indent is what tells a second item apart
+                # from a nested key: reading current_path here would follow the
+                # namespaced path a preceding "content:" left behind.
+                if [[ -n "$list_path" ]] && [[ "$indent" -eq "$list_indent" ]]; then
                     list_index=$((list_index + 1))
+                else
+                    list_path="$current_path"
+                    list_indent="$indent"
+                    list_index=0
                 fi
-                _YAML_KEYS+=("${current_path}.${list_index}")
+                in_list=1
+                item_path=""
+                # The raw item is stored either way: yaml_list_size counts
+                # <list>.<N> keys, so a map item that only produced
+                # <list>.<N>.<key> would make the list look empty.
+                _YAML_KEYS+=("${list_path}.${list_index}")
                 _YAML_VALUES+=("$key")  # key contains the list item
+                # "- key: value" opens a map item.
+                if [[ "$key" =~ ^([A-Za-z_][A-Za-z0-9_-]*):[[:space:]]*(.*)$ ]]; then
+                    item_path="${list_path}.${list_index}"
+                    item_key="${BASH_REMATCH[1]}"
+                    item_value="${BASH_REMATCH[2]}"
+                    item_value="${item_value%"${item_value##*[![:space:]]}"}"
+                    _YAML_KEYS+=("${item_path}.${item_key}")
+                    _YAML_VALUES+=("$item_value")
+                fi
                 ;;
                 
             ILIST)
                 if [[ $in_list -eq 0 ]]; then
                     list_index=0
                     in_list=1
+                    list_path=""
+                    list_indent=-1
+                    item_path=""
                 else
                     list_index=$((list_index + 1))
                 fi
