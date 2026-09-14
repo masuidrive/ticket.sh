@@ -605,7 +605,7 @@ Displays ticket list:
 Starts ticket work:
 
 1. Sets current time to specified ticket's `started_at`
-2. Creates Git branch as `{branch_prefix}<basename>` — or, when the ticket's frontmatter has a `branch:` field, as that branch. Either way, a branch that already exists is checked out rather than re-created (see **Resuming** below), which is what lets a branch someone else made first be adopted.
+2. Creates Git branch as `{branch_prefix}<basename>` — or, when the ticket's frontmatter has a `branch:` field, as that branch. Either way, a branch that already exists is checked out rather than re-created (see **Resuming** below), which is what lets a branch someone else made first be adopted. See **When the ticket lives only on its own branch** below for the case where that branch is also the only place the ticket exists.
 3. Commits the stamp on the feature branch as `[start] {branch}` and fast-forwards the base branch onto that commit (see **Recording the start time** below)
 4. Creates active-ticket symlinks: `current-ticket/` (dir symlink, new layout only), `current-ticket.md`, and `current-note.md`
 5. Emits an `Active ticket paths:` block listing the resolved paths (layout, ticket, note, any `ticket_files` entries that exist, ticket_dir/tmp_dir for new layout, and every symlink correspondence)
@@ -630,6 +630,37 @@ you switch back to the base branch.
 - **Nothing is pushed.** `start` declares that work is beginning; it is not a request to publish the base branch, and doing so would carry along any unpushed commits already sitting there (someone else's, in a repo where several worktrees share a base). The base branch reaches the remote on close.
 - Git hooks run on this commit. Set `no_verify: true` in config to skip them.
 - Resuming an already-started ticket does not re-stamp or re-record anything.
+
+**When the ticket lives only on its own branch:**
+
+`start` normally returns to the base branch and creates the feature branch from
+there. That is wrong for one shape: a ticket whose `branch:` names a branch that
+was created first, with the ticket created and committed *on it*. A bot checks
+out `agent/issue-12` from an issue number and runs `new --branch agent/issue-12`
+there; the base branch never sees the ticket. Switching to the base branch would
+walk away from the only copy of it, which is the `Ticket not found` that left
+`start` unusable for exactly the workflow `branch:` exists to serve.
+
+So when all three of these hold, `start` stays where it is:
+
+- the current branch is the one the ticket's `branch:` names,
+- the ticket file is present in the working tree, and
+- the base branch has no copy of it.
+
+It then stamps `started_at`, commits it on that branch as `[start] <branch>`, and
+emits the `Active ticket paths:` block. The fast-forward is skipped with a line
+saying why — there is no copy of the ticket on the base branch to advance onto,
+so there is nothing to fast-forward. `list` reads the start time off the branch,
+so the ticket still shows as `doing`.
+
+Running it again resumes rather than re-stamps: `started_at` is when the work
+began, and a second `start` is how an interrupted session gets its links back.
+
+All three conditions matter. Without the first, any feature branch would keep
+`start` from returning to the base branch. Without the third, a ticket that is on
+both branches would lose the fast-forward that makes it read `doing` from either
+one. Worktree mode never takes this path — it does not touch the caller's `HEAD`
+in the first place, so there is nothing to protect the ticket from.
 
 **Worktree Mode:**
 - Can be enabled permanently via `worktree_mode: true` in config

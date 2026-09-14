@@ -62,6 +62,14 @@ make_repo() {
     echo "$dir"
 }
 
+# Read started_at out of the ticket as it stands on main. Empty when main has no
+# copy of the ticket, or the value is null.
+# Usage: started_at_on_main <ticket-name>
+started_at_on_main() {
+    git show "main:tickets/${1}/ticket.md" 2>/dev/null \
+        | awk '/^started_at:/ { sub(/^started_at:[[:space:]]*/, ""); sub(/[[:space:]]*#.*$/, ""); if ($0 != "null") print; exit }'
+}
+
 # ---------------------------------------------------------------------------
 echo "1. new --branch writes the field"
 REPO=$(make_repo newbranch)
@@ -257,7 +265,195 @@ fi
 
 # ---------------------------------------------------------------------------
 echo
-echo "8. a ticket without the field behaves exactly as before"
+echo "8. start works when the ticket exists only on its own branch"
+# The bot's shape (issue #9): the machinery creates and checks out the branch
+# first, the ticket is created and committed there, and the base branch never
+# sees it. `start` used to check out the base branch before looking for the
+# ticket, which walked away from the only copy of it.
+REPO=$(make_repo ownbranch)
+cd "$REPO"
+git checkout -q -b agent/issue-77
+timeout 5 ./ticket.sh new issue-77 --branch agent/issue-77 >/dev/null 2>&1
+TICKET=$(safe_get_ticket_name "*issue-77*")
+git add tickets && git commit -q -m "Add ticket on its own branch"
+# Nothing on main: that is the whole point of this case.
+if ! git cat-file -e "main:tickets/${TICKET}/ticket.md" 2>/dev/null; then
+    pass "the ticket is absent from the base branch (fixture)"
+else
+    fail "fixture wrong: the ticket reached main" "$(git log --oneline main -3)"
+fi
+
+OUT=$(timeout 20 ./ticket.sh start "$TICKET" 2>&1)
+RC=$?
+if [[ $RC -eq 0 ]] && ! echo "$OUT" | grep -q "Ticket not found"; then
+    pass "start succeeds"
+else
+    fail "start could not find the ticket" "$OUT"
+fi
+if [[ "$(git rev-parse --abbrev-ref HEAD)" == "agent/issue-77" ]]; then
+    pass "start stays on the branch instead of switching to the base"
+else
+    fail "start switched away" "$(git rev-parse --abbrev-ref HEAD)"
+fi
+if grep -q "^started_at: \"\?20" "tickets/${TICKET}/ticket.md"; then
+    pass "started_at is stamped"
+else
+    fail "started_at not set" "$(sed -n '1,10p' "tickets/${TICKET}/ticket.md")"
+fi
+if git log --format='%s' -1 | grep -q "^\[start\] agent/issue-77$"; then
+    pass "the stamp is committed on this branch"
+else
+    fail "no start commit" "$(git log --oneline -3)"
+fi
+if echo "$OUT" | grep -q "has no copy of this ticket"; then
+    pass "the skipped fast-forward is explained"
+else
+    fail "nothing said about the base branch" "$OUT"
+fi
+if [[ "$(git rev-parse main)" == "$(git rev-parse main@{0})" ]] && \
+   ! git cat-file -e "main:tickets/${TICKET}/ticket.md" 2>/dev/null; then
+    pass "the base branch is left alone"
+else
+    fail "main was modified" "$(git log --oneline main -3)"
+fi
+if [[ -L current-ticket.md ]] && [[ -d current-ticket ]]; then
+    pass "the active-ticket symlinks are created"
+else
+    fail "symlinks missing" "$(ls -l current-ticket* 2>&1)"
+fi
+if echo "$OUT" | grep -q "Active ticket paths:"; then
+    pass "the resolved paths are emitted"
+else
+    fail "no Active ticket paths block" "$OUT"
+fi
+
+# Running it again must not re-stamp: started_at is the time work began, and a
+# second start is how an interrupted session gets its links back.
+STAMP_BEFORE=$(grep '^started_at:' "tickets/${TICKET}/ticket.md")
+OUT=$(timeout 20 ./ticket.sh start "$TICKET" 2>&1)
+if echo "$OUT" | grep -q "already started"; then
+    pass "a second start resumes instead of restarting"
+else
+    fail "second start did not resume" "$OUT"
+fi
+if [[ "$(grep '^started_at:' "tickets/${TICKET}/ticket.md")" == "$STAMP_BEFORE" ]]; then
+    pass "the start time is not rewritten"
+else
+    fail "started_at was overwritten" "$(grep '^started_at:' "tickets/${TICKET}/ticket.md")"
+fi
+
+# And the rest of the lifecycle still works from here.
+echo "work" >> README.md
+git add -A && git commit -q -m "Do the work"
+OUT=$(timeout 30 ./ticket.sh close --no-push 2>&1)
+if [[ $? -eq 0 ]] && [[ -f "tickets/done/${TICKET}/ticket.md" ]]; then
+    pass "close squash-merges it to the base branch"
+else
+    fail "close failed" "$OUT"
+fi
+
+# ---------------------------------------------------------------------------
+echo
+echo "9. a ticket that is on the base branch keeps the ordinary path"
+# The own-branch case must stay narrow. When the base branch has the ticket,
+# start behaves as it always did - branch from the base and fast-forward it, so
+# the ticket reads `doing` from either branch. Nothing about `branch:` changes
+# that; only where the ticket lives does.
+REPO=$(make_repo onbase)
+cd "$REPO"
+timeout 5 ./ticket.sh new shared --branch agent/issue-88 >/dev/null 2>&1
+TICKET=$(safe_get_ticket_name "*shared*")
+git add tickets && git commit -q -m "Add ticket on main"
+
+OUT=$(timeout 20 ./ticket.sh start "$TICKET" 2>&1)
+if [[ "$(git rev-parse --abbrev-ref HEAD)" == "agent/issue-88" ]]; then
+    pass "start ends up on the named branch"
+else
+    fail "wrong branch" "$(git rev-parse --abbrev-ref HEAD)"
+fi
+if ! echo "$OUT" | grep -q "has no copy of this ticket"; then
+    pass "the own-branch path is not taken"
+else
+    fail "took the own-branch path when the base had the ticket" "$OUT"
+fi
+if [[ -n "$(started_at_on_main "$TICKET")" ]]; then
+    pass "the start time still reaches the base branch"
+else
+    fail "the base branch was not fast-forwarded" "$(git log --oneline main -3)"
+fi
+
+# The same ticket, reached from a branch that is not its own: start must still
+# be free to return to the base branch, or the own-branch test above would have
+# pinned every feature branch in place.
+REPO=$(make_repo elsewhere)
+cd "$REPO"
+timeout 5 ./ticket.sh new fromelsewhere --branch agent/issue-89 >/dev/null 2>&1
+TICKET=$(safe_get_ticket_name "*fromelsewhere*")
+git add tickets && git commit -q -m "Add ticket on main"
+git checkout -q -b some/unrelated-branch
+
+OUT=$(timeout 20 ./ticket.sh start "$TICKET" 2>&1)
+if [[ "$(git rev-parse --abbrev-ref HEAD)" == "agent/issue-89" ]]; then
+    pass "start leaves an unrelated branch and lands on the named one"
+else
+    fail "start did not switch away" "$(git rev-parse --abbrev-ref HEAD)"
+fi
+
+# The same move, with git writing a warning to stderr. `start` decides whether
+# to leave a feature branch by reading `git status --porcelain`, and it used to
+# capture stderr along with it - so in any environment where git warns (an
+# unreadable ~/.config/git/ignore is the normal state of a CI container) a clean
+# tree read as uncommitted changes and start refused to move, telling the user
+# to commit files that were already committed. Caught by the assertion above
+# failing on Docker while passing on macOS.
+#
+# The warning is produced by a `git` shim on PATH rather than by arranging for a
+# real one: making git warn for real needs an unreadable path, and an unreadable
+# path is a hard error on some builds and a warning on others - which is how the
+# first attempt at this test failed on Linux while passing on macOS. The shim
+# warns only for `status`, so this stays a test about one line of code.
+REPO=$(make_repo gitwarns)
+cd "$REPO"
+timeout 5 ./ticket.sh new warned --branch agent/issue-90 >/dev/null 2>&1
+TICKET=$(safe_get_ticket_name "*warned*")
+git add tickets && git commit -q -m "Add ticket on main"
+git checkout -q -b some/unrelated-branch
+
+# Outside the repo: an untracked shim/ inside it would make the tree genuinely
+# dirty, and the test would pass for the wrong reason.
+REAL_GIT=$(command -v git)
+SHIM_DIR="${TEST_DIR}/gitshim"
+mkdir -p "$SHIM_DIR"
+cat > "${SHIM_DIR}/git" << SHIM
+#!/usr/bin/env bash
+for _a in "\$@"; do
+    if [[ "\$_a" == "status" ]]; then
+        echo "warning: unable to access '/root/.config/git/ignore': Permission denied" >&2
+        break
+    fi
+done
+exec "${REAL_GIT}" "\$@"
+SHIM
+chmod +x "${SHIM_DIR}/git"
+
+# The shim has to actually warn while still succeeding, or the test proves nothing.
+SHIM_OUT=$(PATH="${SHIM_DIR}:$PATH" git status --porcelain 2>&1 >/dev/null)
+if [[ -n "$SHIM_OUT" ]] && PATH="${SHIM_DIR}:$PATH" git status --porcelain >/dev/null 2>&1; then
+    pass "the shim warns on stderr and still succeeds (fixture)"
+else
+    fail "fixture wrong: the shim did not warn cleanly" "$SHIM_OUT"
+fi
+
+OUT=$(PATH="${SHIM_DIR}:$PATH" timeout 20 ./ticket.sh start "$TICKET" 2>&1)
+if [[ "$(git rev-parse --abbrev-ref HEAD)" == "agent/issue-90" ]]; then
+    pass "a git warning on stderr is not mistaken for a dirty tree"
+else
+    fail "start read a git warning as uncommitted changes" "$OUT"
+fi
+
+# ---------------------------------------------------------------------------
+echo
+echo "10. a ticket without the field behaves exactly as before"
 REPO=$(make_repo plain)
 cd "$REPO"
 timeout 5 ./ticket.sh new ordinary >/dev/null 2>&1

@@ -4,7 +4,7 @@ base_branch: default  # Override base branch for start/close (default: use defau
 description: "start が、ticket の branch: と同じ branch 上にだけ ticket があるときも動くようにする（gh #9）"
 created_at: "2026-09-14T14:27:17Z"
 started_at: 2026-09-14T14:27:35Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-09-14T15:23:12Z # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
 
@@ -45,20 +45,22 @@ base branch には無いなら、base へ切り替えずにそのまま `started
 
 ## Tasks
 
-- [ ] 再現を fixture として固定する
-- [ ] `cmd_start` に「ticket が自分の branch 上にしかない」経路を足す
-  - [ ] base branch へ切り替えない
-  - [ ] `started_at` を stamp して、その branch 上で commit する
-  - [ ] base への fast-forward は skip し、理由を 1 行出す
-  - [ ] `Active ticket paths:` を出す
-  - [ ] 既に started な場合は再 stamp しない（resume 相当）
-- [ ] worktree モードでこの経路に入らないこと（cwd の HEAD を触らないため既に別扱い）
-- [ ] `branch:` が無い ticket / ticket が base にもある場合は現行と同一の挙動
-- [ ] `test/test-branch-override.sh` に節を追加する
-- [ ] Run tests before closing and pass all tests (No exceptions) — `test/run-all.sh` と `test/run-all-on-docker.sh`
-- [ ] Run `bash build.sh` to build the project
-- [ ] Update documentation if necessary
-  - [ ] Update README.md / README.ja.md
-  - [ ] Update spec.md / spec.ja.md
-  - [ ] Update DEV.md
+- [x] 再現を fixture として固定する
+- [x] `cmd_start` に「ticket が自分の branch 上にしかない」経路を足す
+  - [x] base branch へ切り替えない
+  - [x] `started_at` を stamp して、その branch 上で commit する
+  - [x] base への fast-forward は skip し、理由を 1 行出す
+  - [x] `Active ticket paths:` を出す
+  - [x] 既に started な場合は再 stamp しない（resume 相当）
+- [x] worktree モードでこの経路に入らないこと（cwd の HEAD を触らないため既に別扱い）
+- [x] `branch:` が無い ticket / ticket が base にもある場合は現行と同一の挙動
+- [x] `test/test-branch-override.sh` に節を追加する
+- [x] （テストが掘り当てた既存バグ）`start` の `git status --porcelain 2>&1` が
+      git の警告を未コミット変更と誤判定する件を直し、回帰テストを足す
+- [x] Run tests before closing and pass all tests (No exceptions) — `test/run-all.sh` と `test/run-all-on-docker.sh`
+- [x] Run `bash build.sh` to build the project
+- [x] Update documentation if necessary
+  - [x] Update README.md / README.ja.md
+  - [x] Update spec.md / spec.ja.md
+  - [x] Update DEV.md
 - [ ] Get developer approval before closing

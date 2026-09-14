@@ -229,6 +229,7 @@ be recognized by every command; they are never auto-migrated.
   - A ticket the current branch calls \`todo\` is checked against its branch (\`branch:\` if set, else \`{branch_prefix}<name>\`) before being believed. If that branch carries a \`started_at\`, the ticket is \`doing\` and the line \`started_at_only_on: <branch>\` says the timestamp lives only there - which happens when \`start\`'s fast-forward onto the base branch was skipped.
 - \`$SCRIPT_COMMAND start [--worktree] [--copy-file <path>]... <ticket-name>\` - Start working on ticket (creates or switches to feature branch, --worktree creates a separate worktree)
   - With \`--worktree\`: **cd to the worktree directory after start; cd back to the main repo after close.** In environments where cwd resets each command (e.g. LLM agents), cd must be re-run every time.
+  - When the current branch is the one the ticket's \`branch:\` names, the ticket is there, and the base branch has no copy of it, \`start\` stays on that branch instead of switching to the base: it stamps \`started_at\`, commits it there, and skips the fast-forward with a line saying why. Switching would walk away from the only copy of the ticket. Running it again resumes rather than re-stamps.
   - \`start\` commits \`started_at\` on the feature branch and fast-forwards the base branch onto that commit, so the ticket shows as \`doing\` from the base branch too. Nothing is pushed: the base branch reaches the remote on close. If the base branch has moved on, the fast-forward is skipped with a note and the start time stays on the feature branch.
   - \`--copy-file <path>\` (repeatable) copies the given file from the main repo into the new worktree, appended to the \`worktree_copy_files\` config list. Only applied when a worktree is created. Existing files in the target are never overwritten; missing sources warn and continue. Typical use: bringing gitignored \`.env\` into the worktree.
 - \`$SCRIPT_COMMAND restore\` - Restore current-ticket.md symlink from branch name (a branch named by some ticket's \`branch:\` resolves too, not only \`{branch_prefix}*\`)
@@ -1775,6 +1776,10 @@ record_start_on_base() {
     local ticket_hash="$7"
     local note_hash="$8"
     local no_verify="$9"
+    # Optional 10th: "true" when the base branch has no copy of this ticket to
+    # advance onto, so the stamp is committed on the feature branch and the base
+    # branch is left alone. See cmd_start's own-branch path.
+    local skip_base_ff="${10:-false}"
 
     # Stage by path. The tree also holds the current-* symlinks, the ticket's
     # tmp/, and anything worktree_copy_files brought in; those are meant to be
@@ -1805,6 +1810,13 @@ record_start_on_base() {
     if ! run_git_command "git -C \"$work_tree\" commit${verify_flag} -m \"[start] $feature_branch\" --${paths_arg}"; then
         echo "Warning: Could not commit the start time on '$feature_branch'" >&2
         echo "  started_at is written to the ticket file but left uncommitted." >&2
+        return 0
+    fi
+
+    if [[ "$skip_base_ff" == "true" ]]; then
+        echo "Note: '$base_branch' has no copy of this ticket, so there is nothing to"
+        echo "  fast-forward onto. The start time is committed on '$feature_branch',"
+        echo "  and 'list' reads it from there, so the ticket still shows as doing."
         return 0
     fi
 
@@ -1994,6 +2006,33 @@ cmd_start() {
 
     # Check current branch
     local current_branch=$(get_current_branch)
+
+    # Does the ticket live only on its own branch?
+    #
+    # A ticket that names its branch can have been created on that branch and
+    # committed there: a bot checks out agent/issue-12 from an issue number and
+    # runs `new --branch agent/issue-12` on it, so the base branch never sees the
+    # ticket. The branch switching below would then check out the base branch and
+    # walk away from the only copy of it - which is the "Ticket not found" that
+    # left `start` unusable for exactly the workflow `branch:` exists to serve.
+    #
+    # All three conditions matter. The branch has to be the one the ticket names,
+    # or any feature branch would keep `start` from returning to the base branch.
+    # The ticket has to be here, or there is nothing to protect. And the base
+    # branch has to not have it, because when both have it the ordinary path
+    # works and its fast-forward is worth keeping.
+    #
+    # Worktree mode is excluded: it never touches cwd's HEAD in the first place,
+    # so there is nothing to protect the ticket from.
+    local on_own_branch=false
+    if [[ "$use_worktree" != "true" ]] && [[ -f "$ticket_file" ]]; then
+        local _own_branch=$(ticket_branch_override "$ticket_file")
+        if [[ -n "$_own_branch" ]] && [[ "$_own_branch" == "$current_branch" ]] && \
+           ! git cat-file -e "${effective_base}:${ticket_file}" 2>/dev/null; then
+            on_own_branch=true
+        fi
+    fi
+
     if [[ "$use_worktree" == "true" ]]; then
         # Worktree mode: do NOT touch cwd HEAD. Worktree is created directly
         # from the base branch via 'git -C <main_repo> worktree add', so we
@@ -2014,10 +2053,18 @@ Please:
 EOF
             return 1
         fi
+    elif [[ "$on_own_branch" == "true" ]]; then
+        # Staying put: this branch is the only place the ticket exists.
+        check_clean_working_dir "$tickets_dir" || return 1
     elif [[ "$current_branch" != "$effective_base" ]]; then
         # We're not on the effective base branch - handle different scenarios
         local git_status_output
-        if ! git_status_output=$(git status --porcelain 2>&1); then
+        # Only stdout is the porcelain listing. Folding stderr in here made any
+        # warning git happens to emit - an unreadable ~/.config/git/ignore, say,
+        # which is the normal state of a CI container - read as an uncommitted
+        # change, so `start` refused to leave a perfectly clean feature branch
+        # and told the user to commit files that were already committed.
+        if ! git_status_output=$(git status --porcelain 2>/dev/null); then
             echo "Error: Failed to check git status" >&2
             echo "Git repository may be corrupted or inaccessible" >&2
             return 1
@@ -2113,6 +2160,43 @@ EOF
         else
             branch_name="${branch_prefix}${ticket_name}"
         fi
+    fi
+
+    # The ticket lives only on this branch, and we are already on it: stamp the
+    # start time here and leave the base branch alone. Falling through would
+    # reach the "branch already exists" path below, which resumes without ever
+    # recording a start - so a ticket created this way would stay `todo` for
+    # good, and the bot workflows this serves would go on writing started_at by
+    # hand, which is what having a `start` command is meant to end.
+    if [[ "$on_own_branch" == "true" ]]; then
+        local _own_started
+        _own_started=$(get_yaml_field "$(extract_yaml_frontmatter "$ticket_file")" "started_at")
+
+        if is_null_or_empty "$_own_started"; then
+            local _own_timestamp=$(get_utc_timestamp)
+            update_yaml_frontmatter_field "$ticket_file" "started_at" "$_own_timestamp" || {
+                echo "Error: Failed to record the start time in '$ticket_file'" >&2
+                return 1
+            }
+            # No base-branch hashes to pass: there is no fast-forward to clear a
+            # path for, which is what the last argument says.
+            record_start_on_base "." "$main_repo" "$effective_base" "$branch_name" \
+                "$ticket_file" "$note_file_rel" "" "" "$no_verify" "true"
+            echo "Started ticket: $ticket_name"
+        else
+            echo "Ticket was already started on '$branch_name'."
+            echo "Resumed ticket: $ticket_name"
+        fi
+
+        create_current_ticket_symlinks "." "$tickets_dir" "$ticket_name" || return 1
+        ensure_ticket_tmp_dir "." "$tickets_dir" "$ticket_name"
+        emit_active_ticket_paths "." "$tickets_dir" "$ticket_name"
+
+        if [[ -n "$start_success_message" ]]; then
+            echo ""
+            echo "$start_success_message"
+        fi
+        return 0
     fi
 
     # Determine worktree path if using worktree mode.

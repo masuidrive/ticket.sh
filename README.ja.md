@@ -374,6 +374,7 @@ default_content: |
 - **クリーンブランチ**: 変更がない場合はデフォルトブランチから新ブランチを作成
 - **競合検出**: クローズ時のマージ競合処理のガイダンス提供
 - **チケットごとの branch 名**: frontmatter の `branch:`（`new --branch <name>` で設定）があれば、`{branch_prefix}<ticket-name>` ではなくその branch を使う。`start` は既にあれば checkout、無ければ作成し、`check` / `restore` / `list` / `close` / `cancel` もすべてその branch と ticket を対応付ける。branch 名の由来が外にあるケース — issue 番号から `agent/issue-12` を組み立て、ticket ができる前に checkout してしまう CI bot など — を、コマンドを迂回せずに通常どおり扱うためのもの。
+- **ticket がその branch 上にしか無い場合**: 現在の branch が ticket の名指す branch で、ticket がそこにあり、base branch にはその copy が無いとき、`start` はその場に留まる — base に切り替えて ticket を見失う代わりに、`started_at` を入れてその branch に commit する。base への fast-forward は理由（進める先の ticket がそこに無い）を 1 行出して skip し、`list` は branch から開始時刻を読むので ticket は `doing` のまま表示される。
 
 ### 自動整理
 - **doneフォルダ**: 完了チケットを自動的に `tickets/done/<TICKETNAME>/` にディレクトリごと移動

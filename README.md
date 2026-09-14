@@ -457,6 +457,7 @@ default_content: |
 - **Clean branches**: Create new branches from default branch when no changes exist
 - **Conflict detection**: Provides guidance for handling merge conflicts during close
 - **Per-ticket branch names**: A ticket can name its own branch with `branch:` in the frontmatter (set it via `new --branch <name>`) instead of taking `{branch_prefix}<ticket-name>`. `start` checks that branch out when it already exists and creates it otherwise, and `check`, `restore`, `list`, `close` and `cancel` all pair the ticket with it. This is what lets a branch whose name comes from outside — a CI bot deriving `agent/issue-12` from an issue number and checking it out before any ticket exists — be worked on with the ordinary commands instead of around them.
+- **Tickets that live only on their own branch**: when the current branch is the one the ticket names, the ticket is there, and the base branch has no copy of it, `start` stays put — it stamps `started_at` and commits it on that branch rather than switching to the base branch and losing sight of the ticket. The fast-forward onto the base branch is skipped with a line saying why (there is nothing there to advance onto), and `list` reads the start time off the branch, so the ticket still shows as `doing`.
 
 ### Automatic Organization
 - **Done folder**: Completed tickets moved to `tickets/done/<TICKETNAME>/` automatically (whole directory rename)

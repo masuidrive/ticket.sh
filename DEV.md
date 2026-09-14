@@ -139,6 +139,7 @@ The main script uses a case statement to route commands:
   - `current-ticket.md` → the ticket body file (compat)
   - `current-note.md` → the note file (compat)
 - For legacy flat tickets, only the two compat file symlinks are created (there is no per-ticket directory to link to)
+- Stays on the current branch, instead of returning to the base branch, when the ticket lives only there: current branch == the ticket's `branch:`, the ticket file is present, and the base branch has no copy of it. `record_start_on_base()` is then called with its `skip_base_ff` argument set — the stamp is committed on the branch and the base branch is left alone, because there is no copy of the ticket there to fast-forward onto. Worktree mode never takes this path (it does not touch the caller's HEAD anyway). Without it, a ticket created and committed on its own branch made `start` check out the base branch and report `Ticket not found`.
 - Emits an `Active ticket paths:` block listing resolved paths so a downstream agent can consume the output without guessing layout. `ticket_files` entries that exist appear as `file:` lines; the config list is read into `TICKET_FILE_PATHS[]` right after the config is parsed, because the ticket's own frontmatter overwrites the yaml-sh globals before the block is emitted.
 - Worktree mode: creates directory at `../<project>.worktrees/<ticket-name>/`
 - Worktree mode: after the worktree is ready and symlinks/`tmp/` are set up, `copy_worktree_files()` runs against the effective `worktree_copy_files` list (config entries + `--copy-file <path>` CLI extras). Each entry: skip if the target exists, warn if the source is missing, otherwise `cp -p`. Silently no-op when the resolved list is empty (default), so the feature is off unless deliberately configured.
@@ -181,7 +182,7 @@ See `test/README.md` for detailed test documentation. Key points:
 - **Checklist tests** (`test-checklist.sh`): `require_checklist`, `require_checklist_groups`, `check --require`, and the Markdown scanner's edge cases
 - **ticket_files tests** (`test-ticket-files.sh`): file creation, placeholder substitution, the `note.md` override, path escapes, and the `Active ticket paths:` lines
 - **append-only tests** (`test-append-only.sh`): the refusal, the message, `--force`/`--dry-run`, and that appending the lines again clears the gate without rewriting history
-- **Branch override tests** (`test-branch-override.sh`): `new --branch` validation and the full lifecycle (start/check/restore/close/list) on a ticket whose branch is named in its frontmatter
+- **Branch override tests** (`test-branch-override.sh`): `new --branch` validation, the full lifecycle (start/check/restore/close/list) on a ticket whose branch is named in its frontmatter, and the case where the ticket exists only on that branch
 
 ### Running Tests
 
@@ -385,6 +386,14 @@ Documentation updates should be part of the same PR as code changes.
    and every command routes through `ticket_branch_name()` rather than
    re-deriving it. `branch_prefix` keeps its meaning as the default, so a ticket
    without the field behaves exactly as before.
+15. **`start` does not walk away from the only copy of a ticket**: it normally
+   returns to the base branch first, which is wrong when the ticket was created
+   and committed on the branch it names and the base branch has never seen it -
+   the bot shape `branch:` exists for. Staying put there is narrow on purpose:
+   all three of "this is the branch the ticket names", "the ticket is here" and
+   "the base branch does not have it" must hold, or `start` would either stop
+   returning to the base branch from any feature branch, or drop the
+   fast-forward that makes a ticket read `doing` from either side.
 
 ### Recent Enhancements
 

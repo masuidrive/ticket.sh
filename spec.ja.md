@@ -593,7 +593,7 @@ Additional notes or requirements.
 チケット作業を開始：
 
 1. 指定チケットの `started_at` に現在時刻を設定
-2. Gitブランチを `{branch_prefix}<basename>` として作成。frontmatter に `branch:` があればその branch を使う。いずれの場合も、既に存在する branch は作り直さず checkout する（後述の **再開**）。これが、他者が先に作った branch をそのまま引き受けられる理由
+2. Gitブランチを `{branch_prefix}<basename>` として作成。frontmatter に `branch:` があればその branch を使う。いずれの場合も、既に存在する branch は作り直さず checkout する（後述の **再開**）。これが、他者が先に作った branch をそのまま引き受けられる理由。その branch が ticket の唯一の在処でもある場合は後述の **ticket がその branch 上にしか無い場合** を参照
 3. その記録を feature branch に `[start] {branch}` としてコミットし、base branch をそのコミットへ fast-forward（後述の **開始時刻の記録** を参照）
 4. アクティブチケット symlink 群を作成: `current-ticket/`（dir symlink、新形式のみ）、`current-ticket.md`、`current-note.md`。加えて `Active ticket paths:` ブロックを emit（下流エージェントが解決済みパスを消費できる。実在する `ticket_files` のエントリも 1 行ずつ出る）
 5. 実行したGitコマンドと出力を詳細表示
@@ -616,6 +616,34 @@ branch から `list` してもチケットは `todo` のままに見える。こ
 - **push は一切行わない。** `start` は作業の開始を宣言するものであって base branch を publish する操作ではない。そこに未 push の commit があれば巻き込んで出てしまう（複数 worktree が base を共有する repo では他人の commit を含みうる）。base branch がリモートに出るのは `close` のとき。
 - このコミットでは Git hook が実行される。config の `no_verify: true` でスキップできる。
 - 開始済みチケットの resume では再記録は行わない。
+
+**ticket がその branch 上にしか無い場合:**
+
+`start` は通常、base branch に戻ってからそこで feature branch を作る。これが誤りに
+なる形が 1 つある: `branch:` が指す branch が先に作られていて、ticket がその上で
+作られ commit されている場合。bot は issue 番号から `agent/issue-12` を checkout し、
+その上で `new --branch agent/issue-12` を走らせるので、base branch は ticket を
+一度も見ない。base に切り替えると唯一の copy から離れてしまい、これが `branch:` が
+まさに支えるはずのワークフローで `start` を使えなくしていた `Ticket not found`。
+
+そこで、次の 3 つが揃ったときは `start` はその場に留まる:
+
+- 現在の branch が ticket の `branch:` と一致する
+- ticket ファイルが作業ツリーに存在する
+- base branch にその ticket が無い
+
+その上で `started_at` を入れ、`[start] <branch>` としてその branch に commit し、
+`Active ticket paths:` を出す。fast-forward は理由を 1 行出して skip する——base に
+進める先の ticket が無いので、そもそも fast-forward するものが無い。`list` は branch
+から開始時刻を読むので、ticket は `doing` のまま表示される。
+
+再実行すると再 stamp せず resume する。`started_at` は作業を始めた時刻であり、
+2 回目の `start` は中断したセッションが作業リンクを取り戻す手段だから。
+
+3 つの条件はいずれも必要。1 つ目が無ければ、あらゆる feature branch から `start` が
+base に戻れなくなる。3 つ目が無ければ、両方の branch にある ticket が、どちらから見ても
+`doing` と読めるようにしている fast-forward を失う。worktree モードはこの経路に入らない
+——そもそも呼び出し元の `HEAD` を触らないので、ticket を守る必要が無い。
 
 **Worktreeモード:**
 - configで `worktree_mode: true` を設定すると常時有効化
