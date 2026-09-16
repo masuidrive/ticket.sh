@@ -21,11 +21,11 @@ FAIL=0
 test_result() {
     if [[ $1 -eq 0 ]]; then
         echo -e "  ${GREEN}✓${NC} $2"
-        ((PASS++))
+        PASS=$((PASS + 1))
     else
         echo -e "  ${RED}✗${NC} $2"
         [[ -n "${3:-}" ]] && echo "    Details: $3"
-        ((FAIL++))
+        FAIL=$((FAIL + 1))
     fi
 }
 

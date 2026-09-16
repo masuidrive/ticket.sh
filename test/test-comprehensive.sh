@@ -26,13 +26,13 @@ FAILED=0
 # Test functions
 pass() {
     echo -e "  ${GREEN}✓${NC} $1"
-    ((PASSED++))
+    PASSED=$((PASSED + 1))
 }
 
 fail() {
     echo -e "  ${RED}✗${NC} $1"
     [[ -n "${2:-}" ]] && echo "    Reason: $2"
-    ((FAILED++))
+    FAILED=$((FAILED + 1))
 }
 
 section() {

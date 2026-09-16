@@ -25,14 +25,21 @@ chmod +x ticket.sh
 
 PASSED=0
 FAILED=0
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+NC='\033[0m'
 
+# ✓/✗ rather than PASS:/FAIL:, so run-all.sh's counter sees these results. It
+# reads those marks (or a "Summary - Passed:" line) out of each suite's output,
+# and this file matched neither, so its numbers never reached the totals.
 pass() {
-    echo "  PASS: $1"
+    echo -e "  ${GREEN}✓${NC} $1"
     PASSED=$((PASSED + 1))
 }
 
 fail() {
-    echo "  FAIL: $1"
+    echo -e "  ${RED}✗${NC} $1"
+    [[ -n "${2:-}" ]] && echo "    $2"
     FAILED=$((FAILED + 1))
 }
 

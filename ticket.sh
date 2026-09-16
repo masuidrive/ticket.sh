@@ -12,7 +12,7 @@ fi
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20260916.090001
+# Version: 20260916.093027
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -2330,7 +2330,7 @@ if [ -z "${BASH_VERSION:-}" ]; then
 fi
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20260916.090001
+# Version: 20260916.093027
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -2422,7 +2422,7 @@ SCRIPT_COMMAND=$(get_script_command)
 
 
 # Global variables
-VERSION="20260916.090001"  # This will be replaced during build
+VERSION="20260916.093027"  # This will be replaced during build
 CONFIG_FILE=""  # Will be set dynamically by get_config_file()
 CURRENT_TICKET_LINK="current-ticket.md"
 CURRENT_NOTE_LINK="current-note.md"
@@ -4335,11 +4335,13 @@ cmd_start() {
     #
     # Worktree mode is excluded: it never touches cwd's HEAD in the first place,
     # so there is nothing to protect the ticket from.
+    local base_has_ticket=false
+    git cat-file -e "${effective_base}:${ticket_file}" 2>/dev/null && base_has_ticket=true
+
     local on_own_branch=false
-    if [[ "$use_worktree" != "true" ]] && [[ -f "$ticket_file" ]]; then
+    if [[ "$use_worktree" != "true" ]] && [[ -f "$ticket_file" ]] && [[ "$base_has_ticket" != "true" ]]; then
         local _own_branch=$(ticket_branch_override "$ticket_file")
-        if [[ -n "$_own_branch" ]] && [[ "$_own_branch" == "$current_branch" ]] && \
-           ! git cat-file -e "${effective_base}:${ticket_file}" 2>/dev/null; then
+        if [[ -n "$_own_branch" ]] && [[ "$_own_branch" == "$current_branch" ]]; then
             on_own_branch=true
         fi
     fi
@@ -4608,6 +4610,35 @@ EOF
 
         if [[ "$ahead_count" -gt 0 ]]; then
             echo "Feature branch '$branch_name' is $ahead_count commit(s) ahead of '$effective_base'."
+        fi
+
+        # A branch that already exists does not mean the ticket was ever started.
+        # `start` creates the branch before it stamps, so anything that goes
+        # wrong in between - a malformed frontmatter, an interrupted run - leaves
+        # the branch behind with started_at still null. Every later `start` then
+        # came through this resume path, which never stamped, so the ticket
+        # stayed `todo` for good and `close` refused it with "Ticket not
+        # started", leaving hand-editing the frontmatter as the only way on.
+        local _resume_ticket_file="$ticket_file"
+        [[ "$use_worktree" == "true" ]] && _resume_ticket_file="${wt_path}/${ticket_file}"
+        if [[ -f "$_resume_ticket_file" ]]; then
+            local _resume_started
+            _resume_started=$(get_yaml_field "$(extract_yaml_frontmatter "$_resume_ticket_file")" "started_at")
+            if is_null_or_empty "$_resume_started"; then
+                echo "Ticket has no start time yet; recording it now."
+                local _resume_ts=$(get_utc_timestamp)
+                if update_yaml_frontmatter_field "$_resume_ticket_file" "started_at" "$_resume_ts"; then
+                    local _resume_wt="."
+                    [[ "$use_worktree" == "true" ]] && _resume_wt="$wt_path"
+                    local _resume_skip_ff=true
+                    [[ "$base_has_ticket" == "true" ]] && _resume_skip_ff=false
+                    record_start_on_base "$_resume_wt" "$main_repo" "$effective_base" "$branch_name" \
+                        "$ticket_file" "$note_file_rel" "$base_ticket_hash" "$base_note_hash" \
+                        "$no_verify" "$_resume_skip_ff"
+                else
+                    echo "Warning: Could not record the start time in '$_resume_ticket_file'" >&2
+                fi
+            fi
         fi
 
         # Determine target directory for symlinks

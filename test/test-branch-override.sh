@@ -453,6 +453,57 @@ fi
 
 # ---------------------------------------------------------------------------
 echo
+echo "9b. start records the start time when resuming a never-started ticket"
+# `start` creates the branch before it stamps, so anything that goes wrong in
+# between leaves the branch behind with started_at still null. Every later start
+# then took the resume path, which never stamped - so the ticket stayed `todo`
+# for good and close refused it with "Ticket not started", leaving hand-editing
+# the frontmatter as the only way on. Hit for real while working this ticket.
+REPO=$(make_repo resumestamp)
+cd "$REPO"
+timeout 5 ./ticket.sh new interrupted >/dev/null 2>&1
+TICKET=$(safe_get_ticket_name "*interrupted*")
+git add tickets && git commit -q -m "Add ticket"
+# The branch exists, the stamp never happened.
+git branch "feature/${TICKET}" main
+if grep -q '^started_at: null' "tickets/${TICKET}/ticket.md"; then
+    pass "the ticket is unstarted with its branch already present (fixture)"
+else
+    fail "fixture wrong: the ticket is already started" "$(grep '^started_at' "tickets/${TICKET}/ticket.md")"
+fi
+
+OUT=$(timeout 20 ./ticket.sh start "$TICKET" 2>&1)
+if echo "$OUT" | grep -q "Resuming work on existing ticket"; then
+    pass "start takes the resume path"
+else
+    fail "start did not resume" "$OUT"
+fi
+if grep -q '^started_at: "\?20' "tickets/${TICKET}/ticket.md"; then
+    pass "and records the start time anyway"
+else
+    fail "resume left started_at null" "$(grep '^started_at' "tickets/${TICKET}/ticket.md")"
+fi
+
+echo "work" >> README.md
+git add -A && git commit -q -m "Do the work"
+OUT=$(timeout 20 ./ticket.sh close --dry-run 2>&1)
+if [[ $? -eq 0 ]] && ! echo "$OUT" | grep -q "Ticket not started"; then
+    pass "close is no longer blocked"
+else
+    fail "close still refuses the resumed ticket" "$OUT"
+fi
+
+# Resuming again must not move the timestamp: it records when work began.
+STAMP=$(grep '^started_at' "tickets/${TICKET}/ticket.md")
+timeout 20 ./ticket.sh start "$TICKET" >/dev/null 2>&1
+if [[ "$(grep '^started_at' "tickets/${TICKET}/ticket.md")" == "$STAMP" ]]; then
+    pass "a second resume does not re-stamp"
+else
+    fail "started_at was rewritten on the second resume" "$(grep '^started_at' "tickets/${TICKET}/ticket.md")"
+fi
+
+# ---------------------------------------------------------------------------
+echo
 echo "10. a ticket without the field behaves exactly as before"
 REPO=$(make_repo plain)
 cd "$REPO"

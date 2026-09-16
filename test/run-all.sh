@@ -62,8 +62,14 @@ run_test() {
     echo -e "${BLUE}Running $test_name...${NC}"
     echo "  [$(date '+%H:%M:%S')] Starting test: $test_name"
     
-    # Run test and capture output
-    output=$(eval "$test_command" 2>&1) || true
+    # Run test and capture output. The exit code is kept, not discarded: the
+    # counting below reads the output, and a suite whose output does not look
+    # like the others' then reports its failures to nobody. test-worktree.sh
+    # printed PASS:/FAIL: and a bare "Passed: N" line, matching neither the
+    # ✓/✗ marks nor the "Summary - Passed:" fallback, so a deliberate failure
+    # injected into it still produced "479/479, All tests passed, exit 0".
+    local rc=0
+    output=$(eval "$test_command" 2>&1) || rc=$?
     
     # Show the output
     echo "$output"
@@ -87,6 +93,15 @@ run_test() {
         fi
     fi
     
+    # A suite that exits non-zero has failed, whatever its output looked like.
+    # This is the backstop: the parsing above is a convenience for per-suite
+    # numbers, and must never be the only thing standing between a broken test
+    # and a green summary.
+    if [[ $rc -ne 0 ]] && [[ $failed -eq 0 ]]; then
+        failed=1
+        echo -e "  ${RED}Suite exited $rc with no failure marks in its output — counted as 1 failure${NC}"
+    fi
+
     TOTAL_TESTS=$((TOTAL_TESTS + passed + failed))
     TOTAL_PASSED=$((TOTAL_PASSED + passed))
     TOTAL_FAILED=$((TOTAL_FAILED + failed))

@@ -28,13 +28,12 @@ EXPECTED="# Ticket Management Instructions"
 
 if [[ "$FIRST_LINE" == "$EXPECTED" ]]; then
     echo "  ✓ Prompt command returns correct first line"
-    ((PASS_COUNT++))
+    PASS_COUNT=$((PASS_COUNT + 1))
 else
     echo "  ✗ Expected: '$EXPECTED'"
     echo "  ✗ Got: '$FIRST_LINE'"
 fi
-((TEST_COUNT++))
-
+TEST_COUNT=$((TEST_COUNT + 1))
 echo
 echo "=== Prompt command tests completed ==="
 echo

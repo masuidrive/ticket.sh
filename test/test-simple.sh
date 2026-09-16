@@ -39,7 +39,10 @@ git config user.email "test@test.com"
 echo "# Test" > README.md
 git add README.md
 git commit -q -m "Initial"
-git checkout -q -b main
+# git creates the initial branch itself now (init.defaultBranch), so asking for
+# a new `main` aborts with "already exists" - and under `set -e` that killed the
+# whole suite two steps in, for as long as this has been broken.
+git checkout -q -b main 2>/dev/null || git checkout -q main
 echo "  PASS: Git repo initialized"
 
 echo
@@ -58,7 +61,12 @@ echo "  PASS: Init successful"
 echo
 echo "4. Testing new command..."
 timeout 5 ./ticket.sh new test-feature
-TICKET=$(ls tickets/*.md 2>/dev/null | head -1)
+# Tickets live in per-ticket directories now; `ls tickets/*.md` picked up the
+# README.md that `init` writes, and everything downstream then operated on a
+# file with no frontmatter. safe_get_ticket_name knows both layouts and skips
+# that README.
+TICKET_NAME=$(safe_get_ticket_name "*test-feature*")
+TICKET=$(ticket_body_path "$TICKET_NAME")
 if [[ -z "$TICKET" ]]; then
     echo "  FAIL: Ticket not created"
     exit 1
@@ -83,8 +91,7 @@ fi
 
 echo
 echo "6. Testing start command..."
-git add . && git commit -q -m "Add ticket"
-TICKET_NAME=$(basename "$TICKET" .md)
+git add . && git commit -q -m "Add ticket" || true
 ./ticket.sh start "$TICKET_NAME" --no-push >/dev/null 2>&1
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 if [[ "$BRANCH" != "feature/$TICKET_NAME" ]]; then
@@ -118,7 +125,7 @@ if [[ "$BRANCH" != "main" ]]; then
     exit 1
 fi
 # Check in done folder after close
-DONE_TICKET="tickets/done/$(basename "$TICKET")"
+DONE_TICKET=$(ticket_body_path "$TICKET_NAME" --done)
 if [[ -f "$DONE_TICKET" ]] && grep -q "closed_at: null" "$DONE_TICKET"; then
     echo "  FAIL: Ticket not marked as closed"
     exit 1

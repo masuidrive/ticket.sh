@@ -223,11 +223,11 @@ main() {
     
     cleanup
     
-    test_yaml_only || ((failed++))
-    test_yml_only || ((failed++))
-    test_both_files_priority || ((failed++))
-    test_no_config_file || ((failed++))
-    test_backward_compatibility || ((failed++))
+    test_yaml_only || failed=$((failed + 1))
+    test_yml_only || failed=$((failed + 1))
+    test_both_files_priority || failed=$((failed + 1))
+    test_no_config_file || failed=$((failed + 1))
+    test_backward_compatibility || failed=$((failed + 1))
     
     cleanup
     

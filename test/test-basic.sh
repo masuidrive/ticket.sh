@@ -37,7 +37,10 @@ echo "   ✓ Init completed"
 echo "2. Testing new ticket..."
 echo "   Creating new ticket..."
 ./ticket.sh new my-feature >/dev/null
-TICKET=$(ls tickets/*.md | head -1)
+# Per-ticket directories: `ls tickets/*.md` matched only the README that `init`
+# writes, so everything downstream ran against a file with no frontmatter.
+TICKET_NAME=$(safe_get_ticket_name "*my-feature*")
+TICKET=$(ticket_body_path "$TICKET_NAME")
 echo "   ✓ Created: $TICKET"
 
 # Test 3: List
@@ -49,7 +52,6 @@ echo "   Listing tickets..."
 echo "4. Testing start..."
 echo "   Committing initial state..."
 git add tickets .ticket-config.yaml .gitignore && git commit -q -m "add ticket and config"
-TICKET_NAME=$(basename "$TICKET" .md)
 echo "   Starting ticket: $TICKET_NAME"
 ./ticket.sh start "$TICKET_NAME" --no-push >/dev/null
 echo "   ✓ Started on branch: $(git branch --show-current)"
@@ -57,7 +59,8 @@ echo "   ✓ Symlink exists: $(test -L current-ticket.md && echo "yes" || echo "
 
 # Commit the started_at change
 echo "   Committing started_at change..."
-git add tickets && git commit -q -m "start ticket"
+# `start` commits the stamp itself now, so this often has nothing to add.
+git add tickets && git commit -q -m "start ticket" || true
 
 # Test 5: Work and close
 echo "5. Testing close..."
@@ -74,7 +77,7 @@ if timeout 5 ./ticket.sh close --no-push; then
     echo "   ✓ Close succeeded"
     echo "   ✓ Final branch: $(git branch --show-current)"
     # Check ticket in done folder after close
-    DONE_TICKET="tickets/done/$(basename "$TICKET")"
+    DONE_TICKET=$(ticket_body_path "$TICKET_NAME" --done)
     [[ -f "$DONE_TICKET" ]] && grep -q "closed_at: 20" "$DONE_TICKET" && echo "   ✓ Ticket marked as closed"
 else
     echo "   ✗ Close failed"

@@ -24,8 +24,13 @@ echo "1. Testing error recovery during close..."
 
 # Create and start a ticket
 ./ticket.sh new test-error-recovery >/dev/null
-TICKET=$(ls tickets/*.md | head -1)
-TICKET_NAME=$(basename "$TICKET" .md)
+# Per-ticket directories: `ls tickets/*.md` matched only the README that `init`
+# writes, so everything downstream ran against a file with no frontmatter.
+TICKET_NAME=$(safe_get_ticket_name "*test-error-recovery*")
+TICKET=$(ticket_body_path "$TICKET_NAME")
+
+# `start` refuses a dirty tree, and a freshly-created ticket is uncommitted.
+git add -A && git commit -q -m "add ticket" || true
 
 # Start the ticket
 ./ticket.sh start "$TICKET_NAME" >/dev/null
@@ -63,7 +68,8 @@ if [[ -L "current-ticket.md" ]]; then
     exit 1
 fi
 
-if [[ ! -f "tickets/done/${TICKET_NAME}.md" ]]; then
+# Per-ticket layout moves the whole directory into done/.
+if [[ -z "$(ticket_body_path "$TICKET_NAME" --done)" ]]; then
     echo "   ✗ Ticket not found in done folder"
     exit 1
 fi

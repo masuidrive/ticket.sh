@@ -186,9 +186,9 @@ PASSED=0
 FAILED=0
 for i in "${!RESULTS[@]}"; do
     if [[ "${RESULTS[$i]}" == "PASS" ]]; then
-        ((PASSED++))
+        PASSED=$((PASSED + 1))
     else
-        ((FAILED++))
+        FAILED=$((FAILED + 1))
         echo -e "  Failed: ${TESTS[$i]}"
     fi
 done

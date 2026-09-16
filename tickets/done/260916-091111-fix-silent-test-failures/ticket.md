@@ -4,7 +4,7 @@ base_branch: default  # Override base branch for start/close (default: use defau
 description: "run-all がテストの失敗を見落とす件と、start が resume で started_at を入れない件を直す"
 created_at: "2026-09-16T09:11:11Z"
 started_at: 2026-09-16T09:11:11Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-09-16T09:31:10Z # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
 
@@ -49,15 +49,16 @@ Error: Ticket not started
 
 ## Tasks
 
-- [ ] `run-all.sh` が各テストの exit code を見るようにする（出力形式に依存しない backstop）
-- [ ] 全テストが成功時に exit 0 を返すことを確認する
-- [ ] `test-worktree.sh` の PASS / FAIL を他と同じ記号に揃え、集計に乗せる
-- [ ] 故意の失敗を仕込んで run-all が落ちることを実証する
-- [ ] `start` の resume 経路で `started_at` が null なら stamp する
-- [ ] base に ticket が無い場合は fast-forward を skip する（gh #9 と同じ扱い）
-- [ ] 既に started な ticket を resume しても再 stamp しない
-- [ ] テストを追加する
-- [ ] Run tests before closing and pass all tests (No exceptions)
-- [ ] Run `bash build.sh` to build the project
-- [ ] Update documentation if necessary
+- [x] `run-all.sh` が各テストの exit code を見るようにする（出力形式に依存しない backstop）
+- [x] 全テストが成功時に exit 0 を返すことを確認する
+- [x] `test-worktree.sh` の PASS / FAIL を他と同じ記号に揃え、集計に乗せる
+- [x] 故意の失敗を仕込んで run-all が落ちることを実証する
+- [x] `start` の resume 経路で `started_at` が null なら stamp する
+- [x] base に ticket が無い場合は fast-forward を skip する（gh #9 と同じ扱い）
+- [x] 既に started な ticket を resume しても再 stamp しない
+- [x] テストを追加する
+- [x] （backstop が暴いた）途中中断していた 6 スイートを修復する
+- [x] Run tests before closing and pass all tests (No exceptions)
+- [x] Run `bash build.sh` to build the project
+- [x] Update documentation if necessary
 - [ ] Get developer approval before closing

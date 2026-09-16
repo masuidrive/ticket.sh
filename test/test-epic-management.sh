@@ -44,7 +44,7 @@ start_test() {
     local dir="tmp/test-epic-$1-$(date +%s)"
     setup_test_repo "$dir" >/dev/null 2>&1
     if git status --porcelain | grep -q .; then
-        git add -A && git commit -q -m "test setup"
+        git add -A && git commit -q -m "test setup" || true
     fi
 }
 
@@ -75,11 +75,11 @@ else
 fi
 
 # Drive ticket through start/work/close
-git add -A && git commit -q -m "add ticket"
+git add -A && git commit -q -m "add ticket" || true
 ./ticket.sh start "$TICKET_NAME" --no-push >/dev/null 2>&1
-git add -A && git commit -q -m "start"
+git add -A && git commit -q -m "start" || true
 mkdir -p src && echo "feature" > src/feat.js
-git add . && git commit -q -m "work"
+git add . && git commit -q -m "work" || true
 ./ticket.sh close --no-push >/dev/null 2>&1
 
 # We should be back on epic/alpha after close (since base_branch was epic/alpha)
@@ -110,7 +110,7 @@ start_test "cancel"
 
 ./ticket.sh epic new beta-doomed >/dev/null 2>&1
 echo "wip" > beta-feature.js
-git add . && git commit -q -m "wip"
+git add . && git commit -q -m "wip" || true
 ./ticket.sh epic cancel beta-doomed --reason "scope changed" --no-push --no-delete-remote >/dev/null 2>&1
 
 git switch main 2>/dev/null || git checkout main 2>/dev/null
@@ -134,7 +134,7 @@ start_test "preflight"
 
 ./ticket.sh epic new gamma >/dev/null 2>&1
 ./ticket.sh new still-open --epic gamma >/dev/null 2>&1
-git add tickets && git commit -q -m "new ticket"
+git add tickets && git commit -q -m "new ticket" || true
 
 # Without --force should fail
 if ./ticket.sh epic close gamma --no-push 2>&1 | grep -q "open ticket"; then
@@ -205,7 +205,7 @@ start_test "show-json-linked"
 ./ticket.sh epic new gamma >/dev/null 2>&1
 git switch main 2>/dev/null
 ./ticket.sh new linked-feat --epic gamma >/dev/null 2>&1
-git add tickets && git commit -q -m "add ticket"
+git add tickets && git commit -q -m "add ticket" || true
 
 ./ticket.sh epic show gamma --json > /tmp/_epic_show.json 2>/dev/null
 if command -v python3 >/dev/null 2>&1; then
