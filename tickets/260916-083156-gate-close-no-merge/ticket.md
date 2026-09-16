@@ -3,7 +3,7 @@ priority: 2
 base_branch: default  # Override base branch for start/close (default: use default_branch from config)
 description: "close --no-merge が feature branch 上で走るとき checklist / append_only の gate を効かせる（gh #10）"
 created_at: "2026-09-16T08:31:56Z"
-started_at: null  # Do not modify manually
+started_at: 2026-09-16T08:32:19Z # Do not modify manually
 closed_at: null   # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
