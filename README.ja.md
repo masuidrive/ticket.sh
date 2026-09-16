@@ -180,7 +180,8 @@ tickets/
 - `new <slug> [--branch <name>]` - 新しいチケットを作成（`--branch` はこの ticket の feature branch 名を `{branch_prefix}<ticket-name>` の代わりに指定する）
 - `list [--status todo|doing|done|canceled] [--count N]` - チケット一覧
 - `start [--worktree] [--copy-file <path>]... <ticket>` - チケットの作業を開始（--worktree で別ディレクトリに worktree を作成、--copy-file で `worktree_copy_files` にワンショットで path 追加）
-- `close [--no-push] [--force] [--no-delete-remote]` - チケットを完了
+- `close [--no-push] [--force] [--no-delete-remote] [--dry-run|-n]` - チケットを完了
+- `close --no-merge [--closed-at <ISO8601-UTC>] [--dry-run|-n] <ticket>` - squash merge せずに完了（PR 経由で merge 済み／これから merge する場合）。ticket の base branch 以外で走っているときは checklist / append_only の gate が効く（後述）
 - `cancel [--force|-f]` - マージせずにチケットをキャンセル
 - `restore` - アクティブチケット symlink 群 (`current-ticket/`, `current-ticket.md`, `current-note.md`) を現在ブランチ名から再構築
 
@@ -391,6 +392,17 @@ default_content: |
 - **上書きしない**: 既存ファイルはそのまま。`note.md` の要素は `note_content` より優先される。
 - **在処が分かる**: 実在するファイルは `start` / `restore` の `Active ticket paths:` に出るので、そのブロックだけ読んだ agent もファイルの場所が分かる — 覚えるべき規則も、自分で作るべきファイルも無い。
 - **新レイアウトのみ**: flat（旧形式）の ticket には置く先のディレクトリが無い。
+
+### `close --no-merge` の 2 つの走り方と gate
+
+`--no-merge` は squash merge を飛ばして「`closed_at` を入れ、`done/` へ移し、commit して push」だけを行う。走る場所が 2 通りある:
+
+1. **PR が merge された後、base branch 上で**（従来）
+2. **PR を作る前、ticket 自身の branch 上で** — `done/` への移動を PR の差分に載せる。workflow の token が保護された default branch へ push できない（`GH006`）場合はこちらしか選べない
+
+`require_checklist` / `require_checklist_groups` / `append_only_files` の gate は、**ticket の base branch 以外で走っているときに効く**。そこではすべて測れるし、拒否されても直せる。base branch 上（merge 済み）では従来どおり飛ばす——そこで拒否しても ticket が `done/` の外に取り残されるだけで、役に立つ行動にならないため。
+
+通常の `close` と同じく迂回手段は無い。flag による opt-in にしないのは、「呼ぶのを忘れる」形の穴が**何も出力しない**まま残るため。`--dry-run` も使える（同じ検査を走らせて、何も書かずに終わる）。
 
 ### 追記のみのファイル（`append_only_files`）
 - **記録として残すファイル向け**: 経緯ログが価値を持つのは、誰も後から回り道を消して整えなかったから。その path を `append_only_files` に挙げると、かつてそのファイルにあった行が今そこに無い間 `close` が止まり、ファイル名・消した commit・その行を名指しする。

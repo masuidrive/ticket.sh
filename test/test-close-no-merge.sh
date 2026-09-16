@@ -157,6 +157,148 @@ else
     test_result 1 "Positional ticket-name should require --no-merge" "$OUT"
 fi
 
+# ---------------------------------------------------------------------------
+# The gates (issue #10).
+#
+# --no-merge was written for the run that happens on the base branch after a PR
+# has been merged, and skipped the checklist / append-only gates because there
+# is nothing left to measure there. The same command now also runs BEFORE the
+# PR exists, on the ticket's own branch - a workflow token cannot push to a
+# protected default branch, so the move into done/ has to ride in on the PR.
+# There the gates are measurable, and skipping them let a gate that refuses
+# --force be walked around by changing where close was called from, silently.
+echo -e "\n8. Testing gates on the ticket's own branch..."
+
+cd ..
+rm -rf "$TEST_DIR"
+TEST_DIR="tmp/test-close-no-merge-gates-$(date +%s)"
+setup_test_repo "$TEST_DIR"
+
+sed_i 's/^require_checklist: false/require_checklist: true/' .ticket-config.yaml
+cat >> .ticket-config.yaml << 'CFGEOF'
+
+ticket_files:
+  - path: progress.md
+    content: |
+      # Progress: $$TICKET_NAME$$
+append_only_files:
+  - progress.md
+CFGEOF
+git add -A && git commit -q -m "Turn the gates on"
+
+timeout 5 ./ticket.sh new gated >/dev/null 2>&1
+TICKET=$(safe_get_ticket_name "*gated*")
+git add tickets && git commit -q -m "add ticket"
+timeout 20 ./ticket.sh start "$TICKET" >/dev/null 2>&1
+
+# The stock template's Tasks list is unchecked, so require_checklist bites.
+OUT=$(timeout 20 ./ticket.sh close --no-merge --no-push "$TICKET" 2>&1)
+RC=$?
+if [[ $RC -ne 0 ]] && echo "$OUT" | grep -q "unchecked items remain"; then
+    test_result 0 "an unchecked checklist refuses --no-merge on a feature branch"
+else
+    test_result 1 "--no-merge ignored the checklist" "$OUT"
+fi
+if [[ -z "$(ticket_body_path "$TICKET" --done)" ]]; then
+    test_result 0 "nothing was moved to done/"
+else
+    test_result 1 "the ticket was finalized despite the gate" "$OUT"
+fi
+if git diff --quiet && git diff --cached --quiet; then
+    test_result 0 "nothing was written before the refusal"
+else
+    test_result 1 "the tree was touched before the gate refused" "$(git status --porcelain)"
+fi
+
+# --dry-run used to be accepted and silently ignored alongside --no-merge.
+OUT=$(timeout 20 ./ticket.sh close --no-merge --dry-run "$TICKET" 2>&1)
+if [[ $? -ne 0 ]] && echo "$OUT" | grep -q "unchecked items remain"; then
+    test_result 0 "--dry-run surfaces the refusal"
+else
+    test_result 1 "--dry-run did not show the gate" "$OUT"
+fi
+
+# Settle the checklists; the append-only file is still intact, so it passes.
+# sed, not python3/perl: Alpine has neither, and a rewrite that silently does
+# nothing would leave the assertions below failing for the wrong reason.
+for _f in "tickets/${TICKET}/ticket.md" "tickets/${TICKET}/note.md"; do
+    [[ -f "$_f" ]] && sed_i 's/- \[ \]/- [x]/g' "$_f"
+done
+if grep -rq -- '- \[ \]' "tickets/${TICKET}/"; then
+    test_result 1 "test setup: checklists were not settled" "$(grep -rn -- '- \[ \]' "tickets/${TICKET}/")"
+fi
+git add -A && git commit -q -m "Settle the checklists"
+
+OUT=$(timeout 20 ./ticket.sh close --no-merge --dry-run "$TICKET" 2>&1)
+if [[ $? -eq 0 ]] && echo "$OUT" | grep -q "gates:          applied"; then
+    test_result 0 "a settled ticket passes, and says the gates were applied"
+else
+    test_result 1 "a settled ticket was still refused" "$OUT"
+fi
+
+# Now break the append-only file.
+printf -- '- a line I will remove\n' >> "tickets/${TICKET}/progress.md"
+git add -A && git commit -q -m "progress: note it"
+grep -v -F -x -- '- a line I will remove' "tickets/${TICKET}/progress.md" > "tickets/${TICKET}/progress.md.new"
+mv "tickets/${TICKET}/progress.md.new" "tickets/${TICKET}/progress.md"
+git add -A && git commit -q -m "progress: remove it"
+
+OUT=$(timeout 20 ./ticket.sh close --no-merge --no-push "$TICKET" 2>&1)
+if [[ $? -ne 0 ]] && echo "$OUT" | grep -q "Append-only file is missing lines"; then
+    test_result 0 "a lost append-only line refuses --no-merge too"
+else
+    test_result 1 "--no-merge ignored append_only_files" "$OUT"
+fi
+
+# ---------------------------------------------------------------------------
+echo -e "\n9. Testing that the base branch still skips the gates..."
+# After the PR has merged, the gates are deliberately not applied: refusing then
+# would strand the ticket outside done/ without giving anyone a useful action.
+git checkout -q main
+git merge -q --no-edit "$(git rev-parse --abbrev-ref '@{-1}')" >/dev/null 2>&1
+
+# Put the ticket back into the state the gates would refuse.
+sed_i 's/- \[x\]/- [ ]/g' "tickets/${TICKET}/ticket.md"
+if ! grep -q -- '- \[ \]' "tickets/${TICKET}/ticket.md"; then
+    test_result 1 "test setup: the ticket was not un-checked again" "$(head -30 "tickets/${TICKET}/ticket.md")"
+fi
+git add -A && git commit -q -m "on main: unchecked again"
+
+OUT=$(timeout 20 ./ticket.sh close --no-merge --dry-run "$TICKET" 2>&1)
+if [[ $? -eq 0 ]] && echo "$OUT" | grep -q "gates:          skipped"; then
+    test_result 0 "on the base branch the gates are skipped"
+else
+    test_result 1 "the base branch applied the gates" "$OUT"
+fi
+
+OUT=$(timeout 20 ./ticket.sh close --no-merge --no-push "$TICKET" 2>&1)
+if [[ $? -eq 0 ]] && [[ -n "$(ticket_body_path "$TICKET" --done)" ]]; then
+    test_result 0 "and the ticket is finalized as before"
+else
+    test_result 1 "finalizing on the base branch broke" "$OUT"
+fi
+
+# ---------------------------------------------------------------------------
+echo -e "\n10. Testing that undeclared gates change nothing..."
+cd ..
+rm -rf "$TEST_DIR"
+TEST_DIR="tmp/test-close-no-merge-ungated-$(date +%s)"
+setup_test_repo "$TEST_DIR"
+
+timeout 5 ./ticket.sh new ungated >/dev/null 2>&1
+TICKET=$(safe_get_ticket_name "*ungated*")
+git add tickets .ticket-config.yaml && git commit -q -m "add ticket"
+timeout 20 ./ticket.sh start "$TICKET" >/dev/null 2>&1
+
+# Stock config: require_checklist false, no groups, no append_only_files. The
+# template's Tasks list is unchecked and that must still be fine.
+OUT=$(timeout 20 ./ticket.sh close --no-merge --no-push "$TICKET" 2>&1)
+if [[ $? -eq 0 ]] && [[ -n "$(ticket_body_path "$TICKET" --done)" ]]; then
+    test_result 0 "with no gate configured, a feature branch finalizes as before"
+else
+    test_result 1 "an unconfigured gate blocked --no-merge" "$OUT"
+fi
+
 # Cleanup
 cd ..
 rm -rf "$TEST_DIR"

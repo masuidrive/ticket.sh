@@ -216,7 +216,7 @@ Ticket Name                    Status   Created              Started            
 | `--no-delete-remote` | Keep remote feature branch after closing |
 | `--dry-run` \| `-n` | Show what would be done without making changes |
 | `--keep-worktree` | Preserve worktree after closing (for --worktree mode) |
-| `--no-merge` | Skip the squash-merge: assume the ticket's changes are already on the base branch (e.g. after a GitHub PR merge). Only set `closed_at`, move the ticket/note to `done/`, commit and push. Requires `<ticket-name>` as a positional argument. |
+| `--no-merge` | Skip the squash-merge. Only set `closed_at`, move the ticket/note to `done/`, commit and push. Requires `<ticket-name>` as a positional argument. Gated off the ticket's base branch — see below. |
 | `--closed-at <ISO8601-UTC>` | (with `--no-merge`) Set `closed_at` to an explicit ISO8601 UTC value, e.g. `2026-05-29T12:17:36Z`. Defaults to the current UTC time. |
 
 ### Finalizing a merged PR (`close --no-merge`)
@@ -227,7 +227,13 @@ When a PR is merged on GitHub, the ticket's changes are already on the base bran
 ticket.sh close --no-merge [--closed-at <ISO8601-UTC>] [--no-push] <ticket-name>
 ```
 
-This runs on the base branch (not the feature branch), takes the ticket name as an explicit argument (it does not rely on the active-ticket symlinks or the current branch), and is idempotent — re-running on an already-finalized ticket exits 0 without changes. Typical use is a GitHub Actions `pull_request: [closed]` trigger that passes `--closed-at "${{ github.event.pull_request.merged_at }}"` so `closed_at` records the actual merge time.
+It takes the ticket name as an explicit argument (it does not rely on the active-ticket symlinks or the current branch) and is idempotent — re-running on an already-finalized ticket exits 0 without changes. Typical use is a GitHub Actions `pull_request: [closed]` trigger that passes `--closed-at "${{ github.event.pull_request.merged_at }}"` so `closed_at` records the actual merge time.
+
+**Two places it runs, and the gates.** `--no-merge` also fits a second shape: finalize *before* the PR exists, on the ticket's own branch, so the move into `done/` rides in on the PR's diff. That is what you need when a workflow token cannot push to a protected default branch (`GH006`), which makes the after-the-merge push impossible.
+
+The `require_checklist` / `require_checklist_groups` / `append_only_files` gates **apply whenever `--no-merge` runs on a branch other than the ticket's base branch**, and are skipped when it runs on that branch. Off the base branch everything is measurable and a refusal is still actionable; on it the merge has already happened, and refusing would only strand the ticket outside `done/`. As with a normal `close`, nothing bypasses the gates — there is no flag, because a gate you have to remember to ask for is one that goes quiet exactly when it is forgotten.
+
+`--dry-run` works here too: it runs the same checks and exits before anything is written.
 
 ## Ticket File Format
 

@@ -144,6 +144,11 @@ The main script uses a case statement to route commands:
 - Worktree mode: creates directory at `../<project>.worktrees/<ticket-name>/`
 - Worktree mode: after the worktree is ready and symlinks/`tmp/` are set up, `copy_worktree_files()` runs against the effective `worktree_copy_files` list (config entries + `--copy-file <path>` CLI extras). Each entry: skip if the target exists, warn if the source is missing, otherwise `cp -p`. Silently no-op when the resolved list is empty (default), so the feature is off unless deliberately configured.
 
+#### `cmd_close_no_merge()`
+- Finalizes without a squash-merge: sets `closed_at`, `git mv`s the ticket into `done/`, commits and pushes on the current branch.
+- Applies the checklist and append-only gates **when the current branch is not the ticket's base branch** (`base_branch` frontmatter, falling back to `default_branch`), and skips them when it is. The original skip was reasoning about where the command runs, not about the command: the same call now also happens before the PR exists, on the ticket's own branch, because a workflow token cannot push to a protected default branch and the move into `done/` has to ride in on the PR. Skipping there let a gate that refuses `--force` be walked around by changing the call site, with no output. On the base branch the merge has already happened, so refusing would strand the ticket outside `done/`.
+- Honours `--dry-run`, which `cmd_close` used to accept and drop on the floor for this path.
+
 #### `close_ticket()`
 - Refuses, before any mutation, when an `append_only_files` entry is missing a line it used to hold (`append_only_check()` in `lib/append-only.sh`). The judgement is per line and forgiven once the line is back in the file, not per commit — otherwise the only available repair (appending the lines again, since history is not rewritten) would not clear the gate. Runs alongside the checklist gates, before the `--dry-run` exit, and is not bypassed by `--force`.
 - Updates `closed_at` timestamp in `ticket.md`
@@ -395,6 +400,16 @@ Documentation updates should be part of the same PR as code changes.
    returning to the base branch from any feature branch, or drop the
    fast-forward that makes a ticket read `doing` from either side.
 
+16. **A gate that can be skipped by calling it from somewhere else is not a
+   gate**: `close --no-merge` skipped the checklist and append-only checks on
+   the grounds that it runs after the merge, where nothing is measurable. That
+   was true of the call site it was written for, and stopped being true when the
+   same command started running before the PR existed. The condition is now
+   about what can actually be measured - "are we off the ticket's base branch" -
+   rather than about which command was typed. No opt-in flag: the failure this
+   fixes was silent, and a flag would only move the silence to whoever forgets
+   to pass it.
+
 ### Recent Enhancements
 
 - **Smart branch handling**: Automatically handles existing branches and clean states
@@ -406,6 +421,7 @@ Documentation updates should be part of the same PR as code changes.
 - **Extra ticket files**: `ticket_files` lets a project declare any number of companion files `new` should create, not just `note.md`
 - **Append-only files**: `append_only_files` makes `close` refuse when a file kept as a record has lost lines it used to hold
 - **Per-ticket branch names**: `branch:` in the frontmatter (`new --branch`) lets a ticket adopt a branch whose name came from outside
+- **Gated `--no-merge`**: the checklist and append-only gates apply to `close --no-merge` when it runs off the ticket's base branch, where they can be measured
 - **Worktree support**: Optional git worktree mode for parallel ticket work without branch switching
 - **Checklist check**: `check` reports the checkboxes in both `ticket.md` and `note.md` by heading group, split per file; `check --require "<group>"` judges one group across both; `require_checklist: true` makes `close` refuse while any are unchecked; and `require_checklist_groups` (a list of heading names) makes `close` refuse when a named group is in neither file - counting unchecked boxes cannot catch that, since a section that is absent counts zero and reads as finished
 

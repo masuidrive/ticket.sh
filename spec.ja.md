@@ -968,9 +968,16 @@ CI では base branch が remote-tracking ref としてしか存在しないこ�
 ファイルを持たない ticket は対象外——ファイルの存在を強制するのは別の規則で、別のキーが
 必要になる。
 
-`close --no-merge` はゲートしない。これは feature branch が別の場所で merge された**後**に
-base branch 上で走るので、`<base>..HEAD` が空になり、測る対象の履歴が残っていない。
-捕まえるなら手前——作業がまだ載っている feature branch 上で `check` が報告する。既定は空。チェックリストと同じ理由で `--force` では迂回できず、`--dry-run`
+`close --no-merge` は、**ticket の base branch 以外で走っているときはゲートする**。
+base branch 上ではしない。元の理屈——`--no-merge` は merge 後に走るので `<base>..HEAD` が
+空で測る対象が無い——は**コマンドではなく走る場所**についてのものだった。そして同じコマンドが
+PR を作る前にも走るようになった: workflow の token は保護された default branch へ push
+できないので、`done/` への移動を merge の後ろではなく PR の差分に載せる必要がある。
+ticket 自身の branch 上ではすべて測れるし、そこで飛ばすと「`--force` でも抜けられない」と
+宣言した gate が、close を呼ぶ場所を変えるだけで無音で迂回されてしまう。
+
+base branch 上では従来どおり飛ばす。そこでは merge が既に済んでいるので、拒否しても
+ticket が `done/` の外に取り残されるだけで、誰の役にも立つ行動にならない。既定は空。チェックリストと同じ理由で `--force` では迂回できず、`--dry-run`
 でも見える。plain `check` は同じ内容を表示して exit 0 のままなので、branch がまだ自分の
 もので追記できるうちに気づける。
 

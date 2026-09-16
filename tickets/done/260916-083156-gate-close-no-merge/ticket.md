@@ -4,7 +4,7 @@ base_branch: default  # Override base branch for start/close (default: use defau
 description: "close --no-merge が feature branch 上で走るとき checklist / append_only の gate を効かせる（gh #10）"
 created_at: "2026-09-16T08:31:56Z"
 started_at: 2026-09-16T08:32:19Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-09-16T08:45:32Z # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
 
@@ -49,20 +49,21 @@ base は ticket の `base_branch`、無ければ `default_branch`（`cmd_close` 
 
 ## Tasks
 
-- [ ] `cmd_close_no_merge` が config の gate キーと base branch を読む
-- [ ] base branch 以外で走っているときだけ gate を効かせる
-  - [ ] `require_checklist_groups`（欠落グループ）
-  - [ ] `require_checklist`（未記入）
-  - [ ] `append_only_files`（失われた行）
-- [ ] 何も変更する前に拒否する（closed_at も git mv もしない）
-- [ ] base branch 上では従来どおり飛ばす
-- [ ] gate キーが未定義なら現行と同一の挙動
-- [ ] `--dry-run` が `--no-merge` と併用時に黙って無視されている件も直す（gate を事前に見るため）
-- [ ] テストを追加する（`test/test-close-no-merge.sh` に節を足す）
-- [ ] Run tests before closing and pass all tests (No exceptions) — `test/run-all.sh` と `test/run-all-on-docker.sh`
-- [ ] Run `bash build.sh` to build the project
-- [ ] Update documentation if necessary
-  - [ ] Update README.md / README.ja.md
-  - [ ] Update spec.md / spec.ja.md
-  - [ ] Update DEV.md
+- [x] `cmd_close_no_merge` が config の gate キーと base branch を読む
+- [x] base branch 以外で走っているときだけ gate を効かせる
+  - [x] `require_checklist_groups`（欠落グループ）
+  - [x] `require_checklist`（未記入）
+  - [x] `append_only_files`（失われた行）
+- [x] 何も変更する前に拒否する（closed_at も git mv もしない）
+- [x] base branch 上では従来どおり飛ばす
+- [x] gate キーが未定義なら現行と同一の挙動
+- [x] `--dry-run` が `--no-merge` と併用時に黙って無視されている件も直す（gate を事前に見るため）
+- [x] テストを追加する（`test/test-close-no-merge.sh` に節を足す）
+- [x] テストが python3 / perl に依存しないようにする（Alpine には無い）
+- [x] Run tests before closing and pass all tests (No exceptions) — `test/run-all.sh` と `test/run-all-on-docker.sh`
+- [x] Run `bash build.sh` to build the project
+- [x] Update documentation if necessary
+  - [x] Update README.md / README.ja.md
+  - [x] Update spec.md / spec.ja.md
+  - [x] Update DEV.md
 - [ ] Get developer approval before closing

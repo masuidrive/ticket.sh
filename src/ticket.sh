@@ -243,10 +243,12 @@ be recognized by every command; they are never auto-migrated.
   - The squash commit's subject is \`[<ticket-name>] <description>\` (description folded onto one line), and its body is the ticket's **Markdown body only** - the YAML frontmatter is never included. This is fixed behavior with no config key. Keeping the body in the message is what lets \`git blame\` reach the reasoning without opening \`tickets/done/\`.
   - With \`require_checklist: true\` in config, close refuses while the ticket body or the note has unchecked items, and lists them per file. Off by default. \`--force\` does not bypass it: the way out is \`- [-] ... - skip: <reason>\`, which leaves the reason in the file. \`--dry-run\` surfaces it too.
   - \`require_checklist_groups\` (a list of heading names) makes close refuse when a named group is in **neither** file - or is there with no checkboxes under it - as well as when anything under it is unchecked. \`require_checklist\` alone cannot catch this: it counts unchecked boxes, so a section that is not in the file at all counts zero and reads exactly like one where everything got done. Empty by default, independent of \`require_checklist\`, and not bypassed by \`--force\`.
-  - \`append_only_files\` (a list of paths relative to the ticket directory) makes close refuse while a line one of those files used to hold is missing from it, naming the file, the commit that removed it and the count. What is judged is whether the line is in the file now, not whether some commit once took it out - so the repair is to append it again in a new commit, with no history rewriting. A line that was *edited* counts as removed: its old text is gone. Empty by default, not bypassed by \`--force\`, visible under \`--dry-run\`, and skipped for a ticket that does not have the file. Not applied to \`--no-merge\`, which runs on the base branch after the merge, where there is no branch history left to measure - \`check\` on the feature branch is where that one gets caught.
+  - \`append_only_files\` (a list of paths relative to the ticket directory) makes close refuse while a line one of those files used to hold is missing from it, naming the file, the commit that removed it and the count. What is judged is whether the line is in the file now, not whether some commit once took it out - so the repair is to append it again in a new commit, with no history rewriting. A line that was *edited* counts as removed: its old text is gone. Empty by default, not bypassed by \`--force\`, visible under \`--dry-run\`, and skipped for a ticket that does not have the file. Applied to \`--no-merge\` too, but only when it runs off the ticket's base branch (see below).
   - From a worktree, close refuses to merge if the main repo is on a non-default branch or has uncommitted changes (protects parallel workers).
   - **Coding agents (Claude Code / Codex / etc.) must pass \`--keep-worktree\`**: without it, the worker's worktree is deleted and the agent's shell cwd points to a removed directory → every subsequent Bash tool call fails.
-  - \`--no-merge [--closed-at <ISO8601-UTC>] <ticket-name>\` - Skip the squash-merge (assume the ticket's changes are already on the base branch, e.g. after a GitHub PR merge). Only set closed_at, move the ticket/note to done/, commit and push. Requires \`<ticket-name>\`. \`--closed-at\` overrides closed_at with a full ISO8601 UTC value (default: now).
+  - \`--no-merge [--closed-at <ISO8601-UTC>] [--dry-run|-n] <ticket-name>\` - Skip the squash-merge. Only set closed_at, move the ticket/note to done/, commit and push. Requires \`<ticket-name>\`. \`--closed-at\` overrides closed_at with a full ISO8601 UTC value (default: now).
+    - The checklist and append-only gates apply whenever this runs on a branch other than the ticket's base branch - which is where it runs when the move into done/ has to ride in on the PR rather than follow it (a workflow token cannot push to a protected default branch). On the base branch they are still skipped: the merge has already happened by then, and refusing would strand the ticket outside \`done/\` without giving anyone a useful action.
+    - \`--dry-run\` runs the same checks and exits before anything is written. It used to be accepted here and silently ignored.
 - \`$SCRIPT_COMMAND cancel [--force|-f] [--keep-worktree]\` - Cancel current ticket (no merge, moves to done/ with CANCELED marker)
   - Same rule as close: coding agents should pass \`--keep-worktree\` to avoid dangling cwd.
 - \`$SCRIPT_COMMAND selfupdate\` - Update ticket.sh to the latest version from GitHub
@@ -2893,6 +2895,7 @@ cmd_close_no_merge() {
     local ticket_name_arg="$1"
     local closed_at_override="$2"
     local no_push="$3"
+    local dry_run="${4:-false}"
 
     if [[ -z "$ticket_name_arg" ]]; then
         echo "Error: <ticket-name> is required with --no-merge" >&2
@@ -2918,6 +2921,15 @@ cmd_close_no_merge() {
     local auto_push=$(yaml_get "auto_push" || echo "$DEFAULT_AUTO_PUSH")
     local close_success_message=$(yaml_get "close_success_message" || echo "$DEFAULT_CLOSE_SUCCESS_MESSAGE")
     local tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
+    local default_branch=$(yaml_get "default_branch" || echo "$DEFAULT_BRANCH")
+    local require_checklist=$(yaml_get "require_checklist" || echo "$DEFAULT_REQUIRE_CHECKLIST")
+    check_legacy_checklist_key || return 1
+    # Read the lists while yaml_get still holds the config: the ticket's own
+    # frontmatter is parsed into the same globals further down.
+    config_read_list "require_checklist_groups"
+    local _required_groups=(${CONFIG_LIST[@]+"${CONFIG_LIST[@]}"})
+    config_read_list "append_only_files"
+    local _append_only_files=(${CONFIG_LIST[@]+"${CONFIG_LIST[@]}"})
 
     # Normalize ticket name (accept name, path, or .md)
     local ticket_name=$(extract_ticket_name "$ticket_name_arg")
@@ -2958,7 +2970,98 @@ EOF
     fi
 
     local current_branch=$(get_current_branch)
-    local description=$(get_yaml_field "$(extract_yaml_frontmatter "$ticket_file")" "description")
+    local _fm=$(extract_yaml_frontmatter "$ticket_file")
+    local description=$(get_yaml_field "$_fm" "description")
+
+    # --- gates ---
+    #
+    # `--no-merge` was written for the run that happens on the base branch after
+    # a PR has been merged, and it skipped the checklist and append-only gates on
+    # the grounds that there is nothing left to measure there: the feature branch
+    # is gone and the base branch's own history says nothing about it.
+    #
+    # That reasoning was about where the command runs, not about the command, and
+    # the same command now also runs before the PR exists - on the ticket's own
+    # branch, because a workflow token cannot push to a protected default branch,
+    # so the move into done/ has to ride in on the PR instead. There the gates are
+    # perfectly measurable, and skipping them meant a gate that refuses `--force`
+    # could be walked around by changing where close was called from, silently.
+    #
+    # So: off the base branch, the gates apply. On it, they still do not - the PR
+    # is already merged by then, and refusing would strand the ticket outside
+    # done/ without giving anyone an action that helps.
+    local _gated=false
+    if [[ "$current_branch" != "$default_branch" ]]; then
+        local _ticket_base=$(get_yaml_field "$_fm" "base_branch")
+        if is_null_or_empty "$_ticket_base" || \
+           [[ "$(echo "$_ticket_base" | tr '[:upper:]' '[:lower:]')" == "default" ]]; then
+            _ticket_base=$(get_yaml_field "$_fm" "merge_to")
+        fi
+        local _base_lower=$(echo "$_ticket_base" | tr '[:upper:]' '[:lower:]')
+        if is_null_or_empty "$_ticket_base" || [[ "$_base_lower" == "default" ]]; then
+            _ticket_base="$default_branch"
+        fi
+        # A ticket whose own base_branch is where we are standing is the
+        # after-the-merge case too, whatever default_branch says.
+        [[ "$current_branch" != "$_ticket_base" ]] && _gated=true
+    fi
+
+    if [[ "$_gated" == "true" ]]; then
+        local _nm_note_file
+        if [[ "${ticket_file##*/}" == "ticket.md" ]]; then
+            _nm_note_file="${ticket_file%/ticket.md}/note.md"
+        else
+            _nm_note_file="${ticket_file%.md}-note.md"
+        fi
+
+        # Declared groups first, for the same reason as in close: "the section is
+        # not in the file" is the more basic answer of the two.
+        if [[ ${#_required_groups[@]} -gt 0 ]]; then
+            if ! checklist_require_groups "$ticket_file" "$_nm_note_file" \
+                    ${_required_groups[@]+"${_required_groups[@]}"} >&2; then
+                echo "Nothing was closed." >&2
+                return 1
+            fi
+        fi
+
+        if [[ "$require_checklist" == "true" ]]; then
+            if ! checklist_gate "$ticket_file" "$_nm_note_file"; then
+                echo "Nothing was closed." >&2
+                return 1
+            fi
+        fi
+
+        if [[ ${#_append_only_files[@]} -gt 0 ]] && [[ "$is_new_format" == "true" ]]; then
+            local _nm_base
+            if _nm_base=$(append_only_base_ref "$_ticket_base" "$repository"); then
+                if ! append_only_check "$_nm_base" "$src_ticket_dir" \
+                        ${_append_only_files[@]+"${_append_only_files[@]}"} >&2; then
+                    echo "Nothing was closed." >&2
+                    return 1
+                fi
+            else
+                echo "Warning: append_only_files: neither '${repository}/${_ticket_base}' nor a local" >&2
+                echo "'${_ticket_base}' exists, so there is nothing to measure against. Check skipped." >&2
+            fi
+        fi
+    fi
+
+    # --dry-run: every check has passed; stop before anything is written. Used to
+    # be accepted and silently ignored alongside --no-merge, which made it a way
+    # to think you had verified something you had not.
+    if [[ "$dry_run" == "true" ]]; then
+        echo "Dry-run: all preflight checks passed."
+        echo "  ticket file:    $ticket_file"
+        echo "  current branch: $current_branch"
+        if [[ "$_gated" == "true" ]]; then
+            echo "  gates:          applied (not on the ticket's base branch)"
+        else
+            echo "  gates:          skipped (on the base branch; the merge has already happened)"
+        fi
+        echo ""
+        echo "No changes were made. Re-run without --dry-run to finalize the ticket."
+        return 0
+    fi
 
     # Set closed_at (override or now-UTC)
     local timestamp="${closed_at_override:-$(get_utc_timestamp)}"
@@ -3105,7 +3208,7 @@ cmd_close() {
     # --no-merge: finalize a ticket whose changes are already on the base
     # branch (e.g. after a GitHub PR merge). No squash-merge / branch switch.
     if [[ "$no_merge" == "true" ]]; then
-        cmd_close_no_merge "$ticket_name_arg" "$closed_at_override" "$no_push"
+        cmd_close_no_merge "$ticket_name_arg" "$closed_at_override" "$no_push" "$dry_run"
         return $?
     fi
 

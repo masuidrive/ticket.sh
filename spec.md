@@ -1002,10 +1002,19 @@ Only committed history is read; an uncommitted edit is still the author's to fix
 before committing. A ticket that does not have the file is unaffected —
 requiring the file to exist is a different rule and would need its own key.
 
-`close --no-merge` is not gated. It runs on the base branch *after* the feature
-branch has already been merged elsewhere, so `<base>..HEAD` is empty and there
-is no branch history left to measure. Catch it earlier: `check` reports the loss
-on the feature branch, which is where the work still is.
+`close --no-merge` is gated **when it runs off the ticket's base branch**, and
+not when it runs on it. The original reasoning — that `--no-merge` happens after
+the merge, where `<base>..HEAD` is empty and there is nothing left to measure —
+was about *where the command runs*, not about the command, and the same command
+now also runs before the PR exists: a workflow token cannot push to a protected
+default branch, so the move into `done/` has to ride in on the PR rather than
+follow it. On the ticket's own branch everything is measurable, and skipping the
+check there let a gate that refuses `--force` be walked around by changing where
+close was called from, silently.
+
+On the base branch the gates are still skipped. The merge has already happened
+by then, so refusing would leave the ticket outside `done/` without giving
+anyone an action that helps.
 Empty by default. Not bypassed by `--force`, for the same reason as the
 checklist, and visible under `--dry-run`. Plain `check` reports the same thing
 and still exits 0, so the loss surfaces while the branch is still yours to
