@@ -3,7 +3,7 @@ priority: 2
 base_branch: default  # Override base branch for start/close (default: use default_branch from config)
 description: "run-all がテストの失敗を見落とす件と、start が resume で started_at を入れない件を直す"
 created_at: "2026-09-16T09:11:11Z"
-started_at: null  # Do not modify manually
+started_at: 2026-09-16T09:11:11Z # Do not modify manually
 closed_at: null   # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
