@@ -3,7 +3,7 @@ priority: 1
 base_branch: default  # Override base branch for start/close (default: use default_branch from config)
 description: "macOS CI で test-check.sh が timeout not found (127) で走っていなかったのを直す"
 created_at: "2026-09-16T09:41:53Z"
-started_at: null  # Do not modify manually
+started_at: 2026-09-16T09:42:04Z # Do not modify manually
 closed_at: null   # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
