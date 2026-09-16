@@ -5,6 +5,14 @@
 
 set -euo pipefail
 
+# test-helpers.sh provides the `timeout` wrapper. Without it this called the
+# real binary, which macOS does not ship - so on a runner without coreutils the
+# first `timeout 5 ./ticket.sh` exited 127, `set -e` took the suite with it, and
+# the output was redirected to /dev/null, leaving zero lines behind. run-all
+# counted the nothing it produced as nothing and carried on, so this suite had
+# never run on macOS CI.
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/test-helpers.sh"
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
