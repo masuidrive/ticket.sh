@@ -12,7 +12,7 @@ fi
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20260916.084455
+# Version: 20260916.090001
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -2330,7 +2330,7 @@ if [ -z "${BASH_VERSION:-}" ]; then
 fi
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20260916.084455
+# Version: 20260916.090001
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -2422,7 +2422,7 @@ SCRIPT_COMMAND=$(get_script_command)
 
 
 # Global variables
-VERSION="20260916.084455"  # This will be replaced during build
+VERSION="20260916.090001"  # This will be replaced during build
 CONFIG_FILE=""  # Will be set dynamically by get_config_file()
 CURRENT_TICKET_LINK="current-ticket.md"
 CURRENT_NOTE_LINK="current-note.md"
@@ -2540,19 +2540,19 @@ be recognized by every command; they are never auto-migrated.
   - Plain \`check\` never fails on an unfinished checklist - mid-ticket, the later groups being empty is the normal state. With \`require_checklist_groups\` set, it also shows where those groups stand (a missing one as \`missing  (close will refuse)\`), and still exits 0.
   - With \`append_only_files\` set, it also reports any line one of those files used to hold and no longer does, naming the commit that removed it, and still exits 0. Seeing it here is what lets you append the lines again while the branch is still yours to add to; \`close\` is where it is refused.
   - \`--require "<group name>"\` judges that one group and exits 1 if anything in it is unchecked. The name matches heading text in either file, so callers name the stage, not the file. Use it when the caller knows which stage the work is at; ticket.sh has no notion of stages. A name that matches no group is an error, not a pass, so a typo cannot become a check that always succeeds.
-- \`$SCRIPT_COMMAND close [--no-push] [--force|-f] [--no-delete-remote] [--keep-worktree] [--dry-run|-n]\` - Complete current ticket (squash merge to default branch)
+- \`$SCRIPT_COMMAND close [--no-push] [--force|-f] [--no-delete-remote] [--delete-worktree] [--dry-run|-n]\` - Complete current ticket (squash merge to default branch)
   - \`--dry-run\` (\`-n\`) runs all preflight checks (clean working dir, branch, ticket state, base_branch existence, worktree main repo state) and exits before any commit/merge. Useful for catching format mistakes or stale state before the real close. Note: pre-commit hooks are NOT executed by --dry-run.
   - The squash commit's subject is \`[<ticket-name>] <description>\` (description folded onto one line), and its body is the ticket's **Markdown body only** - the YAML frontmatter is never included. This is fixed behavior with no config key. Keeping the body in the message is what lets \`git blame\` reach the reasoning without opening \`tickets/done/\`.
   - With \`require_checklist: true\` in config, close refuses while the ticket body or the note has unchecked items, and lists them per file. Off by default. \`--force\` does not bypass it: the way out is \`- [-] ... - skip: <reason>\`, which leaves the reason in the file. \`--dry-run\` surfaces it too.
   - \`require_checklist_groups\` (a list of heading names) makes close refuse when a named group is in **neither** file - or is there with no checkboxes under it - as well as when anything under it is unchecked. \`require_checklist\` alone cannot catch this: it counts unchecked boxes, so a section that is not in the file at all counts zero and reads exactly like one where everything got done. Empty by default, independent of \`require_checklist\`, and not bypassed by \`--force\`.
   - \`append_only_files\` (a list of paths relative to the ticket directory) makes close refuse while a line one of those files used to hold is missing from it, naming the file, the commit that removed it and the count. What is judged is whether the line is in the file now, not whether some commit once took it out - so the repair is to append it again in a new commit, with no history rewriting. A line that was *edited* counts as removed: its old text is gone. Empty by default, not bypassed by \`--force\`, visible under \`--dry-run\`, and skipped for a ticket that does not have the file. Applied to \`--no-merge\` too, but only when it runs off the ticket's base branch (see below).
   - From a worktree, close refuses to merge if the main repo is on a non-default branch or has uncommitted changes (protects parallel workers).
-  - **Coding agents (Claude Code / Codex / etc.) must pass \`--keep-worktree\`**: without it, the worker's worktree is deleted and the agent's shell cwd points to a removed directory → every subsequent Bash tool call fails.
+  - A worktree is **kept** by default. \`--delete-worktree\` removes it. It used to be the other way round, with the help telling coding agents they *must* pass \`--keep-worktree\`: forgetting deleted the directory their shell was in, and every command afterwards failed with an error that pointed nowhere near the flag. \`--keep-worktree\` is still accepted and does nothing, so existing invocations keep working.
   - \`--no-merge [--closed-at <ISO8601-UTC>] [--dry-run|-n] <ticket-name>\` - Skip the squash-merge. Only set closed_at, move the ticket/note to done/, commit and push. Requires \`<ticket-name>\`. \`--closed-at\` overrides closed_at with a full ISO8601 UTC value (default: now).
     - The checklist and append-only gates apply whenever this runs on a branch other than the ticket's base branch - which is where it runs when the move into done/ has to ride in on the PR rather than follow it (a workflow token cannot push to a protected default branch). On the base branch they are still skipped: the merge has already happened by then, and refusing would strand the ticket outside \`done/\` without giving anyone a useful action.
     - \`--dry-run\` runs the same checks and exits before anything is written. It used to be accepted here and silently ignored.
-- \`$SCRIPT_COMMAND cancel [--force|-f] [--keep-worktree]\` - Cancel current ticket (no merge, moves to done/ with CANCELED marker)
-  - Same rule as close: coding agents should pass \`--keep-worktree\` to avoid dangling cwd.
+- \`$SCRIPT_COMMAND cancel [--force|-f] [--delete-worktree]\` - Cancel current ticket (no merge, moves to done/ with CANCELED marker)
+  - Same as close: the worktree is kept unless \`--delete-worktree\` is given, and \`--keep-worktree\` is accepted as a no-op.
 - \`$SCRIPT_COMMAND selfupdate\` - Update ticket.sh to the latest version from GitHub
 - \`$SCRIPT_COMMAND version\` - Display version information
 - \`$SCRIPT_COMMAND prompt\` - Display prompt instructions for AI coding assistants
@@ -2678,12 +2678,10 @@ support with Claude Code's \`EnterWorktree\` to keep the session cwd pinned:
 2. **Work inside the worktree** for the whole ticket. Do NOT run ticket.sh
    from the main repo — \`current-ticket/\` and \`current-ticket.md\` only
    exist in the worktree.
-3. **Always close with \`--keep-worktree\`**:
-     \`$SCRIPT_COMMAND close --keep-worktree\`
-   - Preserves the worktree so the cwd stays valid.
-   - Without it, close removes the worktree and the next Bash tool call
-     returns "Working directory no longer exists" → session hangs.
-4. **Cancel also uses \`--keep-worktree\`**: same reason.
+3. **Close normally**: \`$SCRIPT_COMMAND close\`
+   - The worktree is kept by default, so the session cwd stays valid.
+   - Only pass \`--delete-worktree\` when you are not standing in it.
+4. **Cancel behaves the same way.**
 5. **Parallel multi-worktree**: each agent runs in its own worktree. Keep
    the main repo on the default branch (don't check out other branches
    there); close refuses if main repo HEAD has drifted, to protect the
@@ -2691,7 +2689,7 @@ support with Claude Code's \`EnterWorktree\` to keep the session cwd pinned:
 6. After close, exit the worktree with \`ExitWorktree\` and pick up the
    next ticket with a fresh \`start --worktree\`.
 
-**TL;DR for agents**: \`start --worktree\` → pin cwd → \`close --keep-worktree\`.
+**TL;DR for agents**: \`start --worktree\` → pin cwd → \`close\`.
 
 ## Troubleshooting
 
@@ -4146,9 +4144,7 @@ cmd_start() {
     # Repeatable; ignored entirely unless use_worktree is true.
     local cli_copy_files=()
 
-    # Parse arguments. Note there is no --no-push: start never pushes, so a
-    # leftover --no-push from older invocations falls through to the
-    # ignore-unknown-flags case below and harmlessly does nothing.
+    # Parse arguments.
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --worktree)
@@ -4167,9 +4163,20 @@ cmd_start() {
                 cli_copy_files+=("${1#--copy-file=}")
                 shift
                 ;;
-            -*)
-                # Ignore unknown flags for backward compatibility
+            --no-push)
+                # Deprecated and inert: start stopped pushing anything, so there
+                # is nothing for this to turn off. Named explicitly rather than
+                # swallowed by a catch-all - this used to be an
+                # ignore-every-unknown-flag case, which kept old invocations
+                # working by also letting `--worktre` through as a silent no-op.
+                # A typo that produces different behaviour instead of an error is
+                # found much later, if at all.
                 shift
+                ;;
+            -*)
+                echo "Error: Unknown option: $1" >&2
+                echo "Usage: $SCRIPT_COMMAND start [--worktree] [--copy-file <path>]... <ticket-name>" >&2
+                return 1
                 ;;
             *)
                 if [[ -z "$ticket_input" ]]; then
@@ -4182,7 +4189,7 @@ cmd_start() {
 
     if [[ -z "$ticket_input" ]]; then
         echo "Error: ticket name required" >&2
-        echo "Usage: $SCRIPT_COMMAND start [--worktree] [--no-push] [--copy-file <path>]... <ticket-name>" >&2
+        echo "Usage: $SCRIPT_COMMAND start [--worktree] [--copy-file <path>]... <ticket-name>" >&2
         return 1
     fi
 
@@ -5444,7 +5451,13 @@ cmd_close() {
     local no_push=false
     local force=false
     local no_delete_remote=false
-    local keep_worktree=false
+    # Removing the worktree is opt-in. It used to be the default with
+    # --keep-worktree to turn it off, and the help had to tell coding agents they
+    # "must" pass it: forgetting deleted the directory their shell was sitting
+    # in, and every command after that failed with an error that pointed nowhere
+    # near the flag. A left-behind worktree costs one `git worktree remove`; the
+    # other direction costs a confused debugging session.
+    local delete_worktree=false
     local dry_run=false
     local no_merge=false
     local closed_at_override=""
@@ -5466,7 +5479,15 @@ cmd_close() {
                 shift
                 ;;
             --keep-worktree)
-                keep_worktree=true
+                # Deprecated and inert: keeping the worktree is now the default,
+                # so this asks for what already happens. Named explicitly rather
+                # than dropped, because the invocations that pass it are spread
+                # across scripts, docs and workflows, and because swallowing it
+                # with a catch-all would let a typo through as well.
+                shift
+                ;;
+            --delete-worktree)
+                delete_worktree=true
                 shift
                 ;;
             --dry-run|-n)
@@ -5487,7 +5508,7 @@ cmd_close() {
                 ;;
             -*)
                 echo "Error: Unknown option: $1" >&2
-                echo "Usage: $SCRIPT_COMMAND close [--no-push] [--force|-f] [--no-delete-remote] [--keep-worktree] [--dry-run|-n]" >&2
+                echo "Usage: $SCRIPT_COMMAND close [--no-push] [--force|-f] [--no-delete-remote] [--delete-worktree] [--dry-run|-n]" >&2
                 echo "       $SCRIPT_COMMAND close --no-merge [--closed-at <ISO8601-UTC>] [--no-push] <ticket-name>" >&2
                 return 1
                 ;;
@@ -5968,12 +5989,11 @@ EOF
             fi
         fi
 
-        # Optionally remove the worker's feature worktree. Agents pass
-        # --keep-worktree so their shell cwd stays valid and they can
-        # continue on to the next ticket; humans typically let it go.
-        if [[ "$keep_worktree" == "true" ]]; then
-            echo "Worker worktree preserved: $worktree_path"
-            echo "(--keep-worktree: branch '$current_branch' was merged but the worktree stays.)"
+        # Remove the worker's feature worktree only when asked. Leaving it is
+        # the default: the caller's shell is usually inside it.
+        if [[ "$delete_worktree" != "true" ]]; then
+            echo "Worktree preserved: $worktree_path"
+            echo "(branch '$current_branch' was merged; pass --delete-worktree to remove it.)"
         else
             run_git_command "git -C $main_repo worktree remove $worktree_path" || {
                 echo "Warning: Failed to remove worktree at '$worktree_path'" >&2
@@ -6075,7 +6095,8 @@ EOF
 # Cancel the current ticket without merging
 cmd_cancel() {
     local force=false
-    local keep_worktree=false
+    # Opt-in, same as close - see there for why.
+    local delete_worktree=false
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
@@ -6085,12 +6106,20 @@ cmd_cancel() {
                 shift
                 ;;
             --keep-worktree)
-                keep_worktree=true
+                # Deprecated and inert: keeping the worktree is now the default,
+                # so this asks for what already happens. Named explicitly rather
+                # than dropped, because the invocations that pass it are spread
+                # across scripts, docs and workflows, and because swallowing it
+                # with a catch-all would let a typo through as well.
+                shift
+                ;;
+            --delete-worktree)
+                delete_worktree=true
                 shift
                 ;;
             *)
                 echo "Error: Unknown option: $1" >&2
-                echo "Usage: $SCRIPT_COMMAND cancel [--force|-f] [--keep-worktree]" >&2
+                echo "Usage: $SCRIPT_COMMAND cancel [--force|-f] [--delete-worktree]" >&2
                 return 1
                 ;;
         esac
@@ -6348,8 +6377,9 @@ EOF
             return 1
         }
 
-        if [[ "$keep_worktree" == "true" ]]; then
-            echo "Worker worktree preserved: $worktree_path"
+        if [[ "$delete_worktree" != "true" ]]; then
+            echo "Worktree preserved: $worktree_path"
+            echo "(pass --delete-worktree to remove it.)"
         else
             run_git_command "git -C $main_repo worktree remove $worktree_path" || {
                 echo "Warning: Failed to remove worktree at '$worktree_path'" >&2
@@ -6501,9 +6531,7 @@ automatically.
    - Get user approval before proceeding.
 2. Complete: `./ticket.sh close`
    - `close` moves the whole `tickets/<TICKETNAME>/` directory to `tickets/done/<TICKETNAME>/` in a single commit that also records `closed_at`.
-   - **When inside a worktree, always add `--keep-worktree`**: `./ticket.sh close --keep-worktree`.
-     Without it, ticket.sh removes the worktree and your shell's cwd becomes dangling, which makes every subsequent Bash tool call fail.
-   - Same rule for cancel: `./ticket.sh cancel --keep-worktree`.
+   - Inside a worktree, `close` keeps it, so your shell's cwd stays valid. Pass `--delete-worktree` only when you are not standing in the worktree. Same for `cancel`.
 EOF
 }
 

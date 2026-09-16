@@ -180,9 +180,9 @@ tickets/
 - `new <slug> [--branch <name>]` - 新しいチケットを作成（`--branch` はこの ticket の feature branch 名を `{branch_prefix}<ticket-name>` の代わりに指定する）
 - `list [--status todo|doing|done|canceled] [--count N]` - チケット一覧
 - `start [--worktree] [--copy-file <path>]... <ticket>` - チケットの作業を開始（--worktree で別ディレクトリに worktree を作成、--copy-file で `worktree_copy_files` にワンショットで path 追加）
-- `close [--no-push] [--force] [--no-delete-remote] [--dry-run|-n]` - チケットを完了
+- `close [--no-push] [--force] [--no-delete-remote] [--dry-run|-n] [--delete-worktree]` - チケットを完了
 - `close --no-merge [--closed-at <ISO8601-UTC>] [--dry-run|-n] <ticket>` - squash merge せずに完了（PR 経由で merge 済み／これから merge する場合）。ticket の base branch 以外で走っているときは checklist / append_only の gate が効く（後述）
-- `cancel [--force|-f]` - マージせずにチケットをキャンセル
+- `cancel [--force|-f] [--delete-worktree]` - マージせずにチケットをキャンセル
 - `restore` - アクティブチケット symlink 群 (`current-ticket/`, `current-ticket.md`, `current-note.md`) を現在ブランチ名から再構築
 
 ### ユーティリティコマンド
@@ -413,7 +413,7 @@ default_content: |
 ### Worktreeサポート（オプション）
 - **並行作業**: `start`に`--worktree`フラグを付けてチケット毎に別のgit worktreeを作成
 - **独立ディレクトリ**: 各チケットが独自の作業ディレクトリを持ち、切り替え時のstash/commit不要
-- **自動クリーンアップ**: `close`と`cancel`コマンドがworktreeを自動削除
+- **worktree は残す**: `close` / `cancel` は worktree をそのまま残す。消したいときだけ `--delete-worktree` を付ける。以前は逆で、help が「coding agent は必ず `--keep-worktree` を付けること」と書いていた — 付け忘れると自分のシェルがいるディレクトリが消え、以降のコマンドが全部 `getcwd: cannot access parent directories` で失敗する。しかも原因が「さっき打ったフラグ」なのでエラーからは辿りにくい。残ってしまう副作用は `git worktree remove` 一回で済むが、逆向きの事故は復旧の手間が大きい。`--keep-worktree` は no-op として受け取り続ける
 - **設定モード**: configで`worktree_mode: true`を設定すると常にworktreeを使用
 - **カスタムディレクトリ**: configで`worktree_dir`を設定してworktreeの場所をカスタマイズ（デフォルト: `../<プロジェクト名>.worktrees/`）
 - **worktree 用ファイルコピー**: config の `worktree_copy_files: [".env"]` (任意の repo 相対 path のリスト)を指定すると、start が worktree を作った直後に main repo からその path 群を worktree へコピー。target 側に既にあれば上書きせず skip、source に無ければ warn のみで続行。ワンショットは `start --worktree --copy-file <path>` (反復可)。gitignore された `.env` 等を新 worktree でも即座に使うことを想定 — gitignore 前提なので、共有 config に入っていても各人自身の `.env` が各人の worktree にコピーされるだけで secret は拡散しない。

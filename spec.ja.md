@@ -647,7 +647,7 @@ base に戻れなくなる。3 つ目が無ければ、両方の branch にあ�
 
 **Worktreeモード:**
 - configで `worktree_mode: true` を設定すると常時有効化
-- worktreeモード使用時、`close`と`cancel`コマンドがworktreeを自動検出・削除
+- worktree モード使用時、`close` / `cancel` は worktree を検出して**残す**。`--delete-worktree` で削除する。以前は逆（削除が既定で `--keep-worktree` で残す）だったが、help に「coding agent は必ず付けること」と書かねばならない状態だった——付け忘れると自分のシェルがいるディレクトリが消え、以降のコマンドが、どのフラグのせいかを示さないエラーで全部失敗する。`--keep-worktree` は受け取り続けて no-op。catch-all で無視するのではなくフラグ名を名指しで受ける（catch-all にすると打ち間違いも通ってしまう）
 - `list`コマンドがアクティブなチケットのworktreeパスを表示
 
 **Worktree へのファイルコピー (`worktree_copy_files`):**

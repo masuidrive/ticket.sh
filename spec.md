@@ -664,7 +664,7 @@ in the first place, so there is nothing to protect the ticket from.
 
 **Worktree Mode:**
 - Can be enabled permanently via `worktree_mode: true` in config
-- When using worktree mode, `close` and `cancel` commands automatically detect and remove the worktree
+- When using worktree mode, `close` and `cancel` detect the worktree and **keep** it. `--delete-worktree` removes it. This was reversed in an earlier version, where removal was the default and `--keep-worktree` opted out: the help had to tell coding agents they *must* pass it, because forgetting removed the directory their shell was in and every later command failed with an error that named no flag. `--keep-worktree` is still accepted and does nothing, so existing invocations keep working — spelled out as its own case rather than swallowed by an ignore-unknown-flags branch, which would also let typos through.
 - `list` command shows worktree path for active tickets
 
 **Worktree file copy (`worktree_copy_files`):**

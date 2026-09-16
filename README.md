@@ -181,8 +181,8 @@ They are never auto-migrated to the new layout; convert on your own schedule.
 - `new <slug> [--epic <epic-slug>] [--branch <name>] [--created-at <YYMMDD-hhmmss>]` - Create new ticket (`--branch` sets the ticket's feature branch name instead of `{branch_prefix}<ticket-name>`; `--created-at` overrides the auto-generated timestamp, used verbatim as the filename prefix and as `created_at` in UTC)
 - `list [--status todo|doing|done|canceled] [--count N]` - List tickets
 - `start [--worktree] [--copy-file <path>]... <ticket>` - Start working on ticket (--worktree creates a separate worktree; --copy-file appends paths to `worktree_copy_files` at invocation time)
-- `close [--no-push] [--force] [--no-delete-remote] [--dry-run|-n] [--keep-worktree]` - Complete ticket
-- `cancel [--force|-f] [--keep-worktree]` - Cancel ticket without merging
+- `close [--no-push] [--force] [--no-delete-remote] [--dry-run|-n] [--delete-worktree]` - Complete ticket
+- `cancel [--force|-f] [--delete-worktree]` - Cancel ticket without merging
 - `restore` - Rebuild the active-ticket symlinks (`current-ticket/`, `current-ticket.md`, `current-note.md`) from the current branch name
 
 ### Utility Commands
@@ -215,7 +215,8 @@ Ticket Name                    Status   Created              Started            
 | `--force` | Close without prompts (useful for CI/CD) |
 | `--no-delete-remote` | Keep remote feature branch after closing |
 | `--dry-run` \| `-n` | Show what would be done without making changes |
-| `--keep-worktree` | Preserve worktree after closing (for --worktree mode) |
+| `--delete-worktree` | Remove the worktree after closing (for --worktree mode). The worktree is **kept** by default. |
+| `--keep-worktree` | Deprecated no-op: keeping the worktree is now the default. Still accepted so existing invocations keep working. |
 | `--no-merge` | Skip the squash-merge. Only set `closed_at`, move the ticket/note to `done/`, commit and push. Requires `<ticket-name>` as a positional argument. Gated off the ticket's base branch — see below. |
 | `--closed-at <ISO8601-UTC>` | (with `--no-merge`) Set `closed_at` to an explicit ISO8601 UTC value, e.g. `2026-05-29T12:17:36Z`. Defaults to the current UTC time. |
 
@@ -490,7 +491,7 @@ default_content: |
 ### Worktree Support (Optional)
 - **Parallel work**: Use `--worktree` flag with `start` to create a separate git worktree per ticket
 - **Independent directories**: Each ticket gets its own working directory, no need to stash/commit when switching
-- **Automatic cleanup**: `close` and `cancel` commands automatically remove the worktree
+- **The worktree is kept**: `close` and `cancel` leave it in place; pass `--delete-worktree` to remove it. It used to be the other way round, and the help had to tell coding agents they *must* pass `--keep-worktree` — forgetting deleted the directory their shell was sitting in, and every command after that failed with an error (`getcwd: cannot access parent directories`) that pointed nowhere near the flag. A left-behind worktree costs one `git worktree remove`; the other direction costs a confused debugging session. `--keep-worktree` is still accepted as a no-op.
 - **Config mode**: Set `worktree_mode: true` in config to always use worktrees
 - **Custom directory**: Set `worktree_dir` in config to customize worktree location (default: `../<project>.worktrees/`)
 - **Safe from any branch / any worktree**: `start --worktree` never modifies the caller's `HEAD` or working tree.

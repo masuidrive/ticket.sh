@@ -158,7 +158,7 @@ The main script uses a case statement to route commands:
 - Moves the ticket to `done/`:
   - New layout: `git mv tickets/<TICKETNAME> tickets/done/<TICKETNAME>` in one step, then `git add` on the moved `ticket.md` so the `closed_at` edit lands in the SAME final commit as the rename (avoids the pre-edit blob problem)
   - Legacy layout: `git mv` on the `.md` file plus (if present) the `-note.md` sibling
-- Removes worktree if running from one
+- Keeps the worktree when running from one; `--delete-worktree` removes it
 - Removes all active-ticket symlinks (`current-ticket/`, `current-ticket.md`, `current-note.md`)
 - Optional remote branch cleanup
 
@@ -168,7 +168,7 @@ The main script uses a case statement to route commands:
 - Moves the whole directory to `done/`
 - Detects worktree mode and switches to main repo
 - Switches to default branch without merging (keeps feature branch)
-- Removes worktree if running from one
+- Keeps the worktree when running from one; `--delete-worktree` removes it
 - Removes all active-ticket symlinks
 
 ## Testing
@@ -410,6 +410,22 @@ Documentation updates should be part of the same PR as code changes.
    fixes was silent, and a flag would only move the silence to whoever forgets
    to pass it.
 
+17. **A flag you must remember to pass is a defect, not an option**: `close` and
+   `cancel` removed the worktree by default, and the help told coding agents
+   they *must* pass `--keep-worktree` - so forgetting deleted the directory
+   their shell was in, and every later command failed with an error naming no
+   flag. The defaults are now the safe direction (keep; `--delete-worktree` to
+   remove), because a left-behind worktree costs one `git worktree remove` while
+   the other direction costs a debugging session. The old flag is kept as an
+   inert, explicitly-named case - not folded into a catch-all, which is the bug
+   below.
+18. **Deprecated flags are named, never swallowed**: `start` used to accept every
+   unknown flag silently so that a leftover `--no-push` would not break. That
+   also let `--worktre` through, producing a branch with no worktree, no error,
+   and a problem found much later. Each retired flag now gets its own no-op
+   case and everything else is an `Unknown option` error, which keeps old
+   invocations working without making typos indistinguishable from intent.
+
 ### Recent Enhancements
 
 - **Smart branch handling**: Automatically handles existing branches and clean states
@@ -422,6 +438,8 @@ Documentation updates should be part of the same PR as code changes.
 - **Append-only files**: `append_only_files` makes `close` refuse when a file kept as a record has lost lines it used to hold
 - **Per-ticket branch names**: `branch:` in the frontmatter (`new --branch`) lets a ticket adopt a branch whose name came from outside
 - **Gated `--no-merge`**: the checklist and append-only gates apply to `close --no-merge` when it runs off the ticket's base branch, where they can be measured
+- **Worktrees are kept by default**: `close` / `cancel` leave the worktree in place; `--delete-worktree` removes it, and `--keep-worktree` remains as a no-op
+- **Unknown flags stop `start`**: retired flags are inert by name, everything else is an error
 - **Worktree support**: Optional git worktree mode for parallel ticket work without branch switching
 - **Checklist check**: `check` reports the checkboxes in both `ticket.md` and `note.md` by heading group, split per file; `check --require "<group>"` judges one group across both; `require_checklist: true` makes `close` refuse while any are unchecked; and `require_checklist_groups` (a list of heading names) makes `close` refuse when a named group is in neither file - counting unchecked boxes cannot catch that, since a section that is absent counts zero and reads as finished
 
