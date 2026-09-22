@@ -3,7 +3,7 @@ priority: 2
 base_branch: default  # Override base branch for start/close (default: use default_branch from config)
 description: "start が ticket の branch: を checkout 後に読むため、ticket が base branch にも在ると branch: が無効になる (GH #13)"
 created_at: "2026-09-22T06:06:53Z"
-started_at: null  # Do not modify manually
+started_at: 2026-09-22T06:07:11Z # Do not modify manually
 closed_at: null   # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
