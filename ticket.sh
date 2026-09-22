@@ -12,7 +12,7 @@ fi
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20260916.094345
+# Version: 20260922.061557
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -2330,7 +2330,7 @@ if [ -z "${BASH_VERSION:-}" ]; then
 fi
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20260916.094345
+# Version: 20260922.061557
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -2422,7 +2422,7 @@ SCRIPT_COMMAND=$(get_script_command)
 
 
 # Global variables
-VERSION="20260916.094345"  # This will be replaced during build
+VERSION="20260922.061557"  # This will be replaced during build
 CONFIG_FILE=""  # Will be set dynamically by get_config_file()
 CURRENT_TICKET_LINK="current-ticket.md"
 CURRENT_NOTE_LINK="current-note.md"
@@ -4335,13 +4335,25 @@ cmd_start() {
     #
     # Worktree mode is excluded: it never touches cwd's HEAD in the first place,
     # so there is nothing to protect the ticket from.
+    # The branch this ticket names, read while we are still on the branch that
+    # holds the edit. The read below that settles branch_name happens after the
+    # checkout, so on a ticket the base branch also has it would see the base
+    # branch's copy - which need not carry `branch:` at all. That is the shape a
+    # bot produces when it adopts a ticket already committed to the backlog: the
+    # only place `branch:` can be written is the agent branch, so the field was
+    # discarded on every such start and the work piled up on a features/<name>
+    # branch no pull request was watching.
+    local pre_switch_branch_override=""
+    if [[ -f "$ticket_file" ]]; then
+        pre_switch_branch_override=$(ticket_branch_override "$ticket_file")
+    fi
+
     local base_has_ticket=false
     git cat-file -e "${effective_base}:${ticket_file}" 2>/dev/null && base_has_ticket=true
 
     local on_own_branch=false
     if [[ "$use_worktree" != "true" ]] && [[ -f "$ticket_file" ]] && [[ "$base_has_ticket" != "true" ]]; then
-        local _own_branch=$(ticket_branch_override "$ticket_file")
-        if [[ -n "$_own_branch" ]] && [[ "$_own_branch" == "$current_branch" ]]; then
+        if [[ -n "$pre_switch_branch_override" ]] && [[ "$pre_switch_branch_override" == "$current_branch" ]]; then
             on_own_branch=true
         fi
     fi
@@ -4368,6 +4380,14 @@ EOF
         fi
     elif [[ "$on_own_branch" == "true" ]]; then
         # Staying put: this branch is the only place the ticket exists.
+        check_clean_working_dir "$tickets_dir" || return 1
+    elif [[ -n "$pre_switch_branch_override" ]] && [[ "$pre_switch_branch_override" == "$current_branch" ]]; then
+        # Staying put: the ticket names this very branch, so branch_name below
+        # resolves to it and the resume path a few lines down would check it out
+        # again anyway. Going by way of the base branch first only churns the
+        # working tree twice and announces "creating a new feature branch from
+        # 'main' instead" - which never comes true, and reads as though the
+        # override had been ignored, the very thing this is here to stop.
         check_clean_working_dir "$tickets_dir" || return 1
     elif [[ "$current_branch" != "$effective_base" ]]; then
         # We're not on the effective base branch - handle different scenarios
@@ -4455,7 +4475,9 @@ EOF
     # them. Resuming an existing branch is already handled below, so "the branch
     # is already there" needs nothing extra here.
     local branch_name
-    if [[ -f "$ticket_file" ]]; then
+    if [[ -n "$pre_switch_branch_override" ]]; then
+        branch_name="$pre_switch_branch_override"
+    elif [[ -f "$ticket_file" ]]; then
         branch_name=$(ticket_branch_name "$ticket_file" "$branch_prefix" "$ticket_name")
     else
         # Worktree mode can reach here with the ticket only in git, never on

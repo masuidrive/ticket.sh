@@ -139,6 +139,8 @@ The main script uses a case statement to route commands:
   - `current-ticket.md` → the ticket body file (compat)
   - `current-note.md` → the note file (compat)
 - For legacy flat tickets, only the two compat file symlinks are created (there is no per-ticket directory to link to)
+- Reads the ticket's `branch:` into `pre_switch_branch_override` **before any branch switching**, and prefers it when settling `branch_name`. The read that settles the branch name used to happen after the checkout, off the base branch's copy — which carries no `branch:` at all when the field was added on the agent branch alone (a bot adopting a ticket already committed to the backlog). The override was discarded on every such `start` and the work piled up on `{branch_prefix}<ticket-name>`; `start` returned 0 and stamped `started_at`, so nothing said otherwise until the PR came up empty.
+- Stays on the current branch when that is the branch the ticket names and the base branch also has the ticket: `branch_name` resolves to it and the resume path below would check it out again anyway, so the detour through the base branch only churns the tree twice and prints a "creating a new feature branch from `<base>` instead" warning that never comes true. Everything else is unchanged — the branch is resumed as before, and the base branch is still fast-forwarded onto the `[start]` commit.
 - Stays on the current branch, instead of returning to the base branch, when the ticket lives only there: current branch == the ticket's `branch:`, the ticket file is present, and the base branch has no copy of it. `record_start_on_base()` is then called with its `skip_base_ff` argument set — the stamp is committed on the branch and the base branch is left alone, because there is no copy of the ticket there to fast-forward onto. Worktree mode never takes this path (it does not touch the caller's HEAD anyway). Without it, a ticket created and committed on its own branch made `start` check out the base branch and report `Ticket not found`.
 - Emits an `Active ticket paths:` block listing resolved paths so a downstream agent can consume the output without guessing layout. `ticket_files` entries that exist appear as `file:` lines; the config list is read into `TICKET_FILE_PATHS[]` right after the config is parsed, because the ticket's own frontmatter overwrites the yaml-sh globals before the block is emitted.
 - Worktree mode: creates directory at `../<project>.worktrees/<ticket-name>/`
@@ -399,6 +401,15 @@ Documentation updates should be part of the same PR as code changes.
    "the base branch does not have it" must hold, or `start` would either stop
    returning to the base branch from any feature branch, or drop the
    fast-forward that makes a ticket read `doing` from either side.
+
+15b. **The branch a ticket names is read where the edit is, not where we end
+   up**: the sister case of 15, and the one 15 did not cover. When the base
+   branch has the ticket too, `start` switches branches as usual - and the read
+   that settled the branch name sat after that switch, so it saw the base
+   branch's copy. A bot adopting a backlogged ticket can only write `branch:` on
+   its own branch, so the field was discarded every time. The read moved ahead
+   of the switch; the value found there wins. Nothing else about the path
+   changed, which is what keeps the fast-forward in 15's last clause intact.
 
 16. **A gate that can be skipped by calling it from somewhere else is not a
    gate**: `close --no-merge` skipped the checklist and append-only checks on

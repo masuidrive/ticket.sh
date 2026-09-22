@@ -645,6 +645,23 @@ base に戻れなくなる。3 つ目が無ければ、両方の branch にあ�
 `doing` と読めるようにしている fast-forward を失う。worktree モードはこの経路に入らない
 ——そもそも呼び出し元の `HEAD` を触らないので、ticket を守る必要が無い。
 
+**`branch:` がその branch 上でだけ書かれた場合:**
+
+姉妹形。ticket は base branch **にも**あるので上の経路には入らず、`start` は普段どおり
+branch を切り替える。backlog として既に commit 済みの ticket を bot が採用する流れでは、
+`branch:` を書けるのは自分の branch だけで、base 側の copy はそれを持たない。
+
+そのため、ticket が名乗る branch は **branch を切り替える前**に、その編集を持つ作業ツリー
+から読み取り、その値を優先する。切り替えた後に読むと base 側の copy を見てしまうので、
+override は毎回捨てられ、作業は `{branch_prefix}<ticket-name>` — どの pull request も
+見ていない branch — に積まれていた。`start` は 0 を返し `started_at` も入るため、PR が
+空になるまで誰も気づけなかった。
+
+ticket が名乗る branch が今いる branch そのものの場合、`start` はその場に留まる。base
+branch を checkout して直後にまた戻る、という往復はしない。それ以外は従来どおり: branch
+は今までどおり resume され、base branch も `[start]` commit に fast-forward されるので、
+ticket はどちらの branch から見ても `doing` と読める。
+
 **Worktreeモード:**
 - configで `worktree_mode: true` を設定すると常時有効化
 - worktree モード使用時、`close` / `cancel` は worktree を検出して**残す**。`--delete-worktree` で削除する。以前は逆（削除が既定で `--keep-worktree` で残す）だったが、help に「coding agent は必ず付けること」と書かねばならない状態だった——付け忘れると自分のシェルがいるディレクトリが消え、以降のコマンドが、どのフラグのせいかを示さないエラーで全部失敗する。`--keep-worktree` は受け取り続けて no-op。catch-all で無視するのではなくフラグ名を名指しで受ける（catch-all にすると打ち間違いも通ってしまう）

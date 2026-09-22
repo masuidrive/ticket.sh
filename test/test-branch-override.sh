@@ -504,6 +504,76 @@ fi
 
 # ---------------------------------------------------------------------------
 echo
+echo "9c. a branch: added on the agent branch wins over the base branch's copy"
+# The sister case of section 8 (issue #13): the ticket is on the base branch
+# *too*, so the own-branch path above does not apply and `start` checks out the
+# base branch as usual. branch_name used to be read after that checkout, off the
+# base branch's copy - which has no `branch:` at all when the field was added on
+# the agent branch alone. That is exactly the shape a bot produces when it adopts
+# a ticket already sitting in the backlog: the override was discarded every time
+# and the work piled up on features/<name>, a branch no pull request watched.
+# `start` returned 0 and stamped started_at, so nothing said otherwise until the
+# PR came up empty.
+REPO=$(make_repo adoptonbase)
+cd "$REPO"
+timeout 5 ./ticket.sh new backlogged >/dev/null 2>&1
+TICKET=$(safe_get_ticket_name "*backlogged*")
+git add tickets && git commit -q -m "Ticket on main, no branch: yet"
+
+git checkout -q -b agent/issue-107
+# The adoption: the field can only be written here, main's copy keeps none.
+BODY="tickets/${TICKET}/ticket.md"
+awk 'NR == 1 { print; print "branch: agent/issue-107"; next } { print }' "$BODY" > "${BODY}.new" \
+    && mv "${BODY}.new" "$BODY"
+git add -A && git commit -q -m "Adopt the ticket on the agent branch"
+if [[ "$(git show "main:tickets/${TICKET}/ticket.md" | grep -c '^branch:')" == "0" ]] && \
+   grep -q '^branch: agent/issue-107$' "tickets/${TICKET}/ticket.md"; then
+    pass "branch: exists only on the agent branch (fixture)"
+else
+    fail "fixture wrong" "$(git show "main:tickets/${TICKET}/ticket.md" | sed -n '1,10p')"
+fi
+
+OUT=$(timeout 20 ./ticket.sh start "$TICKET" 2>&1)
+if [[ "$(git rev-parse --abbrev-ref HEAD)" == "agent/issue-107" ]]; then
+    pass "start honours the override and stays on agent/issue-107"
+else
+    fail "start ignored branch: and moved elsewhere" "$(git rev-parse --abbrev-ref HEAD)
+$OUT"
+fi
+if ! git show-ref --verify --quiet "refs/heads/feature/${TICKET}"; then
+    pass "no feature/<name> branch is invented"
+else
+    fail "start created the prefix-named branch anyway" "$(git branch --list)"
+fi
+if grep -q '^started_at: "\?20' "tickets/${TICKET}/ticket.md"; then
+    pass "started_at is stamped"
+else
+    fail "started_at not set" "$(grep '^started_at' "tickets/${TICKET}/ticket.md")"
+fi
+# The base branch has the ticket, so this is not the own-branch path: the
+# fast-forward that keeps `list` honest from main must still happen.
+if [[ -n "$(started_at_on_main "$TICKET")" ]]; then
+    pass "the start time still reaches the base branch"
+else
+    fail "the base branch was not fast-forwarded" "$(git log --oneline main -3)"
+fi
+if ! echo "$OUT" | grep -q "has no copy of this ticket"; then
+    pass "the own-branch path is not taken"
+else
+    fail "took the own-branch path when the base had the ticket" "$OUT"
+fi
+# And it says so plainly: detouring through the base branch, only to check this
+# one out again, left a "creating a new feature branch from 'main' instead"
+# warning standing that never came true - which reads exactly like the override
+# being ignored.
+if ! echo "$OUT" | grep -q "Creating new feature branch"; then
+    pass "no warning about creating a feature branch from the base"
+else
+    fail "start still announces a branch it does not create" "$OUT"
+fi
+
+# ---------------------------------------------------------------------------
+echo
 echo "10. a ticket without the field behaves exactly as before"
 REPO=$(make_repo plain)
 cd "$REPO"

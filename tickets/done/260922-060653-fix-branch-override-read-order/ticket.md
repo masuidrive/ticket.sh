@@ -4,7 +4,7 @@ base_branch: default  # Override base branch for start/close (default: use defau
 description: "start が ticket の branch: を checkout 後に読むため、ticket が base branch にも在ると branch: が無効になる (GH #13)"
 created_at: "2026-09-22T06:06:53Z"
 started_at: 2026-09-22T06:07:11Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-09-22T06:46:00Z # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
 
@@ -52,13 +52,14 @@ PR が空になるまで気づけない。
 
 ## Tasks
 
-- [ ] 再現テストを書いて、現状で失敗することを確認する
-- [ ] `src/` 側の `start` 実装を修正（checkout 前に `branch:` を読み、優先する）
-- [ ] 既存経路の回帰確認（通常 start / `--worktree` / #9 の経路 / `--worktree` + `branch:`）
-- [ ] `bash build.sh` を実行してビルド
-- [ ] `test/run-all.sh` と `test/run-all-on-docker.sh` を実行して全テストパス（例外なし）
-- [ ] ドキュメント更新（必要なら）
-  - [ ] Update README.*.md
-  - [ ] Update spec.*.md
-  - [ ] Update DEV.md
+- [x] 再現テストを書いて、現状で失敗することを確認する
+- [x] `src/` 側の `start` 実装を修正（checkout 前に `branch:` を読み、優先する）
+- [x] 結局作られない branch を予告する警告を出さないよう、無駄な base 往復をやめる
+- [x] 既存経路の回帰確認（通常 start / `--worktree` / #9 の経路 / `--worktree` + `branch:`）
+- [x] `bash build.sh` を実行してビルド
+- [x] `test/run-all.sh` と `test/run-all-on-docker.sh` を実行して全テストパス（例外なし）
+- [x] ドキュメント更新（必要なら）
+  - [x] Update README.*.md （既に修正後の挙動と一致、変更なし）
+  - [x] Update spec.*.md
+  - [x] Update DEV.md
 - [ ] Get developer approval before closing

@@ -662,6 +662,26 @@ both branches would lose the fast-forward that makes it read `doing` from either
 one. Worktree mode never takes this path — it does not touch the caller's `HEAD`
 in the first place, so there is nothing to protect the ticket from.
 
+**When the `branch:` was added on the branch itself:**
+
+The sister shape: the ticket is on the base branch *too*, so the case above does
+not apply and `start` switches branches as usual. A bot that adopts a ticket
+already sitting in the backlog can only write `branch:` on its own branch — the
+base branch's copy of the ticket carries none.
+
+The branch a ticket names is therefore read **before** any branch switching, off
+the working tree that holds the edit, and that reading wins. Reading it after the
+switch would see the base branch's copy, so the override was discarded every time
+and the work piled up on `{branch_prefix}<ticket-name>` — a branch no pull
+request was watching. `start` returned 0 and stamped `started_at`, so nothing
+said otherwise until the PR came up empty.
+
+When the branch the ticket names is the one you are already on, `start` stays
+there rather than checking out the base branch only to check this one out again a
+moment later. Everything else is unchanged: the branch is resumed as it always
+was, and the base branch is still fast-forwarded onto the `[start]` commit, so
+the ticket reads `doing` from either branch.
+
 **Worktree Mode:**
 - Can be enabled permanently via `worktree_mode: true` in config
 - When using worktree mode, `close` and `cancel` detect the worktree and **keep** it. `--delete-worktree` removes it. This was reversed in an earlier version, where removal was the default and `--keep-worktree` opted out: the help had to tell coding agents they *must* pass it, because forgetting removed the directory their shell was in and every later command failed with an error that named no flag. `--keep-worktree` is still accepted and does nothing, so existing invocations keep working — spelled out as its own case rather than swallowed by an ignore-unknown-flags branch, which would also let typos through.
