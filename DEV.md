@@ -145,6 +145,7 @@ The main script uses a case statement to route commands:
 - Stays on the current branch when that is the branch the ticket names and the base branch also has the ticket: `branch_name` resolves to it and the resume path below would check it out again anyway, so the detour through the base branch only churns the tree twice and prints a "creating a new feature branch from `<base>` instead" warning that never comes true. Everything else is unchanged — the branch is resumed as before, and the base branch is still fast-forwarded onto the `[start]` commit.
 - Stays on the current branch, instead of returning to the base branch, when the ticket lives only there: current branch == the ticket's `branch:`, the ticket file is present, and the base branch has no copy of it. `record_start_on_base()` is then called with its `skip_base_ff` argument set — the stamp is committed on the branch and the base branch is left alone, because there is no copy of the ticket there to fast-forward onto. Worktree mode never takes this path (it does not touch the caller's HEAD anyway). Without it, a ticket created and committed on its own branch made `start` check out the base branch and report `Ticket not found`.
 - Emits an `Active ticket paths:` block listing resolved paths so a downstream agent can consume the output without guessing layout. `ticket_files` entries that exist appear as `file:` lines; the config list is read into `TICKET_FILE_PATHS[]` right after the config is parsed, because the ticket's own frontmatter overwrites the yaml-sh globals before the block is emitted.
+- Reads the ticket wherever this tree can see it, which is what makes `start` work from inside *another* ticket's worktree. Three places used to read the cwd and cannot: the probe that reads a ticket's `branch:` out of git (it tries the branch in hand first, and a branch that was cut before this ticket existed does not carry it — `git show`'s 128, with its message already discarded, ended the whole run through `set -e`, so the call printed nothing and exited 128), the already-started check (`extract_yaml_frontmatter` on a path the cwd lacks printed `File not found` and then read as *never started*, the one answer that check must not reach by accident — `ticket_frontmatter_text()` now falls back to the first ref that carries the ticket), and `emit_active_ticket_paths()` (it probed the cwd for a layout it had just created in the worktree, reporting `layout: unknown` and a `tickets/done/<name>.md` that does not exist — it now probes `link_dir` when that is absolute).
 - Worktree mode: creates directory at `../<project>.worktrees/<ticket-name>/`
 - Worktree mode: after the worktree is ready and symlinks/`tmp/` are set up, `copy_worktree_files()` runs against the effective `worktree_copy_files` list (config entries + `--copy-file <path>` CLI extras). Each entry: skip if the target exists, warn if the source is missing, otherwise `cp -p`. Silently no-op when the resolved list is empty (default), so the feature is off unless deliberately configured.
 
@@ -187,11 +188,12 @@ See `test/README.md` for detailed test documentation. Key points:
 - **Compatibility tests**: Test on different platforms and environments
 - **UTF-8 tests**: Test Unicode support and international characters
 - **Timezone tests**: Test date/time conversion functionality
-- **Worktree tests**: Test worktree creation, close, cancel, resume, and config mode
+- **Worktree tests** (`test-worktree.sh`): worktree creation, close, cancel, resume, config mode, `--no-worktree`, and `start` run from inside another ticket's worktree
 - **Checklist tests** (`test-checklist.sh`): `require_checklist`, `require_checklist_groups`, `check --require`, and the Markdown scanner's edge cases
 - **ticket_files tests** (`test-ticket-files.sh`): file creation, placeholder substitution, the `note.md` override, path escapes, the `Active ticket paths:` lines, and the declared files travelling into a worktree (both routes) without leaving anything untracked in the main repo
 - **append-only tests** (`test-append-only.sh`): the refusal, the message, `--force`/`--dry-run`, and that appending the lines again clears the gate without rewriting history
 - **Branch override tests** (`test-branch-override.sh`): `new --branch` validation, the full lifecycle (start/check/restore/close/list) on a ticket whose branch is named in its frontmatter, and the case where the ticket exists only on that branch
+- **Error reporting tests** (`test-error-reporting.sh`): that a deliberate refusal is not dressed up as a crash, that an unplanned failure names the command and keeps its exit code, that a signal-class exit stays quiet, and that a detached main-repo HEAD reaches its own refusal. The crash cases inject a failing line into a *copy* of the built `ticket.sh`, right after the traps are installed — there is no way in from outside, and the hook has no business in the shipped script.
 
 ### Running Tests
 
@@ -450,6 +452,23 @@ Documentation updates should be part of the same PR as code changes.
    several places cannot see argument order, so a silent winner would be a
    coin toss.
 
+20. **A run that ends must say why, even when nobody planned for it to end**:
+   the script runs under `set -e`, so an unhandled failure ends it where it
+   happens, and the `git` probes that ask whether a branch carries some path
+   discard stderr because a miss is an ordinary answer for them. Put together,
+   a probe against a branch that simply does not have the ticket ended `start`
+   with exit 128 and not one word — the caller could not tell a bug here from
+   its own misuse. The probe itself is fixed, but the shape generalises, so an
+   EXIT trap now names the last failing command. Only the crash codes speak
+   (126, 127, 128): every deliberate failure leaves with 1..6 and a signal with
+   129 or above, so an ERR trap would have called every ordinary refusal a bug.
+   The ERR trap only records (`set -E` carries it into functions); bash runs it
+   inside a command substitution's subshell too, but a recording made there
+   dies with the subshell, which is exactly why the many handled
+   `$(... 2>/dev/null)` reads stay quiet. Note that `local x=$(...)` swallows
+   the status in every bash from 3.2 to 5, while a bare `x=$(...)` does not —
+   that is why only some of these reads were ever fatal.
+
 ### Recent Enhancements
 
 - **Smart branch handling**: Automatically handles existing branches and clean states
@@ -464,6 +483,8 @@ Documentation updates should be part of the same PR as code changes.
 - **Gated `--no-merge`**: the checklist and append-only gates apply to `close --no-merge` when it runs off the ticket's base branch, where they can be measured
 - **Worktrees are kept by default**: `close` / `cancel` leave the worktree in place; `--delete-worktree` removes it, and `--keep-worktree` remains as a no-op
 - **Unknown flags stop `start`**: retired flags are inert by name, everything else is an error
+- **`start` from another ticket's worktree**: the ticket is read out of git when the cwd's tree has no copy of it, instead of the run ending on exit 128 with nothing printed
+- **No silent stops**: an unplanned failure (exit 126/127/128) names the command that failed and where to report it
 - **`start --no-worktree`**: turns `worktree_mode: true` off for one call, for a caller that owns its whole checkout and works one ticket in it; both worktree flags together is an error
 - **Worktree support**: Optional git worktree mode for parallel ticket work without branch switching
 - **Checklist check**: `check` reports the checkboxes in both `ticket.md` and `note.md` by heading group, split per file; `check --require "<group>"` judges one group across both; `require_checklist: true` makes `close` refuse while any are unchecked; and `require_checklist_groups` (a list of heading names) makes `close` refuse when a named group is in neither file - counting unchecked boxes cannot catch that, since a section that is absent counts zero and reads as finished

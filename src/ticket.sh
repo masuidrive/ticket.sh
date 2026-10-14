@@ -189,6 +189,50 @@ get_script_command() {
 # Set dynamic script command at startup
 SCRIPT_COMMAND=$(get_script_command)
 
+# Last-resort diagnostic for a run that ends without saying why.
+#
+# Under `set -e` an unhandled failure ends the script right where it happens.
+# When the failing command had its stderr discarded - the `git` probes do that,
+# because a miss is an ordinary outcome for them - the caller is left with an
+# exit code and nothing else, and an agent calling us cannot tell a bug here
+# from its own misuse. The EXIT trap still runs in that case, so name the
+# command that failed.
+#
+# Only the crash codes speak: 126 (not executable), 127 (command not found) and
+# 128 (`git` fatal, and what a miss like the above yields). Every deliberate
+# failure in this script leaves through `exit`/`return` with 1..6 and a signal
+# leaves with 129 or above, so both stay as quiet as they were.
+#
+# The ERR trap only records; `set -E` is what carries it into functions. bash
+# runs it inside the subshell of a command substitution too, but a recording
+# made there dies with the subshell, so the many `$(... 2>/dev/null)` reads
+# whose failure is handled are unaffected.
+TICKET_LAST_FAILED_COMMAND=""
+
+ticket_record_failed_command() {
+    TICKET_LAST_FAILED_COMMAND="${1:-?}: ${2:-?}"
+}
+
+ticket_report_unexpected_exit() {
+    local code=$?
+    case "$code" in
+        126|127|128)
+            echo "Error: $SCRIPT_COMMAND stopped unexpectedly (exit $code)" >&2
+            if [[ -n "$TICKET_LAST_FAILED_COMMAND" ]]; then
+                echo "Last failing command: $TICKET_LAST_FAILED_COMMAND" >&2
+            fi
+            echo "The command did not finish, and nothing further was attempted." >&2
+            echo "If this looks like a bug in $SCRIPT_COMMAND, please report it with what you ran:" >&2
+            echo "  https://github.com/masuidrive/ticket.sh/issues" >&2
+            ;;
+    esac
+    exit "$code"
+}
+
+set -E
+trap 'ticket_record_failed_command "${BASH_SOURCE[0]##*/}:${LINENO}" "$BASH_COMMAND"' ERR
+trap ticket_report_unexpected_exit EXIT
+
 # Show usage information
 show_usage() {
     echo "# Ticket Management System for Coding Agents"
@@ -1328,8 +1372,18 @@ emit_active_ticket_paths() {
     local tickets_dir="$2"
     local ticket_name="$3"
 
+    # Every existence test below asks about the tree the links were made in,
+    # which is not the cwd in worktree mode: `start` emits this block for the
+    # worktree it just created while standing in the main repo - or in another
+    # ticket's worktree, which carries neither this ticket nor its directory,
+    # and probing from there reported the layout as unknown and the paths as
+    # some non-existent legacy file. The printed paths stay repo-relative, as
+    # they are read from inside that tree.
+    local probe_root="."
+    [[ "$link_dir" == /* ]] && probe_root="$link_dir"
+
     local layout
-    layout=$(ticket_layout "$ticket_name" "$tickets_dir")
+    layout=$(cd "$probe_root" && ticket_layout "$ticket_name" "$tickets_dir")
 
     echo ""
     echo "Active ticket paths:"
@@ -1337,7 +1391,7 @@ emit_active_ticket_paths() {
 
     if [[ "$layout" == "new" ]]; then
         local ticket_dir="${tickets_dir}/${ticket_name}"
-        [[ ! -d "$ticket_dir" ]] && ticket_dir="${tickets_dir}/done/${ticket_name}"
+        [[ ! -d "${probe_root}/${ticket_dir}" ]] && ticket_dir="${tickets_dir}/done/${ticket_name}"
         echo "  ticket:       ${ticket_dir}/ticket.md"
         echo "  note:         ${ticket_dir}/note.md"
         # Extra files from config's ticket_files, so an agent reading only this
@@ -1345,8 +1399,7 @@ emit_active_ticket_paths() {
         # there and where. Only files that actually exist are listed: a ticket
         # created before the config gained the entry has no such file, and
         # naming a path that is not there would send someone to read nothing.
-        local _ef_probe="$ticket_dir"
-        [[ "$link_dir" == /* ]] && _ef_probe="${link_dir}/${ticket_dir}"
+        local _ef_probe="${probe_root}/${ticket_dir}"
         local _ef_i=0
         while (( _ef_i < ${#TICKET_FILE_PATHS[@]} )); do
             local _ef="${TICKET_FILE_PATHS[$_ef_i]}"
@@ -1363,13 +1416,13 @@ emit_active_ticket_paths() {
         # Legacy flat layout: one ticket .md and a sibling <name>-note.md file.
         # Resolve to whichever exists (open first, then done/).
         local ticket_path="${tickets_dir}/${ticket_name}.md"
-        [[ ! -f "$ticket_path" ]] && ticket_path="${tickets_dir}/done/${ticket_name}.md"
+        [[ ! -f "${probe_root}/${ticket_path}" ]] && ticket_path="${tickets_dir}/done/${ticket_name}.md"
         local note_path="${tickets_dir}/${ticket_name}-note.md"
-        [[ ! -f "$note_path" ]] && note_path="${tickets_dir}/done/${ticket_name}-note.md"
+        [[ ! -f "${probe_root}/${note_path}" ]] && note_path="${tickets_dir}/done/${ticket_name}-note.md"
         echo "  ticket:       ${ticket_path}"
         echo "  note:         ${note_path}"
         echo "  symlink_file: ${link_dir}/${CURRENT_TICKET_LINK} -> ${ticket_path}"
-        if [[ -L "${link_dir}/${CURRENT_NOTE_LINK}" ]]; then
+        if [[ -L "${probe_root}/${CURRENT_NOTE_LINK}" ]]; then
             echo "  symlink_note: ${link_dir}/${CURRENT_NOTE_LINK} -> ${note_path}"
         else
             echo "  symlink_note: (not created; legacy tickets don't get a note symlink unless the note file exists)"
@@ -1493,6 +1546,40 @@ ticket_extra_file_rels() {
         [[ "$rel" == "note.md" ]] && continue
         ticket_file_path_ok "$rel" || continue
         echo "${tickets_dir}/${ticket_name}/${rel}"
+    done
+    return 0
+}
+
+# Read a ticket's YAML frontmatter from wherever this tree can see it.
+#
+# The working tree is preferred, but in worktree mode it need not hold the
+# ticket at all: `start` never checks the ticket out into the cwd, and the cwd
+# can be another ticket's worktree, whose branch was cut before this ticket
+# existed. So fall back to the first given ref that carries the path. Echoes
+# nothing - and still returns 0 - when no source has it, leaving the decision
+# to the caller rather than ending the run on a lookup.
+#
+# Usage: ticket_frontmatter_text <main_repo> <ticket_file> [<ref>...]
+ticket_frontmatter_text() {
+    local main_repo="$1"
+    local ticket_file="$2"
+    shift 2
+
+    if [[ -f "$ticket_file" ]]; then
+        extract_yaml_frontmatter "$ticket_file" || true
+        return 0
+    fi
+
+    local ref tmp
+    for ref in "$@"; do
+        [[ -z "$ref" ]] && continue
+        git -C "$main_repo" cat-file -e "${ref}:${ticket_file}" 2>/dev/null || continue
+        tmp=$(mktemp)
+        if git -C "$main_repo" show "${ref}:${ticket_file}" > "$tmp" 2>/dev/null; then
+            extract_yaml_frontmatter "$tmp" || true
+        fi
+        rm -f "$tmp"
+        return 0
     done
     return 0
 }
@@ -2308,7 +2395,14 @@ EOF
         local _probe
         for _probe in "$(get_current_branch)" "$default_branch"; do
             [[ -z "$_probe" ]] && continue
-            _branch_override=$(git -C "$main_repo" show "${_probe}:${ticket_file}" 2>/dev/null \
+            # A probe that does not carry this ticket is the normal case, not an
+            # error: the branch we stand on is whatever the cwd happens to be,
+            # and the cwd can be another ticket's worktree, whose branch was cut
+            # before this ticket existed. `git show` ends with 128 there, and a
+            # bare assignment hands that 128 straight to `set -e` - with git's
+            # own message already discarded, so the run ends saying nothing at
+            # all. Swallow the miss and let the next probe answer.
+            _branch_override=$( { git -C "$main_repo" show "${_probe}:${ticket_file}" 2>/dev/null || true; } \
                                | _ticket_branch_from_stream)
             [[ -n "$_branch_override" ]] && break
         done
@@ -2525,12 +2619,15 @@ EOF
         return 0
     fi
 
-    # Branch doesn't exist - check if ticket is already started
-    local yaml_content=$(extract_yaml_frontmatter "$ticket_file")
-    echo "$yaml_content" >| /tmp/ticket_yaml.yml
-    yaml_parse /tmp/ticket_yaml.yml
-    local started_at=$(yaml_get "started_at" || echo "null")
-    rm -f /tmp/ticket_yaml.yml
+    # Branch doesn't exist - check if ticket is already started. The ticket may
+    # not be in this tree (see ticket_frontmatter_text); reading the missing
+    # path would print "File not found" and then read as never started, which
+    # is the one answer this check must not give by accident.
+    local started_at
+    started_at=$(get_yaml_field \
+        "$(ticket_frontmatter_text "$main_repo" "$ticket_file" \
+            "$(get_current_branch)" "$effective_base" "$default_branch")" \
+        "started_at")
 
     if ! is_null_or_empty "$started_at"; then
         cat >&2 << EOF

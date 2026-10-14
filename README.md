@@ -502,7 +502,7 @@ default_content: |
 - **Safe from any branch / any worktree**: `start --worktree` never modifies the caller's `HEAD` or working tree.
   It operates on the main repository via `git -C <main_repo> worktree add`, so it works correctly when:
   - You are on a feature branch with uncommitted changes (no stash, no checkout)
-  - You are already inside another worktree (e.g. a previous ticket's worktree)
+  - You are already inside another worktree (e.g. a previous ticket's worktree). Standing there, the ticket you are starting is usually not in the cwd's tree at all — that branch was cut before it existed — so it is read out of git instead. Until recently this was the one case that did not work: the run ended on exit 128 without printing anything.
   - Multiple AI agents (Claude Code, etc.) are running in parallel from different worktrees
 - **Populate worktree extras**: Set `worktree_copy_files: [".env"]` (or any list of repo-relative paths) in config to copy those files from the main repo into a freshly-created worktree. Existing files in the target are never overwritten; missing sources warn and continue. One-shot additions: `start --worktree --copy-file <path>` (repeatable). Intended for gitignored helpers like `.env` — the assumption is those files are gitignored, so each collaborator's own `.env` is copied into their own worktree and secrets stay local.
 
@@ -526,6 +526,7 @@ The `check` command verifies the following:
 - **Check command**: Diagnose issues and get guidance on next steps
 - **Restore command**: Rebuild symlinks and recover from interrupted operations  
 - **Conflict resolution**: Resume operations after resolving merge conflicts
+- **No silent stops**: a failure `ticket.sh` did not plan for prints one line naming the command that failed, the exit code and where to report it, instead of ending the run with nothing but a status. Deliberate refusals (exit 1–6) and interruptions (signals) are unchanged — they already say their piece.
 
 ### Robustness Features
 - **UTF-8 support**: Full Unicode support for all content and filenames

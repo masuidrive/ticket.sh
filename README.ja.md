@@ -420,6 +420,7 @@ default_content: |
 - **worktree は残す**: `close` / `cancel` は worktree をそのまま残す。消したいときだけ `--delete-worktree` を付ける。以前は逆で、help が「coding agent は必ず `--keep-worktree` を付けること」と書いていた — 付け忘れると自分のシェルがいるディレクトリが消え、以降のコマンドが全部 `getcwd: cannot access parent directories` で失敗する。しかも原因が「さっき打ったフラグ」なのでエラーからは辿りにくい。残ってしまう副作用は `git worktree remove` 一回で済むが、逆向きの事故は復旧の手間が大きい。`--keep-worktree` は no-op として受け取り続ける
 - **設定モード**: configで`worktree_mode: true`を設定すると、フラグ無しでも worktree を使用
 - **1 回だけ外す**: `start --no-worktree` は `worktree_mode: true` でも worktree を作らず、今の checkout で branch を切り替える。checkout 全体を自分だけで使い、その中で 1 ticket だけ進める呼び出し側 — CI の runner など — には worktree の守るものが無く、作ってしまうと作業は元の checkout に残り ticket の branch は別の場所、という形になるため。`--worktree` との同時指定は後勝ちではなくエラーなので、結果が引数の順序で変わることはない。
+- **どの branch・どの worktree からでも安全**: `start --worktree` は呼び出し側の `HEAD` も working tree も触らない。main repo に対して `git -C <main_repo> worktree add` するので、feature branch の上で未 commit の変更を抱えていても、別の ticket の worktree の中にいても、複数の AI agent が別々の worktree から並走していても正しく動く。別の worktree の中にいるときは、これから start する ticket は cwd の tree にそもそも無いのが普通 — その branch は ticket ができる前に切られている — ので ticket は git から読む。最近まではここだけが動かず、run は何も出力せずに exit 128 で終わっていた。
 - **カスタムディレクトリ**: configで`worktree_dir`を設定してworktreeの場所をカスタマイズ（デフォルト: `../<プロジェクト名>.worktrees/`）
 - **worktree 用ファイルコピー**: config の `worktree_copy_files: [".env"]` (任意の repo 相対 path のリスト)を指定すると、start が worktree を作った直後に main repo からその path 群を worktree へコピー。target 側に既にあれば上書きせず skip、source に無ければ warn のみで続行。ワンショットは `start --worktree --copy-file <path>` (反復可)。gitignore された `.env` 等を新 worktree でも即座に使うことを想定 — gitignore 前提なので、共有 config に入っていても各人自身の `.env` が各人の worktree にコピーされるだけで secret は拡散しない。
 
@@ -427,6 +428,7 @@ default_content: |
 - **checkコマンド**: 問題を診断して次のステップのガイダンス提供
 - **restoreコマンド**: シンボリックリンクの再構築と中断操作からの回復
 - **競合解決**: マージ競合解決後の操作再開
+- **黙って止まらない**: `ticket.sh` が想定していなかった失敗は、終了コードだけを残して終わるのではなく、失敗したコマンド・終了コード・報告先を 1 行で出す。意図した拒否（exit 1〜6）と中断（signal）は従来どおり — そちらは既に自分で理由を述べている。
 
 ### 堅牢性機能
 - **UTF-8対応**: すべてのコンテンツとファイル名でUnicode完全対応

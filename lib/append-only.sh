@@ -118,7 +118,10 @@ append_only_violations() {
 
         count=$(awk 'END { print NR }' "$missing_file")
         first=$(awk 'NR == 1 { print; exit }' "$missing_file")
-        subject=$(git show -s --format='%s' "$sha" 2>/dev/null)
+        # One unreadable subject is not worth ending the whole report over -
+        # and left bare it would, in any caller that does not happen to wrap
+        # this function in a condition.
+        subject=$(git show -s --format='%s' "$sha" 2>/dev/null || true)
         printf '%s\t%s\t%s\t%s\n' "$(git rev-parse --short "$sha")" "$subject" "$count" "$first"
     done < "$commits_file"
 

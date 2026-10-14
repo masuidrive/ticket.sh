@@ -4,7 +4,7 @@ base_branch: default  # Override base branch for start/close (default: use defau
 description: "別の ticket の worktree の中で start すると何も出さずに exit 128 で終わる (GH #16)"
 created_at: "2026-10-14T07:29:46Z"
 started_at: 2026-10-14T07:30:11Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-10-14T16:11:42Z # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
 
@@ -47,18 +47,31 @@ pipeline が 128 を返し、`set -e` の下でこの代入が script を落と�
    は EXIT trap を走らせないことを実機確認済みなので、正常な
    「失敗を許容している `$(...)`」で誤報は出ない
 
+## 追加で見つかったもの
+
+probe ループを直して `start` が通るようになった時点で、同じ経路の続きに別の
+不具合が 2 つ見えた（どちらも cwd の tree を読んでいた）。片方だけ直すと
+「start は成功するが結果が壊れている」になるので一緒に直した。
+
+- already-started チェックが cwd から ticket を読み、`Error: File not found` を
+  出した上で「まだ開始していない」と読んでいた
+- `Active ticket paths:` ブロックが cwd を probe し、`layout: unknown` と存在しない
+  `tickets/done/<name>.md` を出していた
+
+詳細と、`check_main_repo_ready` について当初の見立てが誤っていた点は note.md に。
+
 ## Tasks
 
-- [ ] probe ループの `git show` 失敗を次の probe へ進めるようにする
-- [ ] 同種の無言死パターンを cmd_start / helper で監査し、見つかれば直す
-- [ ] crash 系終了コードのときだけ 1 行出す EXIT trap を入れる
-- [ ] 再現手順が通ることを確認する（別 worktree からの start）
-- [ ] test を追加する（別 worktree からの start、trap の message）
-- [ ] 修正前の src で新 test が落ちることを確認する
-- [ ] Run tests before closing and pass all tests (No exceptions)
-- [ ] Run `bash build.sh` to build the project
-- [ ] Update documentation if necessary
-  - [ ] Update README.*.md
-  - [ ] Update spec.*.md
-  - [ ] Update DEV.md
+- [x] probe ループの `git show` 失敗を次の probe へ進めるようにする
+- [x] 同種の無言死パターンを cmd_start / helper で監査し、見つかれば直す
+- [x] crash 系終了コードのときだけ 1 行出す EXIT trap を入れる
+- [x] 再現手順が通ることを確認する（別 worktree からの start）
+- [x] test を追加する（別 worktree からの start、trap の message）
+- [x] 修正前の src で新 test が落ちることを確認する
+- [x] Run tests before closing and pass all tests (No exceptions)
+- [x] Run `bash build.sh` to build the project
+- [x] Update documentation if necessary
+  - [x] Update README.*.md
+  - [x] Update spec.*.md
+  - [x] Update DEV.md
 - [ ] Get developer approval before closing

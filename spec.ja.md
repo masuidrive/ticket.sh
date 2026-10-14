@@ -407,6 +407,35 @@ ticket が存在する前に checkout してしまう CI bot など — を、�
   2. Navigate to the project root directory where the config exists
   ```
 
+**何も言わずに止まったとき:**
+
+上のエラーはどれも意図した拒否で、どうすればよいかも書いてある。意図していない
+失敗は、以前は何も言わなかった。script は `set -e` の下で動くので、処理されな
+かった失敗はその場で run を終わらせる。そしてその失敗が、stderr を捨ててある
+`git` の読み取りだった場合——ある branch がその path を持っているかを尋ねる
+probe はそうしている。見つからないのは普通の答えだからだ——呼び出し側には終了
+コードだけが残る。それでは agent は、`ticket.sh` の不具合なのか自分の使い方の
+誤りなのかを区別できない。
+
+このように止まったときは、自分でそれを報告する:
+
+```
+Error: ticket.sh stopped unexpectedly (exit 128)
+Last failing command: ticket.sh:2546: git cat-file -e "${ref}:${path}" 2> /dev/null
+The command did not finish, and nothing further was attempted.
+If this looks like a bug in ticket.sh, please report it with what you ran:
+  https://github.com/masuidrive/ticket.sh/issues
+```
+
+- 終了コードはそのまま通す。
+- 口を開くのは crash 系のコードだけ: `126`（実行可能でない）、`127`（コマンドが
+  無い）、`128`（`git` の fatal）。意図的な失敗は `1`〜`6` で終わり、signal は
+  `129` 以上で終わるので、どちらにも message は付かない。
+- コマンドは script に書かれたまま——変数も展開せずに——表示される（bash が未展開
+  で渡してくる）。値ではなく、その行を指すためである。
+- 報告される位置は build 済みの `ticket.sh` の中——実際に走ったのはそのファイル
+  である。`build.sh` が source を連結するので、`src/` の行番号ではない。
+
 ---
 
 ### `init`
@@ -678,6 +707,7 @@ ticket はどちらの branch から見ても `doing` と読める。
 - `--copy-file` を `--no-worktree` と併せて渡すと、stderr に warning を出して続行する。コピー先の worktree が無いので適用されようが無く、無視すること自体は元から `--copy-file` の契約（worktree を作ったときにだけ適用）なので、拒否ではなく warning にしている——常に `--copy-file` を渡す wrapper がそのまま動く。
 - `--no-worktree` が支える形: checkout 全体を自分だけで使い、その中で 1 ticket だけを進める呼び出し側。GitHub Actions の coding bot がそうで、runner の checkout で `ticket.sh start "$TICKET_NAME"` を実行し、そのまま同じディレクトリで作業する。他の session が tree を共有していないので worktree の守るものが無く、それでも `start` が worktree を作るため、bot は元の checkout の——そこが指していた branch の上に——commit を積み、ticket の branch は別の場所にあった。このフラグが無い間は、«人の端末では worktree を既定にしたい» と «bot は worktree を使わない» を 1 つの `.ticket-config.yaml` で両立できなかった。
 - worktree モード使用時、`close` / `cancel` は worktree を検出して**残す**。`--delete-worktree` で削除する。以前は逆（削除が既定で `--keep-worktree` で残す）だったが、help に「coding agent は必ず付けること」と書かねばならない状態だった——付け忘れると自分のシェルがいるディレクトリが消え、以降のコマンドが、どのフラグのせいかを示さないエラーで全部失敗する。`--keep-worktree` は受け取り続けて no-op。catch-all で無視するのではなくフラグ名を名指しで受ける（catch-all にすると打ち間違いも通ってしまう）
+- `start` は別の ticket の worktree の中から実行してもよい。cwd はどの checkout を読むかだけを決め、どの branch を切り替えるかには関わらない。新しい worktree はどちらにせよ main repo から作られ、いま立っている worktree は触られない。ticket 自体は、cwd の tree にその copy が無ければ git から読む——その worktree の branch は ticket が存在する前に切られているので、そこでは「無い」のが普通の状態である。これは最近まで動かなかった: `branch:` を探す probe が手元の branch を最初に試し、ticket を持っていないだけの branch に対する `git show` の失敗が run 全体を終わらせ、git 自身の message は既に捨ててあったので、呼び出しは何も言わずに 128 で終わっていた（共通エラーケースの **何も言わずに止まったとき** を参照）。その背後で cwd を読んでいたものが 2 つあり、こちらも正しい tree を見るようにした: 「すでに started の ticket か」の確認（cwd から ticket を読んでいたので、started の ticket と存在しない ticket を区別できなかった）と、`Active ticket paths:` ブロック（layout を unknown と報告し、存在しない `done/` の path を指していた）。
 - `list`コマンドがアクティブなチケットのworktreeパスを表示
 
 **Worktree へのファイルコピー (`worktree_copy_files`):**

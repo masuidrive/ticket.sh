@@ -236,7 +236,13 @@ check_main_repo_ready() {
     local default_branch="$2"
 
     local main_branch
-    main_branch=$(git -C "$main_repo" symbolic-ref --short HEAD 2>/dev/null)
+    # A detached HEAD is exactly what the message below is for, so the read must
+    # not be what ends the run. Bare, it only survives because every caller
+    # invokes us inside an `|| return 1`, which suppresses errexit through the
+    # whole function body; called plainly, `set -e` would stop here instead -
+    # with git's message already discarded, so nothing would be printed at all.
+    # Make that independent of the caller.
+    main_branch=$(git -C "$main_repo" symbolic-ref --short HEAD 2>/dev/null || true)
     if [[ -z "$main_branch" ]]; then
         echo "Error: Cannot determine main repo HEAD at '$main_repo' (detached or invalid)" >&2
         return 1

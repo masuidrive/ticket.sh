@@ -665,6 +665,146 @@ fi
 cd "$MAIN_REPO"
 git checkout -q main 2>/dev/null || true
 
+echo "17. Testing start from inside another ticket's worktree (issue #16)..."
+# A PM agent runs one ticket per worktree and does not always cd back to the
+# main checkout before starting the next one. `start <other>` from inside a
+# worktree printed nothing at all and ended with 128: the branch probe that
+# reads a ticket's `branch:` out of git tried the branch we stand on first,
+# that branch was cut before the other ticket existed, and `git show`'s 128 -
+# its message already discarded - ended the run through `set -e`.
+cd "$MAIN_REPO"
+echo 'worktree_mode: true' >> .ticket-config.yaml
+git add . && git commit -q -m "Enable worktree_mode for the other-worktree cases"
+
+timeout 5 ./ticket.sh new ow-a >/dev/null 2>&1
+TICKET_OA=$(safe_get_ticket_name "*ow-a*")
+git add . && git commit -q -m "Add ow-a ticket"
+OUTPUT=$(timeout 15 ./ticket.sh start "$TICKET_OA" 2>&1)
+WT_OA=$(worktree_path_from "$OUTPUT") || WT_OA=""
+cd "$MAIN_REPO"
+git checkout -q main 2>/dev/null || true
+
+timeout 5 ./ticket.sh new ow-b >/dev/null 2>&1
+TICKET_OB=$(safe_get_ticket_name "*ow-b*")
+git add . && git commit -q -m "Add ow-b ticket"
+
+if [[ -n "$WT_OA" ]] && [[ -d "$WT_OA" ]]; then
+    pass "fixture: ow-a has a worktree to stand in"
+else
+    fail "fixture: no worktree for ow-a" "$OUTPUT"
+fi
+
+RC=0
+cd "$WT_OA"
+OUTPUT=$(timeout 15 ./ticket.sh start "$TICKET_OB" 2>&1) || RC=$?
+cd "$MAIN_REPO"
+
+if [[ $RC -eq 0 ]]; then
+    pass "start from another ticket's worktree succeeds"
+else
+    fail "start from another ticket's worktree exited $RC" "$OUTPUT"
+fi
+if echo "$OUTPUT" | grep -q "WORKTREE:.*${TICKET_OB}"; then
+    pass "and names ow-b's own worktree"
+else
+    fail "no worktree reported for ow-b" "$OUTPUT"
+fi
+if ! echo "$OUTPUT" | grep -q "^Error:"; then
+    pass "and reports no error on the way"
+else
+    fail "an error was printed" "$OUTPUT"
+fi
+# The paths block is the one thing an agent reads to find its files, and it was
+# probing the cwd - another ticket's worktree - instead of the tree it had just
+# linked, so it called the layout unknown and pointed at tickets/done/<b>.md.
+if echo "$OUTPUT" | grep -q "layout: *new"; then
+    pass "and resolves the layout against the new worktree"
+else
+    fail "layout misreported" "$OUTPUT"
+fi
+if echo "$OUTPUT" | grep -q "ticket: *tickets/${TICKET_OB}/ticket.md"; then
+    pass "and points at the ticket's real path"
+else
+    fail "ticket path misreported" "$OUTPUT"
+fi
+WT_OB="${MAIN_REPO}/../$(basename "$MAIN_REPO").worktrees/${TICKET_OB}"
+if [[ -f "${WT_OB}/tickets/${TICKET_OB}/ticket.md" ]] \
+    && grep -q "^started_at: 2" "${WT_OB}/tickets/${TICKET_OB}/ticket.md"; then
+    pass "and stamps started_at in ow-b's worktree"
+else
+    fail "ow-b's worktree is not set up" "$(ls -la "$WT_OB" 2>&1)"
+fi
+if [[ "$(git -C "$WT_OA" rev-parse --abbrev-ref HEAD)" == "feature/${TICKET_OA}" ]]; then
+    pass "and leaves ow-a's worktree on its own branch"
+else
+    fail "ow-a's worktree was moved" "$(git -C "$WT_OA" rev-parse --abbrev-ref HEAD)"
+fi
+if [[ "$(git -C "$MAIN_REPO" rev-parse --abbrev-ref HEAD)" == "main" ]]; then
+    pass "and leaves the main checkout on main"
+else
+    fail "the main checkout was moved" "$(git -C "$MAIN_REPO" rev-parse --abbrev-ref HEAD)"
+fi
+git worktree remove "$WT_OB" --force 2>/dev/null || true
+
+# The probe loop exists to read a ticket's own `branch:`. Reaching the second
+# probe is the whole point of the fix, so check it actually finds the override
+# there rather than merely surviving the first miss.
+cd "$MAIN_REPO"
+timeout 5 ./ticket.sh new ow-c >/dev/null 2>&1
+TICKET_OC=$(safe_get_ticket_name "*ow-c*")
+BODY_OC="tickets/${TICKET_OC}/ticket.md"
+awk 'NR == 1 { print; print "branch: agent/issue-16"; next } { print }' "$BODY_OC" > "${BODY_OC}.new" \
+    && mv "${BODY_OC}.new" "$BODY_OC"
+git add . && git commit -q -m "Add ow-c ticket naming its own branch"
+RC=0
+cd "$WT_OA"
+OUTPUT=$(timeout 15 ./ticket.sh start "$TICKET_OC" 2>&1) || RC=$?
+cd "$MAIN_REPO"
+if [[ $RC -eq 0 ]] && echo "$OUTPUT" | grep -q "WORKTREE:"; then
+    pass "a ticket naming its own branch starts from another worktree too"
+else
+    fail "start with a branch: override exited $RC" "$OUTPUT"
+fi
+if git -C "$MAIN_REPO" show-ref --verify --quiet refs/heads/agent/issue-16; then
+    pass "and the branch: override is the branch that gets created"
+else
+    fail "the override was lost" "$(git -C "$MAIN_REPO" branch --list)"
+fi
+WT_OC=$(worktree_path_from "$OUTPUT") || WT_OC=""
+[[ -n "$WT_OC" ]] && git worktree remove "$WT_OC" --force 2>/dev/null || true
+
+# started_at is read from the ticket to refuse a ticket that was started but
+# whose branch is gone. Read from the cwd it was simply "File not found", which
+# then read as never started - the one answer that check must not reach by
+# accident.
+cd "$MAIN_REPO"
+timeout 5 ./ticket.sh new ow-d >/dev/null 2>&1
+TICKET_OD=$(safe_get_ticket_name "*ow-d*")
+BODY_OD="tickets/${TICKET_OD}/ticket.md"
+sed_i 's/^started_at: null.*/started_at: 2026-01-01T00:00:00Z/' "$BODY_OD"
+git add . && git commit -q -m "Add ow-d ticket that claims it was started"
+RC=0
+cd "$WT_OA"
+OUTPUT=$(timeout 15 ./ticket.sh start "$TICKET_OD" 2>&1) || RC=$?
+cd "$MAIN_REPO"
+if [[ $RC -ne 0 ]] && echo "$OUTPUT" | grep -q "already started but branch is missing"; then
+    pass "a started ticket with no branch is still refused from another worktree"
+else
+    fail "the already-started check did not fire (exit $RC)" "$OUTPUT"
+fi
+if ! echo "$OUTPUT" | grep -q "File not found"; then
+    pass "and the ticket is read from git, not missed in the cwd"
+else
+    fail "the ticket was looked for in the wrong tree" "$OUTPUT"
+fi
+
+cd "$MAIN_REPO"
+git checkout -q main 2>/dev/null || true
+[[ -n "$WT_OA" ]] && git worktree remove "$WT_OA" --force 2>/dev/null || true
+git worktree prune 2>/dev/null || true
+sed_i '/worktree_mode/d' .ticket-config.yaml
+git add . && git commit -q -m "Disable worktree_mode after the other-worktree cases"
+
 echo
 echo "=== Worktree Test Results ==="
 echo "  Passed: $PASSED, Failed: $FAILED"

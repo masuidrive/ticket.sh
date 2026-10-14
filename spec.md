@@ -413,6 +413,35 @@ All commands perform these prerequisite checks:
   2. Navigate to the project root directory where the config exists
   ```
 
+**When a run stops without a message:**
+
+Every refusal above is deliberate and says what to do about it. A failure that
+is *not* deliberate used to say nothing at all: the script runs under `set -e`,
+so an unhandled failure ends it where it happens, and where that failure was a
+`git` read whose stderr had been discarded — the probes that ask whether a
+branch carries some path do that, because a miss is an ordinary answer for them
+— the caller was left holding an exit code and nothing else. An agent cannot
+tell a bug in `ticket.sh` from its own misuse that way.
+
+Such a stop now reports itself:
+
+```
+Error: ticket.sh stopped unexpectedly (exit 128)
+Last failing command: ticket.sh:2546: git cat-file -e "${ref}:${path}" 2> /dev/null
+The command did not finish, and nothing further was attempted.
+If this looks like a bug in ticket.sh, please report it with what you ran:
+  https://github.com/masuidrive/ticket.sh/issues
+```
+
+- The exit code is passed through unchanged.
+- Only the crash codes speak: `126` (not executable), `127` (command not found)
+  and `128` (`git`'s fatal code). Every deliberate failure leaves with `1`–`6`
+  and a signal leaves with `129` or above, so neither gained a message.
+- The command is shown as it is written in the script, variables and all - bash
+  reports it unexpanded - so it points at the line rather than at the values.
+- The reported location is in the built `ticket.sh`, which is the file that ran.
+  `build.sh` concatenates the sources, so it is not a line in `src/`.
+
 ---
 
 ### `init`
@@ -699,6 +728,7 @@ the ticket reads `doing` from either branch.
 - `--copy-file` with `--no-worktree` warns on stderr and continues. There is no worktree to copy into, so it can never apply; ignoring it is already its contract, which is why this is a warning and not a refusal — a wrapper that always passes `--copy-file` keeps working.
 - The shape `--no-worktree` serves: a caller that owns its whole checkout and works one ticket in it, such as a coding bot in GitHub Actions that runs `ticket.sh start "$TICKET_NAME"` in the runner's checkout and then works in that same directory. No other session shares the tree, so a worktree protects nobody — and `start` creating one left the bot committing in the original checkout, onto whatever branch that held, while the ticket's branch was somewhere else. Before this flag a repo could not have both "worktrees by default on people's machines" and "no worktree for the bot" from one `.ticket-config.yaml`.
 - When using worktree mode, `close` and `cancel` detect the worktree and **keep** it. `--delete-worktree` removes it. This was reversed in an earlier version, where removal was the default and `--keep-worktree` opted out: the help had to tell coding agents they *must* pass it, because forgetting removed the directory their shell was in and every later command failed with an error that named no flag. `--keep-worktree` is still accepted and does nothing, so existing invocations keep working — spelled out as its own case rather than swallowed by an ignore-unknown-flags branch, which would also let typos through.
+- `start` may be run from inside another ticket's worktree. The cwd only decides which checkout is read, never which branch is switched; the new worktree is created from the main repo either way, and the one you are standing in is left untouched. The ticket itself is read out of git when the cwd's tree has no copy of it — which is the normal case there, since that worktree's branch was cut before the ticket existed. This did not work until recently: the `branch:` probe tried the branch in hand first, and `git show`'s failure on a branch that simply does not carry the ticket ended the whole run, with git's message already discarded, so the call exited 128 saying nothing (see **When a run stops without a message** under Common Error Cases). Two things behind it read the cwd as well and are now resolved against the right tree: the already-started check, which read the ticket from the cwd and so could not tell a started ticket from an absent one, and the `Active ticket paths:` block, which reported the layout as unknown and pointed at a `done/` path that was not there.
 - `list` command shows worktree path for active tickets
 
 **Worktree file copy (`worktree_copy_files`):**
