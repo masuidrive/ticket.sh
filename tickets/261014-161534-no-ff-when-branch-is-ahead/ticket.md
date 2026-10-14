@@ -3,7 +3,7 @@ priority: 2
 base_branch: default  # Override base branch for start/close (default: use default_branch from config)
 description: "resume 経路が作業 commit を持つ branch に base を fast-forward する (GH #17)"
 created_at: "2026-10-14T16:15:34Z"
-started_at: null  # Do not modify manually
+started_at: 2026-10-14T16:15:56Z # Do not modify manually
 closed_at: null   # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
