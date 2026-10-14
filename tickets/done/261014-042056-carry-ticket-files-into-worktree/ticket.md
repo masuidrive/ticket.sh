@@ -4,7 +4,7 @@ base_branch: default  # Override base branch for start/close (default: use defau
 description: "worktree で start すると ticket_files で作ったファイルが main の checkout に取り残される (GH #15)"
 created_at: "2026-10-14T04:20:56Z"
 started_at: 2026-10-14T04:22:46Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-10-14T07:25:30Z # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
 
@@ -78,16 +78,16 @@ ticket と note の 2 つ分しか受け取っていない。
 
 ## Tasks
 
-- [ ] `ticket_files` の実体パス一覧を返すヘルパを追加
-- [ ] `start` の worktree 経路（git checkout 群）で ticket_files も移す
-- [ ] 同、fallback の cp を ticket.md の有無から切り離し、ファイルごとに判定する
-- [ ] `record_start_on_base()` の `commit_paths` に ticket_files を含める
-- [ ] fast-forward 用の `<path> <hash>` 対に ticket_files を含める
-- [ ] テストを追加（再現ケース / worktree 側に揃う / `[start]` commit に入る / main に残らない / close が通る / ticket_files 無しの既定は不変）
-- [ ] `bash build.sh` を実行してビルド
-- [ ] `test/run-all.sh` と `test/run-all-on-docker.sh` を実行して全テストパス（例外なし）
-- [ ] ドキュメント更新（必要なら）
-  - [ ] Update README.*.md
-  - [ ] Update spec.*.md
-  - [ ] Update DEV.md
+- [x] `ticket_files` の実体パス一覧を返すヘルパを追加（`ticket_extra_file_rels()`）
+- [x] `start` の worktree 経路（git checkout 群）で ticket_files も移す
+- [x] 同、fallback の cp を ticket.md の有無から切り離し、ファイルごとに判定する
+- [x] `record_start_on_base()` の `commit_paths` に ticket_files を含める
+- [x] fast-forward 用の `<path> <hash>` 対に ticket_files を含める
+- [x] テストを追加（再現ケース / worktree 側に揃う / `[start]` commit に入る / main に残らない / close が通る / ticket_files 無しの既定は不変）
+- [x] `bash build.sh` を実行してビルド
+- [x] `test/run-all.sh` と `test/run-all-on-docker.sh` を実行して全テストパス（例外なし）
+- [x] ドキュメント更新（必要なら）
+  - [x] Update README.*.md
+  - [x] Update spec.*.md
+  - [x] Update DEV.md
 - [ ] Get developer approval before closing

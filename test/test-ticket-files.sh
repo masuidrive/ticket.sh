@@ -279,6 +279,117 @@ fi
 
 # ---------------------------------------------------------------------------
 echo
+echo "6b. the declared files travel into a worktree (issue #15)"
+# Everything that moves a ticket between trees used to name ticket.md and
+# note.md and stop there. So `new` created progress.md, `start --worktree`
+# carried the other two across and committed those two, and progress.md stayed
+# behind in the base branch's working tree - untracked. That blocked every later
+# `close` from the worktree with "Main repo has uncommitted changes", and the
+# worktree's ticket had no progress.md at all, which is where an
+# append_only_files entry naming it would have had to append.
+REPO=$(make_repo worktree-carry)
+config_append "$REPO" 'ticket_files:
+  - path: progress.md
+    content: |
+      # Progress: $$TICKET_NAME$$'
+cd "$REPO"
+timeout 5 ./ticket.sh new carried >/dev/null 2>&1
+TICKET=$(safe_get_ticket_name "*carried*")
+# Deliberately NOT committed: that is the reported shape, and the only one where
+# the files have to be moved rather than already being on the base branch.
+if [[ -f "tickets/${TICKET}/progress.md" ]] && \
+   [[ -n "$(git status --porcelain -- "tickets/${TICKET}/progress.md")" ]]; then
+    pass "progress.md exists and is uncommitted (fixture)"
+else
+    fail "fixture wrong" "$(git status --porcelain)"
+fi
+
+OUT=$(timeout 20 ./ticket.sh start --worktree "$TICKET" 2>&1)
+WT=$(echo "$OUT" | grep '^WORKTREE:' | sed 's/^WORKTREE://')
+if [[ -f "${WT}/tickets/${TICKET}/progress.md" ]]; then
+    pass "progress.md is in the worktree alongside ticket.md and note.md"
+else
+    fail "progress.md did not travel" "$(ls -a "${WT}/tickets/${TICKET}/" 2>&1)
+$OUT"
+fi
+if git -C "$WT" show --stat --format= HEAD | grep -q "progress.md"; then
+    pass "and it is in the [start] commit"
+else
+    fail "the [start] commit left progress.md out" "$(git -C "$WT" show --stat --format= HEAD)"
+fi
+# The symptom that made this visible: an untracked leftover in the main repo.
+if [[ -z "$(git status --porcelain)" ]]; then
+    pass "the main repo's working tree is left clean"
+else
+    fail "something was left behind in the main repo" "$(git status --porcelain)"
+fi
+if git ls-files --error-unmatch "tickets/${TICKET}/progress.md" >/dev/null 2>&1; then
+    pass "the base branch has it tracked, via the fast-forward"
+else
+    fail "progress.md never reached the base branch" "$(git log --oneline -2)"
+fi
+# What the leftover actually cost: close from the worktree refused to run.
+cd "$WT"
+echo "work" >> README.md
+git add -A && git commit -q -m "Do the work"
+OUT=$(timeout 30 ./ticket.sh close --no-push 2>&1)
+if [[ $? -eq 0 ]] && ! echo "$OUT" | grep -q "Main repo has uncommitted changes"; then
+    pass "close from the worktree is no longer blocked"
+else
+    fail "close still refuses" "$OUT"
+fi
+cd "$REPO"
+git worktree prune 2>/dev/null || true
+
+# The other route to the same leak: ticket.md is already on the base branch, so
+# the fallback that copies an uncommitted ticket across was skipped wholesale -
+# and with it the one file that was in fact missing.
+REPO=$(make_repo worktree-carry-late)
+config_append "$REPO" 'ticket_files:
+  - path: progress.md
+    content: |
+      # Progress: $$TICKET_NAME$$'
+cd "$REPO"
+timeout 5 ./ticket.sh new late >/dev/null 2>&1
+TICKET=$(safe_get_ticket_name "*late*")
+rm -f "tickets/${TICKET}/progress.md"
+git add -A && git commit -q -m "Add ticket without progress.md"
+printf '# Progress\nfirst\n' > "tickets/${TICKET}/progress.md"
+OUT=$(timeout 20 ./ticket.sh start --worktree "$TICKET" 2>&1)
+WT=$(echo "$OUT" | grep '^WORKTREE:' | sed 's/^WORKTREE://')
+if [[ -f "${WT}/tickets/${TICKET}/progress.md" ]]; then
+    pass "a late, uncommitted progress.md travels even though ticket.md was committed"
+else
+    fail "progress.md was skipped with the committed ticket.md" "$(ls -a "${WT}/tickets/${TICKET}/" 2>&1)"
+fi
+if [[ -z "$(git status --porcelain)" ]]; then
+    pass "and nothing is left in the main repo there either"
+else
+    fail "leftover in the main repo" "$(git status --porcelain)"
+fi
+cd "$REPO"
+git worktree prune 2>/dev/null || true
+
+# Without the config entry, the worktree start is untouched: ticket.md and
+# note.md and nothing else.
+REPO=$(make_repo worktree-no-extras)
+cd "$REPO"
+timeout 5 ./ticket.sh new bare >/dev/null 2>&1
+TICKET=$(safe_get_ticket_name "*bare*")
+git add -A && git commit -q -m "Add ticket"
+OUT=$(timeout 20 ./ticket.sh start --worktree "$TICKET" 2>&1)
+WT=$(echo "$OUT" | grep '^WORKTREE:' | sed 's/^WORKTREE://')
+EXTRA=$(cd "${WT}/tickets/${TICKET}" && ls | grep -v -E '^(ticket|note)\.md$' | grep -v '^tmp$' || true)
+if [[ -f "${WT}/tickets/${TICKET}/ticket.md" ]] && [[ -z "$EXTRA" ]]; then
+    pass "a repo with no ticket_files sees no change in worktree mode"
+else
+    fail "the worktree gained files it did not declare" "$EXTRA"
+fi
+cd "$REPO"
+git worktree prune 2>/dev/null || true
+
+# ---------------------------------------------------------------------------
+echo
 echo "7. legacy flat tickets get no extra files"
 cd "$REPO"
 git checkout -q main

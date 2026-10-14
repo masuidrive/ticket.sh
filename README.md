@@ -481,6 +481,7 @@ default_content: |
 
 ### Extra Ticket Files (`ticket_files`)
 - **More than one companion file**: `note_content` seeds exactly one file. List `(path, content)` pairs under `ticket_files` and `new` creates each of them in the ticket directory, with the same `$$TICKET_NAME$$` / `$$NOTE_PATH$$` substitution. Subdirectories are created as needed; a path that would escape the ticket directory is skipped with a warning.
+- **They travel with the ticket**: `start` brings them into the worktree alongside `ticket.md` and `note.md` and includes them in the `[start]` commit. Before that, a declared file was created by `new` and then left untracked in the base branch's working tree by a worktree `start` — which blocked every later `close` from the worktree with "Main repo has uncommitted changes".
 - **Never overwrites**: An existing file is left alone. An entry for `note.md` takes precedence over `note_content`.
 - **Discoverable**: `start` and `restore` list the files that exist under `Active ticket paths:`, so an agent reading that block alone knows where they are — no rule to remember, no file to invent.
 - **New layout only**: legacy flat tickets have no directory to hold them.

@@ -1464,6 +1464,39 @@ config_read_ticket_files() {
     return 0
 }
 
+# The ticket's companion files from config's ticket_files, as repo-relative
+# paths, one per line.
+#
+# Everything that moves a ticket between trees has to move these with it, and
+# before this existed each place named ticket.md and note.md and stopped there -
+# so a ticket_files entry was created by `new` and then left behind by `start`.
+#
+# note.md is left out: it is carried by its own name everywhere already, and a
+# second mention would only stage it twice. A legacy flat ticket gets an empty
+# list, which is the right answer - `new` writes ticket_files only inside a
+# per-ticket directory, so there are none to carry.
+#
+# Requires config_read_ticket_files to have run.
+#
+# Usage: ticket_extra_file_rels <tickets_dir> <ticket_name> <ticket_file>
+ticket_extra_file_rels() {
+    local tickets_dir="$1"
+    local ticket_name="$2"
+    local ticket_file="$3"
+
+    [[ "$ticket_file" == "${tickets_dir}/${ticket_name}/ticket.md" ]] || return 0
+
+    local i=0 rel
+    while (( i < ${#TICKET_FILE_PATHS[@]} )); do
+        rel="${TICKET_FILE_PATHS[$i]}"
+        i=$((i + 1))
+        [[ "$rel" == "note.md" ]] && continue
+        ticket_file_path_ok "$rel" || continue
+        echo "${tickets_dir}/${ticket_name}/${rel}"
+    done
+    return 0
+}
+
 # Reject a ticket_files path that would write outside the ticket's directory.
 #
 # The config is the project's own file, so this is not a security boundary; it
@@ -1769,7 +1802,8 @@ EOF
 #
 # Usage: record_start_on_base <work_tree> <repo> <base_branch> <feature_branch>
 #                             <ticket_rel> <note_rel> <ticket_hash> <note_hash>
-#                             <no_verify>
+#                             <no_verify> <skip_base_ff>
+#                             [<extra_rel> <extra_hash>]...
 record_start_on_base() {
     local work_tree="$1"
     local repo="$2"
@@ -1784,12 +1818,29 @@ record_start_on_base() {
     # advance onto, so the stamp is committed on the feature branch and the base
     # branch is left alone. See cmd_start's own-branch path.
     local skip_base_ff="${10:-false}"
+    # Trailing <rel> <hash> pairs: the ticket's companion files from config's
+    # ticket_files. They are the ticket's, so they belong in the same commit and
+    # in the same untracked-file clearing as ticket.md - naming only ticket.md
+    # and note.md here is what left a ticket_files entry sitting untracked in
+    # the base branch's working tree after a worktree start, where it blocked
+    # every later close with "Main repo has uncommitted changes".
+    local extra_pairs=()
+    if [[ $# -gt 10 ]]; then
+        shift 10
+        extra_pairs=("$@")
+    fi
 
     # Stage by path. The tree also holds the current-* symlinks, the ticket's
     # tmp/, and anything worktree_copy_files brought in; those are meant to be
     # gitignored, but an older .gitignore would let 'add -A' swallow them.
     local commit_paths=("$ticket_rel")
     [[ -f "${work_tree}/${note_rel}" ]] && commit_paths+=("$note_rel")
+    local _ep_i=0
+    while (( _ep_i < ${#extra_pairs[@]} )); do
+        local _ep_rel="${extra_pairs[$_ep_i]}"
+        _ep_i=$((_ep_i + 2))
+        [[ -f "${work_tree}/${_ep_rel}" ]] && commit_paths+=("$_ep_rel")
+    done
 
     if ! git -C "$work_tree" add -- "${commit_paths[@]}" 2>/dev/null; then
         echo "Warning: Could not stage ticket files to record the start time" >&2
@@ -1825,7 +1876,8 @@ record_start_on_base() {
     fi
 
     if ! advance_branch_ff "$repo" "$base_branch" "$feature_branch" \
-            "$ticket_rel" "$ticket_hash" "$note_rel" "$note_hash"; then
+            "$ticket_rel" "$ticket_hash" "$note_rel" "$note_hash" \
+            ${extra_pairs[@]+"${extra_pairs[@]}"}; then
         echo "Note: Could not fast-forward '$base_branch' to record the start time." >&2
         echo "  '$base_branch' has moved on, or its working tree holds conflicting changes." >&2
         echo "  The start time is committed on '$feature_branch', and 'list' reads it from" >&2
@@ -2053,13 +2105,37 @@ cmd_start() {
     # which would block the fast-forward that records the start time. These
     # hashes are what lets us tell "the file we are about to commit" apart from
     # "an edit that exists only there" when clearing the way.
+    # The ticket's companion files from config's ticket_files. They travel with
+    # the ticket everywhere below, so they are resolved once, here.
+    local extra_rels=()
+    local _er_line
+    while IFS= read -r _er_line; do
+        [[ -n "$_er_line" ]] && extra_rels[${#extra_rels[@]}]="$_er_line"
+    done <<< "$(ticket_extra_file_rels "$tickets_dir" "$ticket_name" "$ticket_file")"
+
     local base_ticket_hash="" base_note_hash=""
+    # <rel> <hash> pairs for the companion files, snapshotted at the same point
+    # as the two above - before the commit is built - because that is what
+    # drop_untracked_if_unchanged compares against to decide it is safe to
+    # remove the base tree's untracked copy.
+    local extra_ff_pairs=()
     local _base_wt
     _base_wt=$(worktree_holding_branch "$main_repo" "$effective_base")
     if [[ -n "$_base_wt" ]]; then
         base_ticket_hash=$(git -C "$_base_wt" hash-object -- "${_base_wt}/${ticket_file}" 2>/dev/null || echo "")
         base_note_hash=$(git -C "$_base_wt" hash-object -- "${_base_wt}/${note_file_rel}" 2>/dev/null || echo "")
     fi
+    local _er_i=0
+    while (( _er_i < ${#extra_rels[@]} )); do
+        local _er_rel="${extra_rels[$_er_i]}"
+        _er_i=$((_er_i + 1))
+        local _er_hash=""
+        if [[ -n "$_base_wt" ]]; then
+            _er_hash=$(git -C "$_base_wt" hash-object -- "${_base_wt}/${_er_rel}" 2>/dev/null || echo "")
+        fi
+        extra_ff_pairs[${#extra_ff_pairs[@]}]="$_er_rel"
+        extra_ff_pairs[${#extra_ff_pairs[@]}]="$_er_hash"
+    done
 
     # Check current branch
     local current_branch=$(get_current_branch)
@@ -2262,7 +2338,8 @@ EOF
             # No base-branch hashes to pass: there is no fast-forward to clear a
             # path for, which is what the last argument says.
             record_start_on_base "." "$main_repo" "$effective_base" "$branch_name" \
-                "$ticket_file" "$note_file_rel" "" "" "$no_verify" "true"
+                "$ticket_file" "$note_file_rel" "" "" "$no_verify" "true" \
+                ${extra_ff_pairs[@]+"${extra_ff_pairs[@]}"}
             echo "Started ticket: $ticket_name"
         else
             echo "Ticket was already started on '$branch_name'."
@@ -2402,7 +2479,8 @@ EOF
                     [[ "$base_has_ticket" == "true" ]] && _resume_skip_ff=false
                     record_start_on_base "$_resume_wt" "$main_repo" "$effective_base" "$branch_name" \
                         "$ticket_file" "$note_file_rel" "$base_ticket_hash" "$base_note_hash" \
-                        "$no_verify" "$_resume_skip_ff"
+                        "$no_verify" "$_resume_skip_ff" \
+                        ${extra_ff_pairs[@]+"${extra_ff_pairs[@]}"}
                 else
                     echo "Warning: Could not record the start time in '$_resume_ticket_file'" >&2
                 fi
@@ -2488,6 +2566,13 @@ EOF
                 # Legacy flat layout
                 git -C "$wt_path" checkout "$prev_branch" -- "${tickets_dir}/${ticket_name}-note.md" 2>/dev/null || true
             fi
+            # The ticket's companion files from config's ticket_files are part
+            # of the ticket, so they come across with it.
+            local _wc_i=0
+            while (( _wc_i < ${#extra_rels[@]} )); do
+                git -C "$wt_path" checkout "$prev_branch" -- "${extra_rels[$_wc_i]}" 2>/dev/null || true
+                _wc_i=$((_wc_i + 1))
+            done
             git -C "$wt_path" checkout "$prev_branch" -- "${tickets_dir}/README.md" 2>/dev/null || true
         fi
 
@@ -2506,13 +2591,29 @@ EOF
             fi
         fi
 
+        # The companion files are decided one by one rather than under the
+        # ticket.md test above: a ticket committed on the base branch whose
+        # ticket_files entry was added afterwards leaves ticket.md already in
+        # the worktree, which skipped that whole block and left the entry
+        # behind - the same leak by a different route.
+        local _wf_i=0
+        while (( _wf_i < ${#extra_rels[@]} )); do
+            local _wf_rel="${extra_rels[$_wf_i]}"
+            _wf_i=$((_wf_i + 1))
+            if [[ ! -f "${wt_path}/${_wf_rel}" ]] && [[ -f "$_wf_rel" ]]; then
+                mkdir -p "${wt_path}/$(dirname "$_wf_rel")"
+                cp "$_wf_rel" "${wt_path}/${_wf_rel}"
+            fi
+        done
+
         # Update ticket started_at in worktree
         local timestamp=$(get_utc_timestamp)
         update_yaml_frontmatter_field "${wt_path}/${ticket_file}" "started_at" "$timestamp"
 
         record_start_on_base "$wt_path" "$main_repo" "$effective_base" "$branch_name" \
             "$ticket_file" "$note_file_rel" "$base_ticket_hash" "$base_note_hash" \
-            "$no_verify"
+            "$no_verify" "false" \
+            ${extra_ff_pairs[@]+"${extra_ff_pairs[@]}"}
 
         # Create symlinks in worktree directory (handles new + legacy layouts;
         # for new-format tickets this also sets up current-ticket/ dir symlink).
@@ -2563,7 +2664,8 @@ EOF
 
         record_start_on_base "." "$main_repo" "$effective_base" "$branch_name" \
             "$ticket_file" "$note_file_rel" "$base_ticket_hash" "$base_note_hash" \
-            "$no_verify"
+            "$no_verify" "false" \
+            ${extra_ff_pairs[@]+"${extra_ff_pairs[@]}"}
 
         # Create current-* symlinks (handles new + legacy layouts).
         create_current_ticket_symlinks "." "$tickets_dir" "$ticket_name" || return 1

@@ -488,6 +488,14 @@ ticket_files:
   files in.
 - `start` and `restore` list the files that exist under `Active ticket paths:`,
   so an agent reading that block alone knows they are there and where.
+- They are part of the ticket, so they travel with it. `start` brings them into
+  the worktree alongside `ticket.md` and `note.md`, and includes them in the
+  `[start]` commit, which is also what carries them to the base branch through
+  the fast-forward. Naming only `ticket.md` and `note.md` there used to leave a
+  declared file sitting untracked in the base branch's working tree after a
+  worktree `start` — which blocked every later `close` from the worktree with
+  "Main repo has uncommitted changes", and left the worktree's ticket without
+  the file an `append_only_files` entry naming it would have to append to.
 
 With `ticket_files` undefined, `new` behaves exactly as it did.
 
@@ -602,7 +610,7 @@ Displays ticket list:
   2. Or omit --count to use default (20)
   ```
 
-### `start [--worktree] [--copy-file <path>]... <ticket-name>`
+### `start [--worktree|--no-worktree] [--copy-file <path>]... <ticket-name>`
 Starts ticket work:
 
 1. Sets current time to specified ticket's `started_at`
@@ -614,6 +622,7 @@ Starts ticket work:
 
 **Options:**
 - `--worktree`: Creates a separate git worktree instead of switching branches. The main repository stays on the default branch. Worktree is created at `../<project>.worktrees/<ticket-name>/` (or custom `worktree_dir` if configured)
+- `--no-worktree`: skips the worktree for this one call despite `worktree_mode: true`, switching branches in the current checkout instead. See **Worktree Mode** below.
 - `--copy-file <path>` (repeatable): appends the given path to `worktree_copy_files` for this invocation only. Ignored unless a worktree is actually created.
 
 **Recording the start time:**

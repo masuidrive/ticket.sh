@@ -476,6 +476,13 @@ ticket_files:
 - flat（旧レイアウト）の ticket には作らない。置く先のディレクトリが無いため。
 - `start` / `restore` は実在するファイルを `Active ticket paths:` に 1 行ずつ出すので、
   そのブロックだけ読んだ agent もファイルの所在が分かる。
+- ticket の一部なので、ticket と一緒に移動する。`start` は `ticket.md` / `note.md` と
+  並べて worktree に持ち込み、`[start]` commit にも含める（この commit が
+  fast-forward 経由で base branch にも渡す）。ここで `ticket.md` と `note.md` だけを
+  名指ししていたため、worktree で `start` すると宣言したファイルだけが base branch の
+  作業ツリーに未追跡で取り残され、以降 worktree からの `close` が
+  «Main repo has uncommitted changes» で全部止まっていた。worktree 側の ticket にも
+  そのファイルが無いので、`append_only_files` に挙げていると追記先が無い状態で始まる。
 
 `ticket_files` が未定義なら `new` の挙動は従来と完全に同じ。
 
@@ -590,7 +597,7 @@ Additional notes or requirements.
   2. Or omit --count to use default (20)
   ```
 
-### `start [--worktree] [--copy-file <path>]... <ticket-name>`
+### `start [--worktree|--no-worktree] [--copy-file <path>]... <ticket-name>`
 チケット作業を開始：
 
 1. 指定チケットの `started_at` に現在時刻を設定
@@ -601,6 +608,7 @@ Additional notes or requirements.
 
 **オプション:**
 - `--worktree`: ブランチ切り替えの代わりに別のgit worktreeを作成。メインリポジトリはデフォルトブランチのまま。worktreeは `../<プロジェクト名>.worktrees/<チケット名>/`（またはconfigの`worktree_dir`）に作成
+- `--no-worktree`: `worktree_mode: true` でもその 1 回だけ worktree を作らず、今の checkout で branch を切り替える。後述の **Worktreeモード** を参照。
 - `--copy-file <path>` (反復可): その呼び出し限定で `worktree_copy_files` に path を追加。worktree が実際に作成された場合のみ参照される。
 
 **開始時刻の記録:**

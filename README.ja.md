@@ -392,6 +392,7 @@ default_content: |
 
 ### 追加ファイル（`ticket_files`）
 - **付属ファイルを 2 つ以上**: `note_content` が作れるのは `note.md` ただ 1 つ。`ticket_files` に `(path, content)` の組を列挙すると、`new` がそのすべてを ticket dir に作る。置換は `note_content` と同じ（`$$TICKET_NAME$$` / `$$NOTE_PATH$$`）。サブディレクトリは必要に応じて作成し、ticket dir の外に出る path は警告して skip。
+- **ticket と一緒に移動する**: `start` は `ticket.md` / `note.md` と並べて worktree に持ち込み、`[start]` commit にも含める。以前は `new` が作ったファイルが、worktree での `start` のあと base branch の作業ツリーに未追跡で取り残され、以降 worktree からの `close` が «Main repo has uncommitted changes» で止まっていた。
 - **上書きしない**: 既存ファイルはそのまま。`note.md` の要素は `note_content` より優先される。
 - **在処が分かる**: 実在するファイルは `start` / `restore` の `Active ticket paths:` に出るので、そのブロックだけ読んだ agent もファイルの場所が分かる — 覚えるべき規則も、自分で作るべきファイルも無い。
 - **新レイアウトのみ**: flat（旧形式）の ticket には置く先のディレクトリが無い。
