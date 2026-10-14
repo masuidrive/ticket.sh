@@ -3,7 +3,7 @@ priority: 2
 base_branch: default  # Override base branch for start/close (default: use default_branch from config)
 description: "worktree で start すると ticket_files で作ったファイルが main の checkout に取り残される (GH #15)"
 created_at: "2026-10-14T04:20:56Z"
-started_at: null  # Do not modify manually
+started_at: 2026-10-14T04:22:46Z # Do not modify manually
 closed_at: null   # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
