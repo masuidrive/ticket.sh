@@ -3,7 +3,7 @@ priority: 2
 base_branch: default  # Override base branch for start/close (default: use default_branch from config)
 description: "別の ticket の worktree の中で start すると何も出さずに exit 128 で終わる (GH #16)"
 created_at: "2026-10-14T07:29:46Z"
-started_at: null  # Do not modify manually
+started_at: 2026-10-14T07:30:11Z # Do not modify manually
 closed_at: null   # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
