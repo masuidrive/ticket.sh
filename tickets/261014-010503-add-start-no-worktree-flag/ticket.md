@@ -3,7 +3,7 @@ priority: 2
 base_branch: default  # Override base branch for start/close (default: use default_branch from config)
 description: "start に --no-worktree を足し、worktree_mode: true でも 1 回だけ worktree を作らずに進められるようにする (GH #14)"
 created_at: "2026-10-14T01:05:03Z"
-started_at: null  # Do not modify manually
+started_at: 2026-10-14T01:05:26Z # Do not modify manually
 closed_at: null   # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
