@@ -653,6 +653,7 @@ branch から `list` してもチケットは `todo` のままに見える。こ
 - fast-forward は best-effort。base branch が先に進んでいたり、その作業ツリーに競合する変更があれば、その旨を報告して処理を続行する。`started_at` はいずれにせよ feature branch にコミットされている。`list` は feature branch を読みにいく（後述）ので、fast-forward の失敗で失われるのは base branch 側の ticket ファイルの内容であって、チケットの見え方ではない。なお base branch に追い越された fast-forward は retry しても成功しない。feature branch は base branch の新しい commit を含まないため、そもそも fast-forward ではなくなっているからである。
 - **push は一切行わない。** `start` は作業の開始を宣言するものであって base branch を publish する操作ではない。そこに未 push の commit があれば巻き込んで出てしまう（複数 worktree が base を共有する repo では他人の commit を含みうる）。base branch がリモートに出るのは `close` のとき。
 - このコミットでは Git hook が実行される。config の `no_verify: true` でスキップできる。
+- **誰かの作業を載せた branch へは base branch を進めない。** fast-forward は base branch が stamp を見られるようにするためのもので、feature branch が **その ticket 自身のファイルしか持っていない**場合は無害である——`start` が自分で作る branch はその形であり、`branch:` を書き込んで ticket を引き受けただけの branch もその形である。`start` が *resume* するだけの branch はその形である必要が無い: bot が branch を切って `start` の前に commit していることもあり、`start` が中断すると started_at が null のまま branch が残り、already-started のエラー自身が started_at を手で戻すよう案内している。そこで fast-forward すると branch 上の commit がすべて base branch に入っていた——`start` が頼まれていない merge であり、close の「1 ticket = 1 commit」を壊し、`cancel`（merge しないことが目的）でも消えなかった。現在はその場合 base branch を進めず、その旨を 1 行出す。stamp は feature branch に commit されており、`list` はそこから読むので、作業が base branch に届くのは close のとき。判定は branch が**何を触っているか**で、どれだけ先に進んでいるかではない: commit 数で見ると ticket 自身の記帳でも base branch を止めてしまい、fast-forward の存在意義を失う。
 - 開始済みチケットの resume では再記録は行わない。
 
 **ticket がその branch 上にしか無い場合:**

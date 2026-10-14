@@ -4,7 +4,7 @@ base_branch: default  # Override base branch for start/close (default: use defau
 description: "resume 経路が作業 commit を持つ branch に base を fast-forward する (GH #17)"
 created_at: "2026-10-14T16:15:34Z"
 started_at: 2026-10-14T16:15:56Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-10-14T16:49:08Z # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
 
@@ -59,16 +59,16 @@ branch が既にある / ticket が base にも commit されている / started
 
 ## Tasks
 
-- [ ] resume 経路で ahead_count > 0 なら base の fast-forward を見送る
-- [ ] 見送ったことと理由を 1 行出す
-- [ ] worktree モードでも同じか確認する
-- [ ] ahead == 0 の resume が従来どおりであることを確認する
-- [ ] test を追加する（ff 見送り / message / ahead==0 は従来どおり / cancel で main が汚れない）
-- [ ] 修正前の src で新 test が落ちることを確認する
-- [ ] Run tests before closing and pass all tests (No exceptions)
-- [ ] Run `bash build.sh` to build the project
-- [ ] Update documentation if necessary
-  - [ ] Update README.*.md
-  - [ ] Update spec.*.md
-  - [ ] Update DEV.md
+- [x] resume 経路で、branch が ticket 自身のファイル以外を触っていたら base の fast-forward を見送る（当初の方針 `ahead_count > 0` は粗すぎた。note.md 参照）
+- [x] 見送ったことと理由を 1 行出す
+- [x] worktree モードでも同じか確認する
+- [x] ahead == 0 の resume が従来どおりであることを確認する
+- [x] test を追加する（ff 見送り / message / ahead==0 は従来どおり / cancel で main が汚れない）
+- [x] 修正前の src で新 test が落ちることを確認する
+- [x] Run tests before closing and pass all tests (No exceptions)
+- [x] Run `bash build.sh` to build the project
+- [x] Update documentation if necessary
+  - [x] Update README.*.md
+  - [x] Update spec.*.md
+  - [x] Update DEV.md
 - [ ] Get developer approval before closing

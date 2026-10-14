@@ -480,6 +480,227 @@ fi
 
 # ---------------------------------------------------------------------------
 echo
+echo "10. The base branch is held back when the resumed branch has work of its own (issue #17)"
+# ---------------------------------------------------------------------------
+# The fast-forward is safe where the feature branch is the base plus the one
+# stamp commit, which is the shape of every branch `start` creates itself. A
+# branch `start` only resumes need not be that shape - a bot can have cut it and
+# committed before anyone ran `start`, an interrupted `start` leaves the branch
+# behind with started_at still null, and the already-started error tells people
+# to reset started_at by hand. Fast-forwarding there carried the branch's own
+# commits into the base branch: a merge nobody asked `start` for, which broke
+# close's one-commit-per-ticket history and survived `cancel`.
+REPO=$(make_repo repo10)
+cd "$REPO"
+TICKET=$(make_ticket held-back)
+git add tickets && git commit -q -m "Add ticket"
+MAIN_BEFORE=$(git rev-parse main)
+
+# The branch exists and carries work, and the ticket was never started.
+git checkout -q -b "feature/${TICKET}"
+echo "half-finished" > work.txt
+git add work.txt && git commit -q -m "WIP: not reviewed"
+git checkout -q main
+
+START_OUT=$(timeout 10 ./ticket.sh start "$TICKET" 2>&1)
+
+if [[ "$(git rev-parse main)" == "$MAIN_BEFORE" ]]; then
+    pass "the base branch is left where it was"
+else
+    fail "the base branch was advanced" "$(git log --oneline main | head -3)"
+fi
+if ! git cat-file -e "main:work.txt" 2>/dev/null; then
+    pass "and the branch's work did not reach it"
+else
+    fail "unreviewed work was carried onto the base branch" "$START_OUT"
+fi
+if echo "$START_OUT" | grep -q "'main' was left where it is"; then
+    pass "and start says so"
+else
+    fail "the run did not report holding the base branch back" "$START_OUT"
+fi
+if echo "$START_OUT" | grep -q "1 commit(s) ahead of it and carries changes"; then
+    pass "and says why, with the count"
+else
+    fail "the reason is not given" "$START_OUT"
+fi
+# The note record_start_on_base prints for itself names a different reason - no
+# copy of the ticket on the base branch - which is false here.
+if ! echo "$START_OUT" | grep -q "has no copy of this ticket"; then
+    pass "and does not also claim the base branch lacks the ticket"
+else
+    fail "two notes, one of them untrue" "$START_OUT"
+fi
+if started_at_on "feature/${TICKET}" "$TICKET" | grep -q "^started_at: 2"; then
+    pass "the start time is still committed on the branch"
+else
+    fail "the start time was not recorded" "$(started_at_on "feature/${TICKET}" "$TICKET")"
+fi
+LIST_OUT=$(timeout 10 ./ticket.sh list 2>&1)
+if echo "$LIST_OUT" | grep -q "status: doing"; then
+    pass "and list still reports the ticket as doing"
+else
+    fail "the ticket no longer reads as doing" "$LIST_OUT"
+fi
+
+# close is what brings the work over, as one commit for the whole ticket.
+git checkout -q "feature/${TICKET}"
+echo "done" >> work.txt
+git add work.txt && git commit -q -m "Finish"
+COUNT_BEFORE=$(git rev-list --count main)
+timeout 15 ./ticket.sh close >/dev/null 2>&1
+COUNT_AFTER=$(git rev-list --count main)
+if [[ $((COUNT_AFTER - COUNT_BEFORE)) -eq 1 ]]; then
+    pass "close leaves exactly one new commit on the base branch"
+else
+    fail "close added $((COUNT_AFTER - COUNT_BEFORE)) commits" "$(git log --oneline main | head -5)"
+fi
+if git cat-file -e "main:work.txt" 2>/dev/null; then
+    pass "and the work is there once it is closed"
+else
+    fail "close did not bring the work over"
+fi
+
+# ---------------------------------------------------------------------------
+echo
+echo "11. A resumed branch with nothing of its own still advances the base"
+# ---------------------------------------------------------------------------
+# The hold is specifically about commits that are not the stamp. Resuming a
+# branch that is level with the base must behave as it always did, or the fix
+# would have turned the fast-forward off for everybody.
+REPO=$(make_repo repo11)
+cd "$REPO"
+TICKET=$(make_ticket level-branch)
+git add tickets && git commit -q -m "Add ticket"
+git branch "feature/${TICKET}" main
+MAIN_BEFORE=$(git rev-parse main)
+
+START_OUT=$(timeout 10 ./ticket.sh start "$TICKET" 2>&1)
+
+if [[ "$(git rev-parse main)" != "$MAIN_BEFORE" ]]; then
+    pass "the base branch is advanced as before"
+else
+    fail "the base branch stopped being advanced" "$START_OUT"
+fi
+if git log -1 --format=%s main | grep -q "^\[start\]"; then
+    pass "and sits on the start commit"
+else
+    fail "unexpected subject on the base branch" "$(git log -1 --format=%s main)"
+fi
+if ! echo "$START_OUT" | grep -q "was left where it is"; then
+    pass "and nothing is said about holding it back"
+else
+    fail "the hold note fired on a level branch" "$START_OUT"
+fi
+
+# The hold asks what the branch touches, not how far ahead it is. A branch that
+# is ahead only by the ticket's own bookkeeping - a bot adopting a backlog
+# ticket writes `branch:` into it and commits, and nothing else - must still
+# advance the base branch, or holding back would cost the thing the
+# fast-forward exists for.
+REPO=$(make_repo repo11b)
+cd "$REPO"
+TICKET=$(make_ticket own-files-only)
+git add tickets && git commit -q -m "Add ticket"
+git checkout -q -b "feature/${TICKET}"
+printf '\nAdopted.\n' >> "tickets/${TICKET}/note.md"
+git add -A && git commit -q -m "Adopt the ticket on the branch"
+git checkout -q main
+MAIN_BEFORE=$(git rev-parse main)
+
+START_OUT=$(timeout 10 ./ticket.sh start "$TICKET" 2>&1)
+
+if [[ "$(git rev-parse main)" != "$MAIN_BEFORE" ]]; then
+    pass "a branch ahead only by the ticket's own files still advances the base"
+else
+    fail "the base branch was held back over the ticket's own bookkeeping" "$START_OUT"
+fi
+if [[ -n "$(started_at_on main "$TICKET")" ]] && ! started_at_on main "$TICKET" | grep -q null; then
+    pass "and the start time reaches the base branch"
+else
+    fail "the start time did not reach the base branch" "$(started_at_on main "$TICKET")"
+fi
+if ! echo "$START_OUT" | grep -q "was left where it is"; then
+    pass "and no hold is reported"
+else
+    fail "the hold note fired on ticket-only commits" "$START_OUT"
+fi
+
+# ---------------------------------------------------------------------------
+echo
+echo "12. Worktree mode holds the base branch back the same way"
+# ---------------------------------------------------------------------------
+REPO=$(make_repo repo12)
+cd "$REPO"
+echo 'worktree_mode: true' >> .ticket-config.yaml
+git add . && git commit -q -m "Enable worktree_mode"
+TICKET=$(make_ticket held-back-wt)
+git add tickets && git commit -q -m "Add ticket"
+git checkout -q -b "feature/${TICKET}"
+echo "half-finished" > work.txt
+git add work.txt && git commit -q -m "WIP: not reviewed"
+git checkout -q main
+MAIN_BEFORE=$(git rev-parse main)
+
+START_OUT=$(timeout 15 ./ticket.sh start "$TICKET" 2>&1)
+WT=$(echo "$START_OUT" | grep "^WORKTREE:" | head -1 | cut -d: -f2-)
+
+if [[ -n "$WT" ]] && [[ -d "$WT" ]]; then
+    pass "the worktree is created"
+else
+    fail "no worktree" "$START_OUT"
+fi
+if [[ "$(git rev-parse main)" == "$MAIN_BEFORE" ]] && ! git cat-file -e "main:work.txt" 2>/dev/null; then
+    pass "and the base branch is still where it was"
+else
+    fail "the base branch moved in worktree mode" "$(git log --oneline main | head -3)"
+fi
+if echo "$START_OUT" | grep -q "was left where it is"; then
+    pass "and the reason is reported"
+else
+    fail "no note in worktree mode" "$START_OUT"
+fi
+if started_at_on "feature/${TICKET}" "$TICKET" | grep -q "^started_at: 2"; then
+    pass "and the start time is committed on the branch"
+else
+    fail "the start time was not recorded" "$(started_at_on "feature/${TICKET}" "$TICKET")"
+fi
+cd "$REPO"
+git worktree remove "$WT" --force 2>/dev/null || true
+git worktree prune 2>/dev/null || true
+
+# ---------------------------------------------------------------------------
+echo
+echo "13. cancel leaves no abandoned work on the base branch"
+# ---------------------------------------------------------------------------
+# cancel is documented as stopping without merging. Where start had already
+# fast-forwarded the base branch onto the work, there was nothing left for
+# cancel to decline: the work stayed on the base branch for good.
+REPO=$(make_repo repo13)
+cd "$REPO"
+TICKET=$(make_ticket canceled-work)
+git add tickets && git commit -q -m "Add ticket"
+git checkout -q -b "feature/${TICKET}"
+echo "abandoned" > work.txt
+git add work.txt && git commit -q -m "WIP: will be abandoned"
+git checkout -q main
+
+timeout 10 ./ticket.sh start "$TICKET" >/dev/null 2>&1
+timeout 10 ./ticket.sh cancel --force >/dev/null 2>&1
+
+if ! git cat-file -e "main:work.txt" 2>/dev/null; then
+    pass "the abandoned work is not on the base branch"
+else
+    fail "cancel left the work on the base branch" "$(git log --oneline main | head -4)"
+fi
+if [[ -d "tickets/done" ]] && ls tickets/done | grep -q "CANCELED"; then
+    pass "and the ticket is filed as canceled"
+else
+    fail "the ticket was not canceled" "$(ls tickets tickets/done 2>&1)"
+fi
+
+# ---------------------------------------------------------------------------
+echo
 echo "=== start base-branch sync Test Results ==="
 echo "  Passed: $PASSED, Failed: $FAILED"
 echo

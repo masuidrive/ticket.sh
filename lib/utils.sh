@@ -501,6 +501,45 @@ drop_untracked_if_unchanged() {
     rm -f "${wt}/${rel_path}"
 }
 
+# Does <branch> carry anything beyond <base> other than the named files?
+#
+# Returns 0 when every path touched by any commit in <base>..<branch> is one of
+# the given <rel> paths, non-zero otherwise - including when the question cannot
+# be answered, since a caller that uses this to decide whether to move a branch
+# should hear "no" rather than a guess.
+#
+# This is what tells a ticket's own bookkeeping apart from somebody's work. The
+# commits are listed rather than diffed, because a file added on the branch and
+# deleted again leaves no net diff while its commits still land wherever the
+# branch is merged.
+#
+# Usage: branch_carries_only <repo> <base> <branch> [<rel>...]
+branch_carries_only() {
+    local repo="$1"
+    local base="$2"
+    local branch="$3"
+    shift 3
+
+    local touched
+    touched=$(git -C "$repo" log --format= --name-only "${base}..${branch}" 2>/dev/null) || return 1
+
+    local line rel found
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        found=false
+        for rel in "$@"; do
+            [[ -z "$rel" ]] && continue
+            if [[ "$line" == "$rel" ]]; then
+                found=true
+                break
+            fi
+        done
+        [[ "$found" == "true" ]] || return 1
+    done <<< "$touched"
+
+    return 0
+}
+
 # Fast-forward <branch> to <commit-ish>.
 #
 # The mechanism depends on whether the branch is checked out somewhere, not on

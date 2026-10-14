@@ -1901,9 +1901,11 @@ record_start_on_base() {
     local ticket_hash="$7"
     local note_hash="$8"
     local no_verify="$9"
-    # Optional 10th: "true" when the base branch has no copy of this ticket to
-    # advance onto, so the stamp is committed on the feature branch and the base
-    # branch is left alone. See cmd_start's own-branch path.
+    # Optional 10th: "true" to leave the base branch alone, committing the stamp
+    # on the feature branch and stopping there. Either there is no copy of the
+    # ticket on the base branch to advance onto (cmd_start's own-branch path) or
+    # the caller does not want the branch's own commits carried along with the
+    # stamp (its resume path). The caller says which; see the note below.
     local skip_base_ff="${10:-false}"
     # Trailing <rel> <hash> pairs: the ticket's companion files from config's
     # ticket_files. They are the ticket's, so they belong in the same commit and
@@ -1956,9 +1958,16 @@ record_start_on_base() {
     fi
 
     if [[ "$skip_base_ff" == "true" ]]; then
-        echo "Note: '$base_branch' has no copy of this ticket, so there is nothing to"
-        echo "  fast-forward onto. The start time is committed on '$feature_branch',"
-        echo "  and 'list' reads it from there, so the ticket still shows as doing."
+        # Say this only where it is true. The caller has its own reasons for
+        # holding the base branch back - a branch that is ahead with work of its
+        # own, say - and says so itself; the one reason visible from here is
+        # that the base branch has no copy of the ticket to advance onto. Stated
+        # unconditionally it contradicted the caller's note in the same breath.
+        if ! git -C "$repo" cat-file -e "${base_branch}:${ticket_rel}" 2>/dev/null; then
+            echo "Note: '$base_branch' has no copy of this ticket, so there is nothing to"
+            echo "  fast-forward onto. The start time is committed on '$feature_branch',"
+            echo "  and 'list' reads it from there, so the ticket still shows as doing."
+        fi
         return 0
     fi
 
@@ -2571,10 +2580,44 @@ EOF
                     [[ "$use_worktree" == "true" ]] && _resume_wt="$wt_path"
                     local _resume_skip_ff=true
                     [[ "$base_has_ticket" == "true" ]] && _resume_skip_ff=false
+                    # ...and not onto a branch that carries somebody's work.
+                    # The fast-forward exists so the base branch can see the
+                    # stamp, and it is harmless where the branch holds nothing
+                    # but this ticket's own files - which is the shape of every
+                    # branch `start` creates itself, and of a branch that only
+                    # adopted the ticket by writing `branch:` into it. A branch
+                    # we are merely resuming need not be that shape: a bot can
+                    # have cut it and committed before anyone ran `start`, an
+                    # interrupted `start` leaves the branch behind with
+                    # started_at still null, and the already-started error tells
+                    # people to reset started_at by hand. Fast-forwarding there
+                    # carried every commit on the branch into the base branch -
+                    # a merge nobody asked `start` for, which broke close's
+                    # one-commit-per-ticket history and outlived `cancel`, whose
+                    # whole point is not to merge. The test is what the branch
+                    # touches, not how far ahead it is: ahead_count counts the
+                    # ticket's own bookkeeping too, and holding the base branch
+                    # back for that would cost the thing the fast-forward is for.
+                    local _resume_ahead_hold=false
+                    if [[ "$_resume_skip_ff" == "false" ]] && [[ "$ahead_count" -gt 0 ]] \
+                        && ! branch_carries_only "$main_repo" "$effective_base" "$branch_name" \
+                            "$ticket_file" "$note_file_rel" \
+                            ${extra_rels[@]+"${extra_rels[@]}"}; then
+                        _resume_skip_ff=true
+                        _resume_ahead_hold=true
+                    fi
                     record_start_on_base "$_resume_wt" "$main_repo" "$effective_base" "$branch_name" \
                         "$ticket_file" "$note_file_rel" "$base_ticket_hash" "$base_note_hash" \
                         "$no_verify" "$_resume_skip_ff" \
                         ${extra_ff_pairs[@]+"${extra_ff_pairs[@]}"}
+                    if [[ "$_resume_ahead_hold" == "true" ]]; then
+                        echo "Note: '$effective_base' was left where it is."
+                        echo "  '$branch_name' is $ahead_count commit(s) ahead of it and carries changes"
+                        echo "  outside this ticket's own files. Advancing '$effective_base' onto the start"
+                        echo "  commit would take that work along with it - a merge, not a start. The start"
+                        echo "  time is committed on the branch, 'list' reads it from there, and the work"
+                        echo "  reaches '$effective_base' when you close the ticket."
+                    fi
                 else
                     echo "Warning: Could not record the start time in '$_resume_ticket_file'" >&2
                 fi

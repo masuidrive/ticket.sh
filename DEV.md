@@ -115,6 +115,12 @@ The main script uses a case statement to route commands:
   a branch name. The frontmatter is read with awk rather than yaml-sh, because
   `yaml_parse` writes to globals the caller is usually mid-way through using for
   the config — the same reason `started_at_on_branch()` does it that way.
+- `branch_carries_only()` answers whether a branch holds anything beyond the
+  base other than the named files. It lists the commits (`log --name-only`)
+  rather than diffing, because a file added on the branch and deleted again
+  leaves no net diff while its commits still land wherever the branch is
+  merged. It returns non-zero when it cannot tell: a caller deciding whether to
+  move a branch should hear "no" rather than a guess.
 
 ### Key Functions
 
@@ -145,6 +151,7 @@ The main script uses a case statement to route commands:
 - Stays on the current branch when that is the branch the ticket names and the base branch also has the ticket: `branch_name` resolves to it and the resume path below would check it out again anyway, so the detour through the base branch only churns the tree twice and prints a "creating a new feature branch from `<base>` instead" warning that never comes true. Everything else is unchanged — the branch is resumed as before, and the base branch is still fast-forwarded onto the `[start]` commit.
 - Stays on the current branch, instead of returning to the base branch, when the ticket lives only there: current branch == the ticket's `branch:`, the ticket file is present, and the base branch has no copy of it. `record_start_on_base()` is then called with its `skip_base_ff` argument set — the stamp is committed on the branch and the base branch is left alone, because there is no copy of the ticket there to fast-forward onto. Worktree mode never takes this path (it does not touch the caller's HEAD anyway). Without it, a ticket created and committed on its own branch made `start` check out the base branch and report `Ticket not found`.
 - Emits an `Active ticket paths:` block listing resolved paths so a downstream agent can consume the output without guessing layout. `ticket_files` entries that exist appear as `file:` lines; the config list is read into `TICKET_FILE_PATHS[]` right after the config is parsed, because the ticket's own frontmatter overwrites the yaml-sh globals before the block is emitted.
+- Holds the base branch back when the branch it is resuming carries changes outside the ticket's own files. `record_start_on_base()` fast-forwards the base branch onto the `[start]` commit, which is harmless where the branch is the base plus that commit — the shape of every branch `start` creates itself, and of a branch that adopted the ticket by writing `branch:` into it. A branch only being resumed need not be that shape (a bot committed before anyone ran `start`; an interrupted `start` left `started_at` null; the already-started error tells people to reset it by hand), and the fast-forward then carried every commit on the branch into the base branch — a merge nobody asked `start` for, which broke close's one-commit-per-ticket history and outlived `cancel`. The decision is `branch_carries_only()` over `ticket_file`, `note_file_rel` and `extra_rels`, not `ahead_count`: counting commits would hold the base branch back for the ticket's own bookkeeping too, which is what the fast-forward is *for*. `record_start_on_base()`'s own skip note now checks whether the base branch really lacks the ticket before claiming that as the reason, since the caller has its own and the two were printed together.
 - Reads the ticket wherever this tree can see it, which is what makes `start` work from inside *another* ticket's worktree. Three places used to read the cwd and cannot: the probe that reads a ticket's `branch:` out of git (it tries the branch in hand first, and a branch that was cut before this ticket existed does not carry it — `git show`'s 128, with its message already discarded, ended the whole run through `set -e`, so the call printed nothing and exited 128), the already-started check (`extract_yaml_frontmatter` on a path the cwd lacks printed `File not found` and then read as *never started*, the one answer that check must not reach by accident — `ticket_frontmatter_text()` now falls back to the first ref that carries the ticket), and `emit_active_ticket_paths()` (it probed the cwd for a layout it had just created in the worktree, reporting `layout: unknown` and a `tickets/done/<name>.md` that does not exist — it now probes `link_dir` when that is absolute).
 - Worktree mode: creates directory at `../<project>.worktrees/<ticket-name>/`
 - Worktree mode: after the worktree is ready and symlinks/`tmp/` are set up, `copy_worktree_files()` runs against the effective `worktree_copy_files` list (config entries + `--copy-file <path>` CLI extras). Each entry: skip if the target exists, warn if the source is missing, otherwise `cp -p`. Silently no-op when the resolved list is empty (default), so the feature is off unless deliberately configured.
@@ -193,6 +200,7 @@ See `test/README.md` for detailed test documentation. Key points:
 - **ticket_files tests** (`test-ticket-files.sh`): file creation, placeholder substitution, the `note.md` override, path escapes, the `Active ticket paths:` lines, and the declared files travelling into a worktree (both routes) without leaving anything untracked in the main repo
 - **append-only tests** (`test-append-only.sh`): the refusal, the message, `--force`/`--dry-run`, and that appending the lines again clears the gate without rewriting history
 - **Branch override tests** (`test-branch-override.sh`): `new --branch` validation, the full lifecycle (start/check/restore/close/list) on a ticket whose branch is named in its frontmatter, and the case where the ticket exists only on that branch
+- **Start base-sync tests** (`test-start-base-sync.sh`): both fast-forward mechanisms, the untracked ticket file `new` leaves behind, the fallback when the fast-forward cannot happen, and the base branch being held back when the resumed branch carries work of its own — including that a branch ahead only by the ticket's own files still advances it, and that `cancel` leaves nothing behind
 - **Error reporting tests** (`test-error-reporting.sh`): that a deliberate refusal is not dressed up as a crash, that an unplanned failure names the command and keeps its exit code, that a signal-class exit stays quiet, and that a detached main-repo HEAD reaches its own refusal. The crash cases inject a failing line into a *copy* of the built `ticket.sh`, right after the traps are installed — there is no way in from outside, and the hook has no business in the shipped script.
 
 ### Running Tests
@@ -469,6 +477,21 @@ Documentation updates should be part of the same PR as code changes.
    the status in every bash from 3.2 to 5, while a bare `x=$(...)` does not —
    that is why only some of these reads were ever fatal.
 
+21. **A fast-forward is only safe while the branch is the base plus the stamp**:
+   `start` records the start time by committing it on the feature branch and
+   fast-forwarding the base branch onto that commit — correct for a branch
+   `start` created itself, which is the base plus that one commit. The resume
+   path reaches branches `start` did not create, and fast-forwarding there
+   carried the branch's own commits into the base branch: unreviewed work landed
+   on `main` at `start` time, close's squash then had little left to squash, and
+   `cancel` — whose whole point is not to merge — could not take it back. The
+   guard asks what the branch *touches*, not how far ahead it is. Counting
+   commits also catches the ticket's own bookkeeping, and a bot adopting a
+   backlog ticket does exactly that (one commit writing `branch:` into it), so
+   `ahead_count > 0` would have withheld the start time from the base branch in
+   the one case design note 15b exists to serve — a fix trading one silent loss
+   for another.
+
 ### Recent Enhancements
 
 - **Smart branch handling**: Automatically handles existing branches and clean states
@@ -485,6 +508,7 @@ Documentation updates should be part of the same PR as code changes.
 - **Unknown flags stop `start`**: retired flags are inert by name, everything else is an error
 - **`start` from another ticket's worktree**: the ticket is read out of git when the cwd's tree has no copy of it, instead of the run ending on exit 128 with nothing printed
 - **No silent stops**: an unplanned failure (exit 126/127/128) names the command that failed and where to report it
+- **No accidental merge at `start`**: resuming a branch that carries work outside the ticket's own files leaves the base branch where it is, with a line saying why
 - **`start --no-worktree`**: turns `worktree_mode: true` off for one call, for a caller that owns its whole checkout and works one ticket in it; both worktree flags together is an error
 - **Worktree support**: Optional git worktree mode for parallel ticket work without branch switching
 - **Checklist check**: `check` reports the checkboxes in both `ticket.md` and `note.md` by heading group, split per file; `check --require "<group>"` judges one group across both; `require_checklist: true` makes `close` refuse while any are unchecked; and `require_checklist_groups` (a list of heading names) makes `close` refuse when a named group is in neither file - counting unchecked boxes cannot catch that, since a section that is absent counts zero and reads as finished

@@ -379,6 +379,7 @@ default_content: |
 - **競合検出**: クローズ時のマージ競合処理のガイダンス提供
 - **チケットごとの branch 名**: frontmatter の `branch:`（`new --branch <name>` で設定）があれば、`{branch_prefix}<ticket-name>` ではなくその branch を使う。`start` は既にあれば checkout、無ければ作成し、`check` / `restore` / `list` / `close` / `cancel` もすべてその branch と ticket を対応付ける。branch 名の由来が外にあるケース — issue 番号から `agent/issue-12` を組み立て、ticket ができる前に checkout してしまう CI bot など — を、コマンドを迂回せずに通常どおり扱うためのもの。
 - **ticket がその branch 上にしか無い場合**: 現在の branch が ticket の名指す branch で、ticket がそこにあり、base branch にはその copy が無いとき、`start` はその場に留まる — base に切り替えて ticket を見失う代わりに、`started_at` を入れてその branch に commit する。base への fast-forward は理由（進める先の ticket がそこに無い）を 1 行出して skip し、`list` は branch から開始時刻を読むので ticket は `doing` のまま表示される。
+- **作業が載っている branch を resume した場合**: `start` は開始時刻を feature branch に commit し、base branch をその commit へ fast-forward する。branch が ticket 自身のファイルしか持っていないうちは安全だが、`start` が resume するだけの branch はそれ以上を持ち得る — bot が branch を切って `start` より先に commit していた、あるいは `start` が中断して started_at が null のまま branch が残った、など。その場合は base branch をその場に残し、理由を 1 行出す: 進めるとその作業まで連れていくことになり、それは start ではなく merge だから。以前はまさにそれをしていて、close の「1 ticket = 1 commit」を壊し、`cancel` でも消えなかった。
 
 ### 自動整理
 - **doneフォルダ**: 完了チケットを自動的に `tickets/done/<TICKETNAME>/` にディレクトリごと移動
