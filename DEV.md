@@ -133,6 +133,7 @@ The main script uses a case statement to route commands:
 
 #### `start_ticket()`
 - Creates feature branch (or git worktree with `--worktree` flag)
+- `--no-worktree` turns `worktree_mode: true` off for one call. The parser records *which way the flags asked* (`worktree_flag_set` / `no_worktree_flag_set`) rather than only the resulting boolean, because the config read is a default and has to stay silent when the command line spoke. That read used to be unconditional and sat after the parsing, so `worktree_mode: true` set `use_worktree` back to true a few lines after the parser had honoured the flag — the flag could never have worked without moving it. Both flags together is an error, not last-one-wins: argument order is exactly what a caller assembling the command line from several places cannot see. `--copy-file` with `--no-worktree` warns and continues (nothing to copy into, and ignoring it is already its contract, so a wrapper that always passes it keeps working). Both flags are matched by name, not by a catch-all — see design note 11 below.
 - Updates `started_at` timestamp
 - Creates the active-ticket symlinks in the working tree root (or the worktree root in `--worktree` mode):
   - `current-ticket/` → `tickets/<TICKETNAME>/` (dir symlink; new-format tickets only)
@@ -436,6 +437,17 @@ Documentation updates should be part of the same PR as code changes.
    and a problem found much later. Each retired flag now gets its own no-op
    case and everything else is an `Unknown option` error, which keeps old
    invocations working without making typos indistinguishable from intent.
+19. **A config setting is a default, so a flag has to be able to outrank it**:
+   `worktree_mode: true` was read after `start` parsed its arguments and simply
+   assigned `use_worktree=true`, which left no way to say "not this time". The
+   repo could not have both "worktrees by default on people's machines" and "no
+   worktree for the CI bot, which owns its whole checkout" from one
+   `.ticket-config.yaml`. `--no-worktree` now exists, and the parser records
+   *which way the flags asked* rather than only the resulting boolean, so the
+   config can stay silent when the command line spoke. Both flags together is an
+   error rather than last-one-wins: a caller assembling the command line from
+   several places cannot see argument order, so a silent winner would be a
+   coin toss.
 
 ### Recent Enhancements
 
@@ -451,6 +463,7 @@ Documentation updates should be part of the same PR as code changes.
 - **Gated `--no-merge`**: the checklist and append-only gates apply to `close --no-merge` when it runs off the ticket's base branch, where they can be measured
 - **Worktrees are kept by default**: `close` / `cancel` leave the worktree in place; `--delete-worktree` removes it, and `--keep-worktree` remains as a no-op
 - **Unknown flags stop `start`**: retired flags are inert by name, everything else is an error
+- **`start --no-worktree`**: turns `worktree_mode: true` off for one call, for a caller that owns its whole checkout and works one ticket in it; both worktree flags together is an error
 - **Worktree support**: Optional git worktree mode for parallel ticket work without branch switching
 - **Checklist check**: `check` reports the checkboxes in both `ticket.md` and `note.md` by heading group, split per file; `check --require "<group>"` judges one group across both; `require_checklist: true` makes `close` refuse while any are unchecked; and `require_checklist_groups` (a list of heading names) makes `close` refuse when a named group is in neither file - counting unchecked boxes cannot catch that, since a section that is absent counts zero and reads as finished
 

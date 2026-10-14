@@ -12,7 +12,7 @@ fi
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20260922.061557
+# Version: 20261014.011854
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -2330,7 +2330,7 @@ if [ -z "${BASH_VERSION:-}" ]; then
 fi
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20260922.061557
+# Version: 20261014.011854
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -2422,7 +2422,7 @@ SCRIPT_COMMAND=$(get_script_command)
 
 
 # Global variables
-VERSION="20260922.061557"  # This will be replaced during build
+VERSION="20261014.011854"  # This will be replaced during build
 CONFIG_FILE=""  # Will be set dynamically by get_config_file()
 CURRENT_TICKET_LINK="current-ticket.md"
 CURRENT_NOTE_LINK="current-note.md"
@@ -2529,8 +2529,9 @@ be recognized by every command; they are never auto-migrated.
   - With \`ticket_files\` in config, the declared files are created in the ticket directory alongside \`note.md\`.
 - \`$SCRIPT_COMMAND list [--status STATUS] [--count N]\` - List tickets (default: todo + doing, count: 20)
   - A ticket the current branch calls \`todo\` is checked against its branch (\`branch:\` if set, else \`{branch_prefix}<name>\`) before being believed. If that branch carries a \`started_at\`, the ticket is \`doing\` and the line \`started_at_only_on: <branch>\` says the timestamp lives only there - which happens when \`start\`'s fast-forward onto the base branch was skipped.
-- \`$SCRIPT_COMMAND start [--worktree] [--copy-file <path>]... <ticket-name>\` - Start working on ticket (creates or switches to feature branch, --worktree creates a separate worktree)
+- \`$SCRIPT_COMMAND start [--worktree|--no-worktree] [--copy-file <path>]... <ticket-name>\` - Start working on ticket (creates or switches to feature branch, --worktree creates a separate worktree)
   - With \`--worktree\`: **cd to the worktree directory after start; cd back to the main repo after close.** In environments where cwd resets each command (e.g. LLM agents), cd must be re-run every time.
+  - \`--no-worktree\` turns \`worktree_mode: true\` off for this one call, so \`start\` switches branches in the current checkout as it would without the setting. For a caller that owns its whole checkout and works one ticket in it - a CI runner - a worktree protects nobody, and creating one would leave the work in the original checkout while the ticket's branch lived elsewhere. Passing both flags is an error, not a preference.
   - When the current branch is the one the ticket's \`branch:\` names, the ticket is there, and the base branch has no copy of it, \`start\` stays on that branch instead of switching to the base: it stamps \`started_at\`, commits it there, and skips the fast-forward with a line saying why. Switching would walk away from the only copy of the ticket. Running it again resumes rather than re-stamps.
   - \`start\` commits \`started_at\` on the feature branch and fast-forwards the base branch onto that commit, so the ticket shows as \`doing\` from the base branch too. Nothing is pushed: the base branch reaches the remote on close. If the base branch has moved on, the fast-forward is skipped with a note and the start time stays on the feature branch.
   - \`--copy-file <path>\` (repeatable) copies the given file from the main repo into the new worktree, appended to the \`worktree_copy_files\` config list. Only applied when a worktree is created. Existing files in the target are never overwritten; missing sources warn and continue. Typical use: bringing gitignored \`.env\` into the worktree.
@@ -2805,13 +2806,16 @@ require_checklist: $DEFAULT_REQUIRE_CHECKLIST
 #       Append-only log of how the work went. Current state lives in \$\$NOTE_PATH\$\$.
 
 # Worktree mode: create a separate git worktree for each ticket
-# When true, 'start' always creates a worktree (same as --worktree flag)
+# When true, 'start' creates a worktree even without the --worktree flag.
+# This is a default, not a rule: 'start --no-worktree' skips the worktree for
+# one call and switches branches in the current checkout instead - for a caller
+# that owns its whole checkout and works one ticket in it, such as a CI runner.
 # worktree_mode: false
 # worktree_dir: ""  # Custom worktree directory (default: ../<project>.worktrees/)
 
 # Files copied from the main repo into a freshly-created worktree.
-# Only consulted when 'start' actually creates a worktree (--worktree or
-# worktree_mode: true). Existing files in the target worktree are never
+# Only consulted when 'start' actually creates a worktree (--worktree, or
+# worktree_mode: true without --no-worktree). Existing files in the target worktree are never
 # overwritten; missing sources warn and continue. Intended for gitignored
 # helpers (e.g. .env) that a new worktree still needs.
 # Extra one-shot entries can be added at invocation via --copy-file <path>.
@@ -4140,6 +4144,11 @@ record_start_on_base() {
 cmd_start() {
     local use_worktree=false
     local ticket_input=""
+    # Which way the command line asked, if it asked at all. `worktree_mode` in
+    # the config is a default, not an override, so it may only speak when
+    # neither flag did - see where it is read below.
+    local worktree_flag_set=false
+    local no_worktree_flag_set=false
     # Extra paths appended to config's worktree_copy_files via --copy-file.
     # Repeatable; ignored entirely unless use_worktree is true.
     local cli_copy_files=()
@@ -4149,6 +4158,22 @@ cmd_start() {
         case "$1" in
             --worktree)
                 use_worktree=true
+                worktree_flag_set=true
+                shift
+                ;;
+            --no-worktree)
+                # Turns `worktree_mode: true` off for this one invocation.
+                # The shape it serves: a CI runner's checkout, where one run
+                # works one ticket and no other session shares the tree, so a
+                # worktree protects nobody. There, `start` quietly created one
+                # under ../<project>.worktrees/ while the bot carried on
+                # committing in the original checkout - onto whatever branch
+                # that held - and the ticket's branch was somewhere else
+                # entirely. A repo could not have both "worktrees by default on
+                # people's machines" and "no worktree for the bot" from one
+                # config, because there was no way to opt out per call.
+                use_worktree=false
+                no_worktree_flag_set=true
                 shift
                 ;;
             --copy-file)
@@ -4175,7 +4200,7 @@ cmd_start() {
                 ;;
             -*)
                 echo "Error: Unknown option: $1" >&2
-                echo "Usage: $SCRIPT_COMMAND start [--worktree] [--copy-file <path>]... <ticket-name>" >&2
+                echo "Usage: $SCRIPT_COMMAND start [--worktree|--no-worktree] [--copy-file <path>]... <ticket-name>" >&2
                 return 1
                 ;;
             *)
@@ -4187,9 +4212,19 @@ cmd_start() {
         esac
     done
 
+    # Both flags at once is a contradiction, not a preference. Letting the last
+    # one win would make the behaviour depend on argument order, which is
+    # exactly what a caller assembling the command line from several places
+    # cannot see.
+    if [[ "$worktree_flag_set" == "true" ]] && [[ "$no_worktree_flag_set" == "true" ]]; then
+        echo "Error: --worktree and --no-worktree cannot be used together" >&2
+        echo "Pass one or the other. Passing neither follows 'worktree_mode' in the config." >&2
+        return 1
+    fi
+
     if [[ -z "$ticket_input" ]]; then
         echo "Error: ticket name required" >&2
-        echo "Usage: $SCRIPT_COMMAND start [--worktree] [--copy-file <path>]... <ticket-name>" >&2
+        echo "Usage: $SCRIPT_COMMAND start [--worktree|--no-worktree] [--copy-file <path>]... <ticket-name>" >&2
         return 1
     fi
 
@@ -4214,12 +4249,25 @@ cmd_start() {
     # runs after that.
     config_read_ticket_files
 
-    # Check if worktree mode is enabled by config
+    # Worktree mode from the config is the default, so it only speaks when the
+    # command line did not. This read used to be unconditional, which put it a
+    # few lines after the parser had honoured --no-worktree and quietly undid
+    # it: `worktree_mode: true` set use_worktree back to true, and the flag
+    # could never have worked.
     local worktree_mode=$(yaml_get "worktree_mode" || echo "$DEFAULT_WORKTREE_MODE")
-    if [[ "$worktree_mode" == "true" ]]; then
+    if [[ "$no_worktree_flag_set" != "true" ]] && [[ "$worktree_mode" == "true" ]]; then
         use_worktree=true
     fi
     local worktree_dir=$(yaml_get "worktree_dir" || echo "$DEFAULT_WORKTREE_DIR")
+
+    # --copy-file names files to bring into a worktree, so with --no-worktree it
+    # can never apply. Ignoring it is already its contract ("only applied when a
+    # worktree is created"), which is why this warns rather than refuses - a
+    # wrapper that always passes --copy-file keeps working - but it says so,
+    # because here the file will certainly not be copied.
+    if [[ "$no_worktree_flag_set" == "true" ]] && [[ ${#cli_copy_files[@]} -gt 0 ]]; then
+        echo "Warning: --copy-file is ignored with --no-worktree (no worktree is created to copy into)." >&2
+    fi
 
     # Resolve worktree_copy_files list (config entries + --copy-file CLI extras).
     # Read into a bash array via a loop (mapfile isn't available on macOS bash 3.2).

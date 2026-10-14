@@ -278,7 +278,8 @@ require_checklist: false
 #   - progress.md
 
 # Worktree mode (optional)
-# worktree_mode: false    # When true, 'start' always creates a worktree
+# worktree_mode: false    # When true, 'start' creates a worktree without the
+#                         # flag. 'start --no-worktree' turns it off per call.
 # worktree_dir: ""        # Custom worktree base directory
 
 # Files copied from main repo into a fresh worktree (only when 'start' actually
@@ -684,6 +685,10 @@ the ticket reads `doing` from either branch.
 
 **Worktree Mode:**
 - Can be enabled permanently via `worktree_mode: true` in config
+- `worktree_mode` is a **default, not an override**: `start --no-worktree` skips the worktree for that one call and switches branches in the current checkout, exactly as a `start` without the setting would. The config is therefore read only when neither flag was passed.
+- `--worktree` together with `--no-worktree` is an error. Letting the last one win would make the behaviour depend on argument order, which a caller assembling the command line from several places cannot see. Both flags are matched by name, not by a catch-all, so a mistyped `--no-worktre` is still refused.
+- `--copy-file` with `--no-worktree` warns on stderr and continues. There is no worktree to copy into, so it can never apply; ignoring it is already its contract, which is why this is a warning and not a refusal — a wrapper that always passes `--copy-file` keeps working.
+- The shape `--no-worktree` serves: a caller that owns its whole checkout and works one ticket in it, such as a coding bot in GitHub Actions that runs `ticket.sh start "$TICKET_NAME"` in the runner's checkout and then works in that same directory. No other session shares the tree, so a worktree protects nobody — and `start` creating one left the bot committing in the original checkout, onto whatever branch that held, while the ticket's branch was somewhere else. Before this flag a repo could not have both "worktrees by default on people's machines" and "no worktree for the bot" from one `.ticket-config.yaml`.
 - When using worktree mode, `close` and `cancel` detect the worktree and **keep** it. `--delete-worktree` removes it. This was reversed in an earlier version, where removal was the default and `--keep-worktree` opted out: the help had to tell coding agents they *must* pass it, because forgetting removed the directory their shell was in and every later command failed with an error that named no flag. `--keep-worktree` is still accepted and does nothing, so existing invocations keep working — spelled out as its own case rather than swallowed by an ignore-unknown-flags branch, which would also let typos through.
 - `list` command shows worktree path for active tickets
 

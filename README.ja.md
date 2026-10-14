@@ -261,7 +261,10 @@ require_checklist: false
 #   - progress.md
 
 # Worktree mode: create a separate git worktree for each ticket
-# When true, 'start' always creates a worktree (same as --worktree flag)
+# When true, 'start' creates a worktree even without the --worktree flag.
+# This is a default, not a rule: 'start --no-worktree' skips the worktree for
+# one call and switches branches in the current checkout instead - for a caller
+# that owns its whole checkout and works one ticket in it, such as a CI runner.
 # worktree_mode: false
 # worktree_dir: ""  # Custom worktree base directory (default: ../<project>.worktrees/)
 
@@ -414,7 +417,8 @@ default_content: |
 - **並行作業**: `start`に`--worktree`フラグを付けてチケット毎に別のgit worktreeを作成
 - **独立ディレクトリ**: 各チケットが独自の作業ディレクトリを持ち、切り替え時のstash/commit不要
 - **worktree は残す**: `close` / `cancel` は worktree をそのまま残す。消したいときだけ `--delete-worktree` を付ける。以前は逆で、help が「coding agent は必ず `--keep-worktree` を付けること」と書いていた — 付け忘れると自分のシェルがいるディレクトリが消え、以降のコマンドが全部 `getcwd: cannot access parent directories` で失敗する。しかも原因が「さっき打ったフラグ」なのでエラーからは辿りにくい。残ってしまう副作用は `git worktree remove` 一回で済むが、逆向きの事故は復旧の手間が大きい。`--keep-worktree` は no-op として受け取り続ける
-- **設定モード**: configで`worktree_mode: true`を設定すると常にworktreeを使用
+- **設定モード**: configで`worktree_mode: true`を設定すると、フラグ無しでも worktree を使用
+- **1 回だけ外す**: `start --no-worktree` は `worktree_mode: true` でも worktree を作らず、今の checkout で branch を切り替える。checkout 全体を自分だけで使い、その中で 1 ticket だけ進める呼び出し側 — CI の runner など — には worktree の守るものが無く、作ってしまうと作業は元の checkout に残り ticket の branch は別の場所、という形になるため。`--worktree` との同時指定は後勝ちではなくエラーなので、結果が引数の順序で変わることはない。
 - **カスタムディレクトリ**: configで`worktree_dir`を設定してworktreeの場所をカスタマイズ（デフォルト: `../<プロジェクト名>.worktrees/`）
 - **worktree 用ファイルコピー**: config の `worktree_copy_files: [".env"]` (任意の repo 相対 path のリスト)を指定すると、start が worktree を作った直後に main repo からその path 群を worktree へコピー。target 側に既にあれば上書きせず skip、source に無ければ warn のみで続行。ワンショットは `start --worktree --copy-file <path>` (反復可)。gitignore された `.env` 等を新 worktree でも即座に使うことを想定 — gitignore 前提なので、共有 config に入っていても各人自身の `.env` が各人の worktree にコピーされるだけで secret は拡散しない。
 

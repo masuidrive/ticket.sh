@@ -273,7 +273,8 @@ require_checklist: false
 #   - progress.md
 
 # Worktreeモード（オプション）
-# worktree_mode: false    # trueの場合、startは常にworktreeを作成
+# worktree_mode: false    # true の場合、start はフラグ無しでも worktree を作成。
+#                         # start --no-worktree で 1 回だけ外せる。
 # worktree_dir: ""        # カスタムworktreeベースディレクトリ
 
 # start が worktree を作成した直後に main repo からコピーするファイル群。
@@ -664,6 +665,10 @@ ticket はどちらの branch から見ても `doing` と読める。
 
 **Worktreeモード:**
 - configで `worktree_mode: true` を設定すると常時有効化
+- `worktree_mode` は **既定であって上書きではない**: `start --no-worktree` はその 1 回だけ worktree を作らず、設定が無いときの `start` と同じように今の checkout で branch を切り替える。そのため config は、どちらのフラグも渡されなかったときにだけ読まれる。
+- `--worktree` と `--no-worktree` の同時指定はエラー。後勝ちにすると挙動が引数の順序で決まり、コマンドラインを複数箇所から組み立てる呼び出し側にはそれが見えない。どちらのフラグも catch-all ではなく名前で受けるので、`--no-worktre` のような打ち間違いは従来どおり弾かれる。
+- `--copy-file` を `--no-worktree` と併せて渡すと、stderr に warning を出して続行する。コピー先の worktree が無いので適用されようが無く、無視すること自体は元から `--copy-file` の契約（worktree を作ったときにだけ適用）なので、拒否ではなく warning にしている——常に `--copy-file` を渡す wrapper がそのまま動く。
+- `--no-worktree` が支える形: checkout 全体を自分だけで使い、その中で 1 ticket だけを進める呼び出し側。GitHub Actions の coding bot がそうで、runner の checkout で `ticket.sh start "$TICKET_NAME"` を実行し、そのまま同じディレクトリで作業する。他の session が tree を共有していないので worktree の守るものが無く、それでも `start` が worktree を作るため、bot は元の checkout の——そこが指していた branch の上に——commit を積み、ticket の branch は別の場所にあった。このフラグが無い間は、«人の端末では worktree を既定にしたい» と «bot は worktree を使わない» を 1 つの `.ticket-config.yaml` で両立できなかった。
 - worktree モード使用時、`close` / `cancel` は worktree を検出して**残す**。`--delete-worktree` で削除する。以前は逆（削除が既定で `--keep-worktree` で残す）だったが、help に「coding agent は必ず付けること」と書かねばならない状態だった——付け忘れると自分のシェルがいるディレクトリが消え、以降のコマンドが、どのフラグのせいかを示さないエラーで全部失敗する。`--keep-worktree` は受け取り続けて no-op。catch-all で無視するのではなくフラグ名を名指しで受ける（catch-all にすると打ち間違いも通ってしまう）
 - `list`コマンドがアクティブなチケットのworktreeパスを表示
 

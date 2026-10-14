@@ -350,7 +350,10 @@ require_checklist: false
 #   - progress.md
 
 # Worktree mode: create a separate git worktree for each ticket
-# When true, 'start' always creates a worktree (same as --worktree flag)
+# When true, 'start' creates a worktree even without the --worktree flag.
+# This is a default, not a rule: 'start --no-worktree' skips the worktree for
+# one call and switches branches in the current checkout instead - for a caller
+# that owns its whole checkout and works one ticket in it, such as a CI runner.
 # worktree_mode: false
 # worktree_dir: ""  # Custom worktree base directory (default: ../<project>.worktrees/)
 
@@ -492,7 +495,8 @@ default_content: |
 - **Parallel work**: Use `--worktree` flag with `start` to create a separate git worktree per ticket
 - **Independent directories**: Each ticket gets its own working directory, no need to stash/commit when switching
 - **The worktree is kept**: `close` and `cancel` leave it in place; pass `--delete-worktree` to remove it. It used to be the other way round, and the help had to tell coding agents they *must* pass `--keep-worktree` — forgetting deleted the directory their shell was sitting in, and every command after that failed with an error (`getcwd: cannot access parent directories`) that pointed nowhere near the flag. A left-behind worktree costs one `git worktree remove`; the other direction costs a confused debugging session. `--keep-worktree` is still accepted as a no-op.
-- **Config mode**: Set `worktree_mode: true` in config to always use worktrees
+- **Config mode**: Set `worktree_mode: true` in config to use worktrees without passing the flag
+- **Off for one call**: `start --no-worktree` skips the worktree despite `worktree_mode: true` and switches branches in the current checkout. For a caller that owns its whole checkout and works one ticket in it — a CI runner — a worktree protects nobody, and creating one left the work in the original checkout while the ticket's branch lived elsewhere. Passing both flags is an error rather than a last-one-wins preference, so the result never depends on argument order.
 - **Custom directory**: Set `worktree_dir` in config to customize worktree location (default: `../<project>.worktrees/`)
 - **Safe from any branch / any worktree**: `start --worktree` never modifies the caller's `HEAD` or working tree.
   It operates on the main repository via `git -C <main_repo> worktree add`, so it works correctly when:

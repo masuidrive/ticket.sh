@@ -518,6 +518,153 @@ fi
 cd "$MAIN_REPO"
 git checkout -q main 2>/dev/null || true
 
+# ---------------------------------------------------------------------------
+echo
+echo "16. Testing --no-worktree (issue #14)..."
+# A repo that wants worktrees by default still has callers that own their whole
+# checkout and work one ticket in it - a CI runner, where no other session
+# shares the tree, so a worktree protects nobody. There, `start` created one
+# under ../<project>.worktrees/ while the bot carried on committing in the
+# original checkout, onto whatever branch that held, and the ticket's branch was
+# somewhere else. There was no way to opt out for one call: the flags were
+# --worktree and --copy-file, and anything else is refused (section 15).
+cd "$MAIN_REPO"
+echo 'worktree_mode: true' >> .ticket-config.yaml
+echo '.env' >> .gitignore
+git add . && git commit -q -m "Enable worktree_mode for the --no-worktree cases"
+
+# The default must still hold: the setting alone creates a worktree. Asserted
+# here as well as in section 9 because --no-worktree moved where the config is
+# read, and getting that wrong would turn the setting off for everybody.
+timeout 5 ./ticket.sh new nwt-default >/dev/null 2>&1
+TICKET_ND=$(safe_get_ticket_name "*nwt-default*")
+git add . && git commit -q -m "Add nwt-default ticket"
+OUTPUT=$(timeout 10 ./ticket.sh start "$TICKET_ND" 2>&1)
+if echo "$OUTPUT" | grep -q "WORKTREE:"; then
+    pass "worktree_mode: true still creates a worktree with no flag"
+    WT_ND=$(worktree_path_from "$OUTPUT")
+    git worktree remove "$WT_ND" --force 2>/dev/null || true
+else
+    fail "worktree_mode stopped working" "$OUTPUT"
+fi
+cd "$MAIN_REPO"
+git checkout -q main 2>/dev/null || true
+
+# The flag itself.
+timeout 5 ./ticket.sh new nwt-off >/dev/null 2>&1
+TICKET_NO=$(safe_get_ticket_name "*nwt-off*")
+git add . && git commit -q -m "Add nwt-off ticket"
+WT_COUNT_BEFORE=$(git worktree list | wc -l | tr -d ' ')
+OUTPUT=$(timeout 15 ./ticket.sh start --no-worktree "$TICKET_NO" 2>&1)
+if ! echo "$OUTPUT" | grep -q "WORKTREE:"; then
+    pass "--no-worktree creates no worktree despite worktree_mode: true"
+else
+    fail "--no-worktree still made a worktree" "$OUTPUT"
+fi
+if [[ "$(git worktree list | wc -l | tr -d ' ')" == "$WT_COUNT_BEFORE" ]]; then
+    pass "and git knows of no new worktree"
+else
+    fail "a worktree appeared anyway" "$(git worktree list)"
+fi
+if [[ "$(git rev-parse --abbrev-ref HEAD)" == "feature/${TICKET_NO}" ]]; then
+    pass "the branch is switched in the current checkout instead"
+else
+    fail "start did not switch the current checkout" "$(git rev-parse --abbrev-ref HEAD)
+$OUTPUT"
+fi
+# The point of the shape: work committed right here reaches the ticket's branch.
+echo "bot work" >> README.md
+git add -A && git commit -q -m "Work in the runner's checkout"
+if [[ "$(git log --format='%s' -1 "feature/${TICKET_NO}")" == "Work in the runner's checkout" ]]; then
+    pass "a commit made in place lands on the ticket's branch"
+else
+    fail "the commit went somewhere else" "$(git log --oneline -3)"
+fi
+OUTPUT=$(timeout 30 ./ticket.sh close --no-push 2>&1)
+if [[ $? -eq 0 ]] && [[ -f "tickets/done/${TICKET_NO}/ticket.md" ]]; then
+    pass "close finishes the ticket started this way"
+else
+    fail "close failed after --no-worktree" "$OUTPUT"
+fi
+cd "$MAIN_REPO"
+git checkout -q main 2>/dev/null || true
+
+# Both flags at once: a contradiction, not a preference. Letting the last one
+# win would make the result depend on argument order, which a caller assembling
+# the command line from several places cannot see.
+timeout 5 ./ticket.sh new nwt-both >/dev/null 2>&1
+TICKET_NB=$(safe_get_ticket_name "*nwt-both*")
+git add . && git commit -q -m "Add nwt-both ticket"
+BEFORE=$(git rev-parse --abbrev-ref HEAD)
+OUTPUT=$(timeout 10 ./ticket.sh start --worktree --no-worktree "$TICKET_NB" 2>&1) && RC_NB=0 || RC_NB=$?
+if [[ $RC_NB -ne 0 ]] && echo "$OUTPUT" | grep -q "cannot be used together"; then
+    pass "--worktree with --no-worktree is refused"
+else
+    fail "both flags were accepted" "rc=$RC_NB
+$OUTPUT"
+fi
+OUTPUT=$(timeout 10 ./ticket.sh start --no-worktree --worktree "$TICKET_NB" 2>&1) || true
+if echo "$OUTPUT" | grep -q "cannot be used together"; then
+    pass "and the other order is refused the same way"
+else
+    fail "the result depends on argument order" "$OUTPUT"
+fi
+if [[ "$(git rev-parse --abbrev-ref HEAD)" == "$BEFORE" ]] && \
+   ! git show-ref --verify --quiet "refs/heads/feature/${TICKET_NB}"; then
+    pass "a refused invocation does nothing at all"
+else
+    fail "start acted on a refused invocation" "$(git rev-parse --abbrev-ref HEAD)
+$(git branch --list)"
+fi
+
+# Named explicitly, not swallowed by a catch-all - the hole section 15 closed.
+OUTPUT=$(timeout 10 ./ticket.sh start --no-worktre "$TICKET_NB" 2>&1) || true
+if echo "$OUTPUT" | grep -q "Unknown option: --no-worktre"; then
+    pass "a mistyped --no-worktree is refused"
+else
+    fail "start accepted --no-worktre" "$OUTPUT"
+fi
+if echo "$OUTPUT" | grep -q -- "--worktree|--no-worktree"; then
+    pass "the usage line names both flags"
+else
+    fail "usage does not mention --no-worktree" "$OUTPUT"
+fi
+
+# --copy-file names files to bring into a worktree, so with --no-worktree it can
+# never apply. Ignoring it is already its contract, which is why this warns
+# rather than refuses - a wrapper that always passes it keeps working.
+echo "secret" > .env
+OUTPUT=$(timeout 15 ./ticket.sh start --no-worktree --copy-file .env "$TICKET_NB" 2>&1)
+if echo "$OUTPUT" | grep -q -- "--copy-file is ignored with --no-worktree"; then
+    pass "--copy-file with --no-worktree warns that it is ignored"
+else
+    fail "nothing said about the ignored --copy-file" "$OUTPUT"
+fi
+if echo "$OUTPUT" | grep -q "Started ticket"; then
+    pass "and the start still goes through"
+else
+    fail "the warning turned into a refusal" "$OUTPUT"
+fi
+cd "$MAIN_REPO"
+git checkout -q main 2>/dev/null || true
+
+# Without the setting, the flag is simply the default spelled out.
+sed -i.bak '/worktree_mode/d' .ticket-config.yaml
+rm -f .ticket-config.yaml.bak
+git add . && git commit -q -m "Disable worktree_mode again"
+timeout 5 ./ticket.sh new nwt-plain >/dev/null 2>&1
+TICKET_NP=$(safe_get_ticket_name "*nwt-plain*")
+git add . && git commit -q -m "Add nwt-plain ticket"
+OUTPUT=$(timeout 15 ./ticket.sh start --no-worktree "$TICKET_NP" 2>&1)
+if ! echo "$OUTPUT" | grep -q "WORKTREE:" && [[ "$(git rev-parse --abbrev-ref HEAD)" == "feature/${TICKET_NP}" ]]; then
+    pass "--no-worktree without worktree_mode behaves as plain start"
+else
+    fail "--no-worktree changed the default behaviour" "$(git rev-parse --abbrev-ref HEAD)
+$OUTPUT"
+fi
+cd "$MAIN_REPO"
+git checkout -q main 2>/dev/null || true
+
 echo
 echo "=== Worktree Test Results ==="
 echo "  Passed: $PASSED, Failed: $FAILED"

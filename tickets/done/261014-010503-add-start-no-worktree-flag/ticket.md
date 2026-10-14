@@ -4,7 +4,7 @@ base_branch: default  # Override base branch for start/close (default: use defau
 description: "start に --no-worktree を足し、worktree_mode: true でも 1 回だけ worktree を作らずに進められるようにする (GH #14)"
 created_at: "2026-10-14T01:05:03Z"
 started_at: 2026-10-14T01:05:26Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-10-14T04:20:36Z # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
 
@@ -52,16 +52,16 @@ main の checkout 内で branch が切り替わると、同じ checkout で動�
 
 ## Tasks
 
-- [ ] `src/ticket.sh` の `cmd_start()` に `--no-worktree` を追加し、`worktree_mode` の上書き順を直す
-- [ ] `--worktree` と `--no-worktree` の同時指定をエラーにする
-- [ ] `--no-worktree` + `--copy-file` の扱いを決める
-- [ ] help の `start` 行を更新
-- [ ] `init` が書き出す config の `worktree_mode` コメントを更新
-- [ ] テストを追加（`--no-worktree` が worktree_mode を上回る / 同時指定がエラー / 打ち間違いは通らない / 既定の挙動は不変）
-- [ ] `bash build.sh` を実行してビルド
-- [ ] `test/run-all.sh` と `test/run-all-on-docker.sh` を実行して全テストパス（例外なし）
-- [ ] ドキュメント更新
-  - [ ] Update README.*.md
-  - [ ] Update spec.*.md
-  - [ ] Update DEV.md
+- [x] `src/ticket.sh` の `cmd_start()` に `--no-worktree` を追加し、`worktree_mode` の上書き順を直す
+- [x] `--worktree` と `--no-worktree` の同時指定をエラーにする
+- [x] `--no-worktree` + `--copy-file` の扱いを決める → warning を出して続行（理由は note.md）
+- [x] help の `start` 行を更新
+- [x] `init` が書き出す config の `worktree_mode` コメントを更新
+- [x] テストを追加（`--no-worktree` が worktree_mode を上回る / 同時指定がエラー / 打ち間違いは通らない / 既定の挙動は不変）
+- [x] `bash build.sh` を実行してビルド
+- [x] `test/run-all.sh` と `test/run-all-on-docker.sh` を実行して全テストパス（例外なし）
+- [x] ドキュメント更新
+  - [x] Update README.*.md
+  - [x] Update spec.*.md
+  - [x] Update DEV.md
 - [ ] Get developer approval before closing
