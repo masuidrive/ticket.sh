@@ -3,7 +3,7 @@ priority: 2
 base_branch: default  # Override base branch for start/close (default: use default_branch from config)
 description: "close / start / cancel の固定パス /tmp/ticket_yaml.yml をやめる（GH #20）"
 created_at: "2026-10-16T12:21:29Z"
-started_at: null  # Do not modify manually
+started_at: 2026-10-16T12:21:48Z # Do not modify manually
 closed_at: null   # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
