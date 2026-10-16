@@ -356,6 +356,7 @@ default_content: |
 ./ticket.sh check [--require "<group name>"]  # Sync status + ticket/note checklists (--require judges one group)
 ./ticket.sh close [--no-push] [--force|-f]  # Complete ticket/merge process
 ./ticket.sh cancel [--force|-f]           # Cancel ticket without merging
+./ticket.sh reopen [--dry-run|-n] [--no-push] <ticket-name>  # Bring a ticket finalized by close --no-merge back into the working set
 ```
 
 ---
@@ -1174,6 +1175,35 @@ close was called from, silently.
 On the base branch the gates are still skipped. The merge has already happened
 by then, so refusing would leave the ticket outside `done/` without giving
 anyone an action that helps.
+
+**A ticket that is already in `done/`.** `--no-merge` has always been
+idempotent: a ticket already in `done/` exits 0 and nothing is written, so a bot
+that retries is not punished for retrying. Finalizing before the merge makes
+that promise too strong. The ticket sits in `done/` while the PR is still being
+read, and a reviewer who asks for changes instead of merging leaves the work
+moving while the ticket says it is finished. A second close there reported
+success without running a single gate, which turned every gate above into one
+that could be walked around by finalizing first and fixing after — including the
+ones `--force` cannot bypass — and said nothing about it.
+
+The 0 now holds only while the branch has not moved:
+
+| Where / what happened | Result |
+|-----------------------|--------|
+| On the base branch (or the ticket's own `base_branch`) | exit 0, nothing written, however far the branch has moved |
+| Off it, no commits after the finalize | exit 0, nothing written |
+| Off it, commits after the finalize | exit 1, naming the finalize commit, the number of commits after it, and `reopen` |
+| Off it, the move into `done/` is not in this branch's history | exit 1 — there is no point to measure "since" against |
+
+The finalize point is the commit that **added** the `done/` path
+(`git log --diff-filter=A -1`), not the newest commit that touched the ticket.
+Commits after a finalize routinely touch the ticket — a note written as the work
+goes on is the ordinary case — and taking the newest of those would make every
+branch that keeps notes look untouched, which is this hole closed in a way that
+reopens for anyone who writes things down.
+
+`--dry-run` refuses it too. A dry run that reported a pass here would be the
+original defect with a flag in front of it.
 Empty by default. Not bypassed by `--force`, for the same reason as the
 checklist, and visible under `--dry-run`. Plain `check` reports the same thing
 and still exits 0, so the loss surfaces while the branch is still yours to
@@ -1506,6 +1536,62 @@ closed_at: "2025-06-28T18:45:20Z"
 
 Implementation details...
 ```
+
+---
+
+### `reopen [--dry-run|-n] [--no-push] <ticket-name>`
+
+Brings a ticket that `close --no-merge` moved into `done/` back into the working
+set. It is the way back from the refusal above, and the only one: `start` looks
+at the open location, so a ticket in `done/` was unreachable by every command
+that could have continued the work.
+
+**What it does**
+
+1. `git mv` the ticket out of `done/` — the whole directory, or the flat
+   `<name>.md` with its `<name>-note.md` — back where it came from
+2. set `closed_at` to `null`; `started_at` is left alone, because the ticket was
+   started and that is still true
+3. one commit, `[reopen] <branch>`, made with the ticket's paths as an explicit
+   pathspec
+4. re-link `current-ticket/`, `current-ticket.md`, `current-note.md` and print
+   the `Active ticket paths:` block, exactly as `start`'s resume does
+5. push the branch when `auto_push: true` and `--no-push` was not given; a
+   failed push is a warning, not a failure, as in `close`
+
+**Where it runs**
+
+Only on the ticket's own branch — its `branch:` when it sets one, otherwise
+`{branch_prefix}<ticket-name>` — or in that branch's worktree. That is where the
+commits a second close has to judge are.
+
+**What it refuses**
+
+| Condition | Why |
+|-----------|-----|
+| on the base branch (`default_branch`, or the ticket's `base_branch`) | a ticket that reached its base branch is merged; moving the file back would not bring back the work or the decision to take it. Follow-up work is a new ticket |
+| on any other branch | the commits after the finalize are not there, so neither is the thing a second close would weigh |
+| the ticket is not in `done/` | there is nothing to bring back; `start` or `restore` is the command |
+| the ticket's `canceled_at` is set | `cancel` said the work is not happening, and that is not reversed by a file move |
+| the working location is occupied | moving one copy onto the other would lose one of them |
+| no `<ticket-name>` given, or an unknown flag | a mistyped flag is a mistake, not a preference |
+
+**What it does not run**
+
+Neither `pre_close_command` nor `post_start_command`. Reopening makes no claim
+that the work is finished, so a close check passing here would mean the opposite
+of what it says; and the worktree `post_start_command` prepares is the one you
+are standing in, already prepared.
+
+**The commit's pathspec.** `git commit -- <the ticket's paths>` rather than a
+bare `git commit`, so edits already in the tree stay uncommitted. Being asked
+for changes is exactly the moment someone has started making them, and a reopen
+that swept them into its own commit would be a surprise in the one direction
+that is hard to undo. `no_verify: true` is honoured, as on every commit
+`ticket.sh` makes itself.
+
+`--dry-run` runs every check above and exits before anything is moved,
+committed or re-linked.
 
 ---
 

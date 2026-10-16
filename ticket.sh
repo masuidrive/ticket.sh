@@ -12,7 +12,7 @@ fi
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20261016.135405
+# Version: 20261016.151324
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -1688,6 +1688,34 @@ post_start_run() {
     return 0
 }
 
+# The base branch a ticket names, resolved.
+#
+# Reads `base_branch`, falls back to the historical `merge_to`, and treats both
+# an empty/null value and the literal `default` (any case) as "whatever the
+# config calls the default branch". Three commands asked this question with
+# three copies of the same cascade; `close --no-merge` now asks it twice, once
+# for a ticket that is still open and once for one already in done/, which is
+# one copy too many to keep writing out.
+#
+# Usage: ticket_base_from_frontmatter <frontmatter-text> <default_branch>
+ticket_base_from_frontmatter() {
+    local fm="$1"
+    local default_branch="$2"
+
+    local base
+    base=$(get_yaml_field "$fm" "base_branch")
+    if is_null_or_empty "$base" || \
+       [[ "$(echo "$base" | tr '[:upper:]' '[:lower:]')" == "default" ]]; then
+        base=$(get_yaml_field "$fm" "merge_to")
+    fi
+    local lower
+    lower=$(echo "$base" | tr '[:upper:]' '[:lower:]')
+    if is_null_or_empty "$base" || [[ "$lower" == "default" ]]; then
+        base="$default_branch"
+    fi
+    echo "$base"
+}
+
 # --- checklist.sh ---
 
 # checklist.sh - find unchecked checklist items in a ticket's files.
@@ -2544,7 +2572,7 @@ if [ -z "${BASH_VERSION:-}" ]; then
 fi
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20261016.135405
+# Version: 20261016.151324
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -2636,7 +2664,7 @@ SCRIPT_COMMAND=$(get_script_command)
 
 
 # Global variables
-VERSION="20261016.135405"  # This will be replaced during build
+VERSION="20261016.151324"  # This will be replaced during build
 CONFIG_FILE=""  # Will be set dynamically by get_config_file()
 CURRENT_TICKET_LINK="current-ticket.md"
 CURRENT_NOTE_LINK="current-note.md"
@@ -2814,6 +2842,13 @@ be recognized by every command; they are never auto-migrated.
   - \`--no-merge [--closed-at <ISO8601-UTC>] [--dry-run|-n] <ticket-name>\` - Skip the squash-merge. Only set closed_at, move the ticket/note to done/, commit and push. Requires \`<ticket-name>\`. \`--closed-at\` overrides closed_at with a full ISO8601 UTC value (default: now).
     - The checklist, append-only and \`pre_close_command\` gates apply whenever this runs on a branch other than the ticket's base branch - which is where it runs when the move into done/ has to ride in on the PR rather than follow it (a workflow token cannot push to a protected default branch). On the base branch they are still skipped: the merge has already happened by then, and refusing would strand the ticket outside \`done/\` without giving anyone a useful action.
     - \`--dry-run\` runs the same checks and exits before anything is written. It used to be accepted here and silently ignored.
+    - A ticket that is **already in done/** returns 0 and does nothing, as before - but only while the branch has not moved since. Off the base branch, if commits were added after the one that moved the ticket into \`done/\`, close refuses and names \`reopen\`: the gates ran against the branch as it was then, and reporting success again would let a gate that refuses \`--force\` be walked around by finalizing first and fixing after. The finalize point is the commit that **added** the \`done/\` path, not the newest commit that touched it - commits after a finalize routinely touch the ticket too, and taking the newest would make every branch with notes in it look untouched. On the base branch the plain 0 stands: the merge has already happened.
+- \`$SCRIPT_COMMAND reopen [--dry-run|-n] [--no-push] <ticket-name>\` - Bring a ticket that \`close --no-merge\` moved into \`done/\` back into the working set
+  - Moves the ticket out of \`done/\`, sets \`closed_at\` back to \`null\`, commits that as \`[reopen] <branch>\`, re-links \`current-ticket/\` and prints the \`Active ticket paths:\` block. \`started_at\` is left alone - the ticket was started, and that is still true.
+  - Runs **only on the ticket's own branch** (its \`branch:\`, else \`{branch_prefix}<name>\`), or in that branch's worktree. On the base branch it refuses: a ticket that reached its base branch is merged, and moving the file back would not bring back the work. Follow-up work is a new ticket.
+  - Neither \`pre_close_command\` nor \`post_start_command\` runs. Reopening does not claim the work is finished, and the worktree it would prepare is the one you are standing in.
+  - The commit names the ticket's paths explicitly, so edits already in the tree stay uncommitted: being asked for changes is exactly when someone has started making them.
+  - This is the way back from the case \`close --no-merge\` now refuses - see its \`already finalized\` note above.
 - \`$SCRIPT_COMMAND cancel [--force|-f] [--delete-worktree]\` - Cancel current ticket (no merge, moves to done/ with CANCELED marker)
   - Same as close: the worktree is kept unless \`--delete-worktree\` is given, and \`--keep-worktree\` is accepted as a no-op.
 - \`$SCRIPT_COMMAND selfupdate\` - Update ticket.sh to the latest version from GitHub
@@ -5947,10 +5982,83 @@ cmd_close_no_merge() {
         done_note="${done_dir}/${ticket_name}-note.md"
     fi
 
-    # Idempotent: already finalized (either layout in done/)
-    if [[ -f "${done_dir}/${ticket_name}/ticket.md" ]] || [[ -f "${done_dir}/${ticket_name}.md" ]]; then
-        echo "Ticket already finalized: $ticket_name"
-        return 0
+    # Already in done/. Re-running close here used to be a flat success - the
+    # command is meant to be idempotent, a bot that retries should not be
+    # punished for it. But "idempotent" only holds while nothing has changed,
+    # and off the base branch something can: the move into done/ rides in on the
+    # PR there (a workflow token cannot push to a protected default branch), so
+    # a human can read the PR and ask for changes while the ticket sits in done/.
+    # The gates - checklist, append-only, pre_close_command - had already run
+    # against the branch as it was. Reporting success again afterwards meant a
+    # gate that refuses --force could be walked around by finalizing first and
+    # fixing after, and nothing said so.
+    #
+    # So: on the base branch, unchanged (the merge has happened; see the long
+    # comment on the gates below). Off it, the answer depends on whether the
+    # branch has moved since the ticket was finalized - `reopen` is the way
+    # back, and it is what the refusal names.
+    local _done_fm_file=""
+    if [[ -f "${done_dir}/${ticket_name}/ticket.md" ]]; then
+        _done_fm_file="${done_dir}/${ticket_name}/ticket.md"
+    elif [[ -f "${done_dir}/${ticket_name}.md" ]]; then
+        _done_fm_file="${done_dir}/${ticket_name}.md"
+    fi
+    if [[ -n "$_done_fm_file" ]]; then
+        local _fin_branch=$(get_current_branch)
+        local _fin_fm=$(extract_yaml_frontmatter "$_done_fm_file")
+        local _fin_base=$(ticket_base_from_frontmatter "$_fin_fm" "$default_branch")
+
+        if [[ "$_fin_branch" == "$default_branch" ]] || [[ "$_fin_branch" == "$_fin_base" ]]; then
+            echo "Ticket already finalized: $ticket_name"
+            return 0
+        fi
+
+        # Which commit put the ticket in done/, and what came after it on this
+        # branch. The commit is found with --diff-filter=A on the done/ path
+        # rather than by taking the newest commit that touched the file: the
+        # commits that follow a finalize routinely touch the ticket too (a note
+        # written as the work goes on is the normal case), and reading the
+        # newest of those as the finalize point would make every such branch
+        # look untouched - the hole this is closing, closed in a way that opens
+        # whenever anyone keeps notes.
+        local _fin_sha=$(git log --diff-filter=A -1 --format=%H -- "$_done_fm_file" 2>/dev/null)
+        if [[ -z "$_fin_sha" ]]; then
+            cat >&2 << EOF
+Error: Ticket is in done/, but no commit put it there
+The ticket file is in done/ and this branch's history does not contain the move,
+so there is no point to measure "has anything changed since" against:
+  ticket:      $_done_fm_file
+  you are on:  $_fin_branch
+Commit the move, or bring the ticket back with reopen and close it again:
+  $SCRIPT_COMMAND reopen $ticket_name
+Nothing was closed.
+EOF
+            return 1
+        fi
+
+        local _fin_after=$(git rev-list --count "${_fin_sha}..HEAD" 2>/dev/null || echo 0)
+        if [[ "$_fin_after" -eq 0 ]]; then
+            echo "Ticket already finalized: $ticket_name"
+            return 0
+        fi
+
+        cat >&2 << EOF
+Error: Ticket was already finalized, and the branch has moved since
+The gates this command applies off the base branch - the checklist, the
+append-only files, pre_close_command - ran when the ticket was finalized. They
+have not seen what the branch holds now:
+  ticket:        $_done_fm_file
+  finalized at:  ${_fin_sha:0:7}
+  new commits:   $_fin_after
+  you are on:    $_fin_branch
+Closing again here would report success without checking any of it.
+
+Bring the ticket back into the working set, then close it again:
+  $SCRIPT_COMMAND reopen $ticket_name
+  $SCRIPT_COMMAND close --no-merge $ticket_name
+Nothing was closed.
+EOF
+        return 1
     fi
 
     # Target must exist
@@ -5987,15 +6095,7 @@ EOF
     # done/ without giving anyone an action that helps.
     local _gated=false
     if [[ "$current_branch" != "$default_branch" ]]; then
-        local _ticket_base=$(get_yaml_field "$_fm" "base_branch")
-        if is_null_or_empty "$_ticket_base" || \
-           [[ "$(echo "$_ticket_base" | tr '[:upper:]' '[:lower:]')" == "default" ]]; then
-            _ticket_base=$(get_yaml_field "$_fm" "merge_to")
-        fi
-        local _base_lower=$(echo "$_ticket_base" | tr '[:upper:]' '[:lower:]')
-        if is_null_or_empty "$_ticket_base" || [[ "$_base_lower" == "default" ]]; then
-            _ticket_base="$default_branch"
-        fi
+        local _ticket_base=$(ticket_base_from_frontmatter "$_fm" "$default_branch")
         # A ticket whose own base_branch is where we are standing is the
         # after-the-merge case too, whatever default_branch says.
         [[ "$current_branch" != "$_ticket_base" ]] && _gated=true
@@ -7163,6 +7263,268 @@ EOF
         echo "Moved to: $new_ticket_path"
     fi
     echo "Feature branch '$current_branch' has been kept (not deleted)"
+}
+
+# Bring a finalized ticket back into the working set.
+#
+# `close --no-merge` is also used before the PR is merged, on the ticket's own
+# branch, because the move into done/ has to ride in on the PR rather than
+# follow it. That means a ticket can be in done/ while the work is still being
+# argued about: the human reads the PR and asks for changes. There was no way
+# back from there - `start` only looks at the open location, so the ticket
+# stayed in done/ while the branch kept moving.
+#
+# What it does: git mv the ticket back out of done/, set closed_at to null, one
+# commit, re-link current-ticket/ and print the paths. What it deliberately
+# does not do: run `pre_close_command` (nothing is being closed, and a project
+# check that passes here would say the opposite of what it means) or
+# `post_start_command` (the worktree it prepares is the one you are standing
+# in, already prepared).
+#
+# The commit is made with an explicit pathspec, like start's, so a tree that
+# already has edits in it keeps them: being asked for changes is exactly the
+# moment someone has started making them.
+cmd_reopen() {
+    local ticket_name_arg=""
+    local dry_run=false
+    local no_push=false
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --dry-run|-n)
+                dry_run=true
+                shift
+                ;;
+            --no-push)
+                no_push=true
+                shift
+                ;;
+            -*)
+                echo "Error: Unknown option: $1" >&2
+                echo "Usage: $SCRIPT_COMMAND reopen [--dry-run|-n] [--no-push] <ticket-name>" >&2
+                return 1
+                ;;
+            *)
+                if [[ -n "$ticket_name_arg" ]]; then
+                    echo "Error: Too many arguments: $1" >&2
+                    echo "Usage: $SCRIPT_COMMAND reopen [--dry-run|-n] [--no-push] <ticket-name>" >&2
+                    return 1
+                fi
+                ticket_name_arg="$1"
+                shift
+                ;;
+        esac
+    done
+
+    check_git_repo || return 1
+    check_config || return 1
+
+    if ! yaml_parse "$CONFIG_FILE"; then
+        echo "Error: Cannot parse configuration file: $CONFIG_FILE" >&2
+        echo "Configuration file may be corrupted or unreadable" >&2
+        return 1
+    fi
+    local tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
+    local default_branch=$(yaml_get "default_branch" || echo "$DEFAULT_BRANCH")
+    local branch_prefix=$(yaml_get "branch_prefix" || echo "$DEFAULT_BRANCH_PREFIX")
+    local repository=$(yaml_get "repository" || echo "$DEFAULT_REPOSITORY")
+    local auto_push=$(yaml_get "auto_push" || echo "$DEFAULT_AUTO_PUSH")
+    local no_verify=$(yaml_get "no_verify" || echo "$DEFAULT_NO_VERIFY")
+    config_read_ticket_files
+
+    if [[ -z "$ticket_name_arg" ]]; then
+        echo "Error: <ticket-name> is required" >&2
+        echo "Usage: $SCRIPT_COMMAND reopen [--dry-run|-n] [--no-push] <ticket-name>" >&2
+        return 1
+    fi
+
+    local ticket_name=$(extract_ticket_name "$ticket_name_arg")
+    local done_dir="${tickets_dir}/done"
+
+    # Locate the ticket in done/, either layout.
+    local is_new_format=false
+    local done_ticket_dir="" done_ticket="" done_note=""
+    local dst_dir="" ticket_file="" note_file=""
+    if [[ -f "${done_dir}/${ticket_name}/ticket.md" ]]; then
+        is_new_format=true
+        done_ticket_dir="${done_dir}/${ticket_name}"
+        done_ticket="${done_ticket_dir}/ticket.md"
+        dst_dir="${tickets_dir}/${ticket_name}"
+        ticket_file="${dst_dir}/ticket.md"
+    elif [[ -f "${done_dir}/${ticket_name}.md" ]]; then
+        done_ticket="${done_dir}/${ticket_name}.md"
+        done_note="${done_dir}/${ticket_name}-note.md"
+        ticket_file="${tickets_dir}/${ticket_name}.md"
+        note_file="${tickets_dir}/${ticket_name}-note.md"
+    else
+        local _open=""
+        [[ -f "${tickets_dir}/${ticket_name}/ticket.md" ]] && _open="${tickets_dir}/${ticket_name}/ticket.md"
+        [[ -z "$_open" ]] && [[ -f "${tickets_dir}/${ticket_name}.md" ]] && _open="${tickets_dir}/${ticket_name}.md"
+        if [[ -n "$_open" ]]; then
+            cat >&2 << EOF
+Error: Ticket is not in done/
+There is nothing to bring back - this ticket is already in the working set:
+  ticket:  $_open
+Work on it with start, or re-link it with restore:
+  $SCRIPT_COMMAND start $ticket_name
+  $SCRIPT_COMMAND restore
+EOF
+        else
+            ticket_not_found_error "$ticket_name" >&2
+        fi
+        return 1
+    fi
+
+    local _fm=$(extract_yaml_frontmatter "$done_ticket")
+
+    # A cancelled ticket is in done/ too, under a -CANCELED- name, and cancel
+    # says the work is not happening. Reopening it would restore the directory
+    # with CANCELED in its name and the decision reversed by a file move.
+    local _canceled=$(get_yaml_field "$_fm" "canceled_at")
+    if ! is_null_or_empty "$_canceled"; then
+        cat >&2 << EOF
+Error: Ticket was cancelled, not closed
+reopen brings back a ticket that was finished; this one was called off:
+  ticket:       $done_ticket
+  canceled_at:  $_canceled
+If the work is happening after all, open a ticket for it:
+  $SCRIPT_COMMAND new <slug>
+EOF
+        return 1
+    fi
+
+    # The working location must be free: a ticket in both places is a state
+    # this command would make worse by moving one onto the other.
+    local _taken=""
+    if [[ "$is_new_format" == "true" ]] && [[ -e "$dst_dir" ]]; then
+        _taken="$dst_dir"
+    elif [[ "$is_new_format" == "false" ]] && [[ -e "$ticket_file" ]]; then
+        _taken="$ticket_file"
+    fi
+    if [[ -n "$_taken" ]]; then
+        cat >&2 << EOF
+Error: The working location is already taken
+The ticket is in done/, but its place in the working set is not empty, so the
+move would write one over the other:
+  in done/:     $done_ticket
+  in the way:   $_taken
+Look at both and keep the one that has the work in it. Nothing was moved.
+EOF
+        return 1
+    fi
+
+    local current_branch=$(get_current_branch)
+    local ticket_base=$(ticket_base_from_frontmatter "$_fm" "$default_branch")
+    local ticket_branch=$(ticket_branch_name "$done_ticket" "$branch_prefix" "$ticket_name")
+
+    # On the base branch, a ticket in done/ has been merged: the work is in the
+    # history, and moving the file back would not bring the decision back with
+    # it. Follow-up work is a new ticket, which is also what keeps `close`'s
+    # idempotence on the base branch meaning what it says.
+    if [[ "$current_branch" == "$default_branch" ]] || [[ "$current_branch" == "$ticket_base" ]]; then
+        cat >&2 << EOF
+Error: Refusing to reopen on the base branch
+A ticket that reached its base branch is merged, and bringing the file back
+would not bring back the work's history or the decision to take it:
+  ticket:       $done_ticket
+  base_branch:  $ticket_base
+  you are on:   $current_branch
+Open a ticket for the follow-up work instead:
+  $SCRIPT_COMMAND new <slug>
+EOF
+        return 1
+    fi
+
+    # Off the base branch, it has to be the ticket's own branch: the commits
+    # that follow the finalize are what a second close has to judge, and they
+    # only exist there.
+    if [[ "$current_branch" != "$ticket_branch" ]]; then
+        cat >&2 << EOF
+Error: Not on the ticket's branch
+reopen runs on the branch the ticket was finalized from, where the commits that
+came after it are:
+  ticket:       $done_ticket
+  its branch:   $ticket_branch
+  you are on:   $current_branch
+Switch to that branch (or its worktree) and run reopen again:
+  git checkout $ticket_branch
+  $SCRIPT_COMMAND reopen $ticket_name
+EOF
+        return 1
+    fi
+
+    if [[ "$dry_run" == "true" ]]; then
+        echo "Dry-run: all preflight checks passed."
+        echo "  ticket:         $done_ticket"
+        echo "  would move to:  $ticket_file"
+        echo "  closed_at:      would be set to null"
+        echo "  current branch: $current_branch"
+        echo ""
+        echo "No changes were made. Re-run without --dry-run to reopen the ticket."
+        return 0
+    fi
+
+    # Move it back. The pathspec for the commit carries both ends of the move,
+    # so the rename is recorded and nothing else is.
+    local _commit_paths=()
+    if [[ "$is_new_format" == "true" ]]; then
+        run_git_command "git mv \"$done_ticket_dir\" \"$dst_dir\"" || {
+            echo "Error: Failed to move ticket directory out of done/" >&2
+            return 1
+        }
+        _commit_paths=("$done_ticket_dir" "$dst_dir")
+    else
+        run_git_command "git mv \"$done_ticket\" \"$ticket_file\"" || {
+            echo "Error: Failed to move ticket out of done/" >&2
+            return 1
+        }
+        _commit_paths=("$done_ticket" "$ticket_file")
+        if [[ -f "$done_note" ]]; then
+            run_git_command "git mv \"$done_note\" \"$note_file\"" || {
+                echo "Error: Failed to move note file out of done/" >&2
+                return 1
+            }
+            _commit_paths+=("$done_note" "$note_file")
+        fi
+    fi
+
+    # started_at is left alone: the ticket was started, and that is still true.
+    update_yaml_frontmatter_field "$ticket_file" "closed_at" "null" || {
+        echo "Error: Failed to clear the ticket's closed_at field" >&2
+        return 1
+    }
+
+    local _commit_args=""
+    local _p
+    for _p in "${_commit_paths[@]}"; do
+        _commit_args="$_commit_args \"$_p\""
+    done
+    local _no_verify=""
+    [[ "$no_verify" == "true" ]] && _no_verify=" --no-verify"
+    run_git_command "git commit${_no_verify} -m \"[reopen] $current_branch\" --${_commit_args}" || {
+        echo "Error: Failed to commit the reopened ticket" >&2
+        return 1
+    }
+
+    if [[ "$auto_push" == "true" ]] && [[ "$no_push" == "false" ]]; then
+        run_git_command "git push $repository $current_branch" || {
+            echo "Warning: Failed to push to remote repository" >&2
+            echo "The ticket is reopened locally. Push when ready:" >&2
+            echo "  git push $repository $current_branch" >&2
+        }
+    fi
+
+    create_current_ticket_symlinks "." "$tickets_dir" "$ticket_name" || return 1
+    ensure_ticket_tmp_dir "." "$tickets_dir" "$ticket_name"
+
+    echo "Reopened ticket: $ticket_name"
+    echo "Moved back to: $ticket_file"
+    echo "closed_at: null"
+    if [[ "$auto_push" == "false" ]] || [[ "$no_push" == "true" ]]; then
+        echo "Note: Changes not pushed to remote. Use 'git push $repository $current_branch' when ready."
+    fi
+
+    emit_active_ticket_paths "." "$tickets_dir" "$ticket_name"
 }
 
 # Command: version
@@ -8480,6 +8842,10 @@ main() {
         close)
             shift
             cmd_close "$@"
+            ;;
+        reopen)
+            shift
+            cmd_reopen "$@"
             ;;
         cancel)
             shift

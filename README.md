@@ -183,6 +183,7 @@ They are never auto-migrated to the new layout; convert on your own schedule.
 - `start [--worktree] [--copy-file <path>]... <ticket>` - Start working on ticket (--worktree creates a separate worktree; --copy-file appends paths to `worktree_copy_files` at invocation time)
 - `close [--no-push] [--force] [--no-delete-remote] [--dry-run|-n] [--delete-worktree]` - Complete ticket
 - `cancel [--force|-f] [--delete-worktree]` - Cancel ticket without merging
+- `reopen [--dry-run|-n] [--no-push] <ticket>` - Bring a ticket that `close --no-merge` moved into `done/` back into the working set. Runs only on the ticket's own branch; refuses on the base branch
 - `restore` - Rebuild the active-ticket symlinks (`current-ticket/`, `current-ticket.md`, `current-note.md`) from the current branch name
 
 ### Utility Commands
@@ -228,13 +229,49 @@ When a PR is merged on GitHub, the ticket's changes are already on the base bran
 ticket.sh close --no-merge [--closed-at <ISO8601-UTC>] [--no-push] <ticket-name>
 ```
 
-It takes the ticket name as an explicit argument (it does not rely on the active-ticket symlinks or the current branch) and is idempotent — re-running on an already-finalized ticket exits 0 without changes. Typical use is a GitHub Actions `pull_request: [closed]` trigger that passes `--closed-at "${{ github.event.pull_request.merged_at }}"` so `closed_at` records the actual merge time.
+It takes the ticket name as an explicit argument (it does not rely on the active-ticket symlinks or the current branch) and is idempotent — re-running on an already-finalized ticket exits 0 without changes, as long as the branch has not moved since (see below). Typical use is a GitHub Actions `pull_request: [closed]` trigger that passes `--closed-at "${{ github.event.pull_request.merged_at }}"` so `closed_at` records the actual merge time.
 
 **Two places it runs, and the gates.** `--no-merge` also fits a second shape: finalize *before* the PR exists, on the ticket's own branch, so the move into `done/` rides in on the PR's diff. That is what you need when a workflow token cannot push to a protected default branch (`GH006`), which makes the after-the-merge push impossible.
 
 The `require_checklist` / `require_checklist_groups` / `append_only_files` / `pre_close_command` gates **apply whenever `--no-merge` runs on a branch other than the ticket's base branch**, and are skipped when it runs on that branch. Off the base branch everything is measurable and a refusal is still actionable; on it the merge has already happened, and refusing would only strand the ticket outside `done/`. As with a normal `close`, nothing bypasses the gates — there is no flag, because a gate you have to remember to ask for is one that goes quiet exactly when it is forgotten.
 
 `--dry-run` works here too: it runs the same checks and exits before anything is written.
+
+**When the ticket is already in `done/`.** Finalizing before the PR is merged means a ticket can sit in `done/` while the work is still being discussed: the reviewer reads the PR and asks for changes. Re-running `close --no-merge` there used to exit 0 and run nothing, which turned the gates above into something you could walk around by finalizing first and fixing after — silently, and including the gates that refuse `--force`.
+
+So the idempotent 0 now holds only while the branch has not moved:
+
+- **Unchanged branch** → exit 0, nothing done, exactly as before. A retrying bot is not punished for retrying.
+- **Commits added after the finalize**, off the base branch → exit 1, naming the finalize commit, how many commits came after it, and `reopen` as the way back. The gates ran against the branch as it was then; they have not seen this.
+- **On the base branch** → exit 0 as before, however far it has moved. The merge has already happened there, the gates are skipped by design, and refusing would strand the ticket outside `done/` with nothing useful to do about it.
+
+The finalize point is the commit that **added** the `done/` path, not the newest commit that touched the ticket. Commits after a finalize routinely touch the ticket — a note written as the work goes on is the normal case — and reading the newest of those as the finalize point would make every branch that keeps notes look untouched.
+
+### Reopening a finalized ticket (`reopen`)
+
+```bash
+ticket.sh reopen [--dry-run|-n] [--no-push] <ticket-name>
+```
+
+The way back from the case above: it moves the ticket out of `done/`, sets `closed_at` to `null`, commits that as `[reopen] <branch>`, re-links `current-ticket/` and prints the `Active ticket paths:` block. `started_at` is left alone — the ticket was started, and that is still true. Both layouts are handled; a legacy flat ticket brings its `<name>-note.md` back with it.
+
+- **Only on the ticket's own branch** (its `branch:`, else `{branch_prefix}<name>`), or in that branch's worktree. The commits a second close has to judge only exist there.
+- **Refused on the base branch.** A ticket that reached its base branch is merged, and moving the file back would not bring back the work or the decision to take it. Follow-up work is a new ticket.
+- **Refused for a cancelled ticket**, for the same reason in reverse: `cancel` said the work is not happening, and a file move is not where that gets reversed.
+- Neither `pre_close_command` nor `post_start_command` runs. Reopening does not claim the work is finished, and the worktree `post_start_command` would prepare is the one you are standing in.
+- The commit names the ticket's paths explicitly, so edits already in the tree stay uncommitted. Being asked for changes is exactly the moment someone has started making them.
+
+Typical use, in a bot that treats "a human merged the PR" as the close:
+
+```bash
+# PDH-verify passed: finalize the ticket so the move rides in on the PR
+ticket.sh close --no-merge "$TICKET"
+
+# the reviewer asks for changes instead of merging
+ticket.sh reopen "$TICKET"
+# ... fix, commit ...
+ticket.sh close --no-merge "$TICKET"   # the gates run again, against the work as it stands
+```
 
 ## Ticket File Format
 

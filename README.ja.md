@@ -183,6 +183,7 @@ tickets/
 - `close [--no-push] [--force] [--no-delete-remote] [--dry-run|-n] [--delete-worktree]` - チケットを完了
 - `close --no-merge [--closed-at <ISO8601-UTC>] [--dry-run|-n] <ticket>` - squash merge せずに完了（PR 経由で merge 済み／これから merge する場合）。ticket の base branch 以外で走っているときは checklist / append_only の gate が効く（後述）
 - `cancel [--force|-f] [--delete-worktree]` - マージせずにチケットをキャンセル
+- `reopen [--dry-run|-n] [--no-push] <ticket>` - `close --no-merge` が `done/` へ移した ticket を作業中へ戻す。ticket 自身の branch 上でだけ動き、base branch 上では拒否する
 - `restore` - アクティブチケット symlink 群 (`current-ticket/`, `current-ticket.md`, `current-note.md`) を現在ブランチ名から再構築
 
 ### ユーティリティコマンド
@@ -426,6 +427,44 @@ default_content: |
 `require_checklist` / `require_checklist_groups` / `append_only_files` / `pre_close_command` の gate は、**ticket の base branch 以外で走っているときに効く**。そこではすべて測れるし、拒否されても直せる。base branch 上（merge 済み）では従来どおり飛ばす——そこで拒否しても ticket が `done/` の外に取り残されるだけで、役に立つ行動にならないため。
 
 通常の `close` と同じく迂回手段は無い。flag による opt-in にしないのは、「呼ぶのを忘れる」形の穴が**何も出力しない**まま残るため。`--dry-run` も使える（同じ検査を走らせて、何も書かずに終わる）。
+
+#### ticket が既に `done/` にあるとき
+
+PR を merge する前に finalize するということは、作業がまだ議論されている間 ticket が `done/` に在り得るということ: reviewer が PR を読んで修正を求める、という普通の流れがそれ。そこで `close --no-merge` を再実行すると従来は 0 を返して何もしなかったので、上の gate は「先に finalize して後から直す」だけで迂回できた——**何も出力しないまま**、`--force` で迂回できない gate も含めて。
+
+そこで、冪等な 0 は **branch が動いていない間だけ**にした:
+
+- **branch が動いていない** → 従来どおり exit 0、何もしない。retry する bot が retry したことで罰を受けることはない
+- **finalize の後に commit が増えている**（base branch 以外） → exit 1。finalize した commit、その後に増えた commit 数、戻り道としての `reopen` を名指しする。gate が見たのはその時点の branch であって、今の branch ではない
+- **base branch 上** → どれだけ進んでいても従来どおり exit 0。そこでは merge が済んでいて gate は設計上飛ばしており、拒否しても ticket が `done/` の外に取り残されるだけ
+
+finalize の基準は、その `done/` path を **追加した** commit であって、ticket を触った最新の commit ではない。finalize の後の commit は ticket を触ることが普通にある（作業しながら note を書く運用がそれ）ので、最新を基準にすると note を書く人の branch はすべて「動いていない」と読まれてしまう。
+
+### finalize した ticket を戻す（`reopen`）
+
+```bash
+ticket.sh reopen [--dry-run|-n] [--no-push] <ticket-name>
+```
+
+上の戻り道。`done/` から ticket を出し、`closed_at` を `null` に戻し、それを `[reopen] <branch>` として 1 commit にし、`current-ticket/` を張り直して `Active ticket paths:` を出す。`started_at` は触らない——その ticket は実際に開始されたのであって、それは今も本当だから。両レイアウトに対応し、flat（旧形式）の ticket は `<name>-note.md` も一緒に戻る。
+
+- **ticket 自身の branch 上でだけ**（frontmatter の `branch:`、無ければ `{branch_prefix}<name>`）、またはその worktree 内で動く。2 回目の close が判定すべき commit はそこにしか無い
+- **base branch 上では拒否**。base branch に届いた ticket は merge 済みで、ファイルを戻しても作業も「取り込むという判断」も戻らない。続きの作業は新しい ticket
+- **cancel 済みの ticket も拒否**。理由は逆向きに同じで、`cancel` は「この作業はやらない」と言ったのであり、それを覆す場所はファイルの移動ではない
+- `pre_close_command` も `post_start_command` も走らない。戻すことは「終わった」と主張しないし、`post_start_command` が整える worktree は今立っているその worktree
+- commit は ticket の path を明示して作るので、tree にある編集はそのまま未 commit で残る。修正を求められた直後は、まさに誰かが手を付け始めている瞬間だから
+
+「人が PR を merge すること」を close とみなす bot での典型:
+
+```bash
+# PDH-verify 通過: done/ への移動を PR の差分に載せるため finalize する
+ticket.sh close --no-merge "$TICKET"
+
+# reviewer が merge せず修正を求めた
+ticket.sh reopen "$TICKET"
+# ... 直して commit ...
+ticket.sh close --no-merge "$TICKET"   # gate が今の作業に対してもう一度走る
+```
 
 ### 追記のみのファイル（`append_only_files`）
 - **記録として残すファイル向け**: 経緯ログが価値を持つのは、誰も後から回り道を消して整えなかったから。その path を `append_only_files` に挙げると、かつてそのファイルにあった行が今そこに無い間 `close` が止まり、ファイル名・消した commit・その行を名指しする。

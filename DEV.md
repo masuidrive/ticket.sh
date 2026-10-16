@@ -134,6 +134,11 @@ The main script uses a case statement to route commands:
   check exists to refuse; this is preparation, and the worktree is already built
   when it runs, so a failure warns and names the command to re-run rather than
   leaving a ticket nobody can open because a registry was briefly down.
+- `ticket_base_from_frontmatter()` resolves a ticket's base branch: `base_branch`,
+  then the historical `merge_to`, then the configured default, with the literal
+  `default` meaning the default too. Three commands had their own copy of that
+  cascade; `cmd_close_no_merge()` now needs the answer twice (for an open ticket
+  and for one already in `done/`), which is one copy too many to keep writing out.
 - `branch_carries_only()` answers whether a branch holds anything beyond the
   base other than the named files. It lists the commits (`log --name-only`)
   rather than diffing, because a file added on the branch and deleted again
@@ -181,6 +186,15 @@ The main script uses a case statement to route commands:
 - Finalizes without a squash-merge: sets `closed_at`, `git mv`s the ticket into `done/`, commits and pushes on the current branch.
 - Applies the checklist, append-only and `pre_close_command` gates **when the current branch is not the ticket's base branch** (`base_branch` frontmatter, falling back to `default_branch`), and skips them when it is. The original skip was reasoning about where the command runs, not about the command: the same call now also happens before the PR exists, on the ticket's own branch, because a workflow token cannot push to a protected default branch and the move into `done/` has to ride in on the PR. Skipping there let a gate that refuses `--force` be walked around by changing the call site, with no output. On the base branch the merge has already happened, so refusing would strand the ticket outside `done/`.
 - Honours `--dry-run`, which `cmd_close` used to accept and drop on the floor for this path.
+- Refuses a ticket that is **already in `done/` on a branch that has moved since**, instead of the flat exit 0 it used to return. The idempotent 0 is kept where it is true: on the base branch (where the merge has happened and the gates are skipped by design, so a retrying bot has nothing to gain from a refusal) and off it when no commit followed the finalize. Off the base branch with commits after it, the gates above ran against a branch nobody is looking at any more, and reporting success meant they could be walked around by finalizing first and fixing after — the hole `reopen` is the way out of. The refusal names the finalize commit, the count, and `reopen`.
+- Decides "has the branch moved" from `git log --diff-filter=A -1 -- <done path>`, the commit that **added** the ticket to `done/`, not the newest commit that touched it. Commits after a finalize routinely touch the ticket (a note written as the work goes on), and taking the newest would make every branch that keeps notes look untouched — the same hole, reopened for exactly the people who write things down. A `done/` path with no such commit in this branch's history is also a refusal: there is no point to measure "since" against, and guessing is what this is replacing.
+- Reads the already-finalized ticket's frontmatter from the `done/` copy, since the open path is gone by then — that is what the base-branch test above needs in order to honour a ticket's own `base_branch`.
+
+#### `cmd_reopen()`
+- `git mv`s a finalized ticket out of `done/` (whole directory, or the flat `.md` plus its `-note.md`), sets `closed_at` back to `null`, commits `[reopen] <branch>`, re-links the `current-*` symlinks and prints `emit_active_ticket_paths()` — the resume half of `start`, without the branch work, because the branch is already the one you are on.
+- Runs only on the ticket's own branch (`ticket_branch_name()`), and refuses on the base branch before that: a ticket that reached its base branch is merged, and moving the file back brings neither the work nor the decision with it. The other refusals are the ones where reopening would mean something other than it says — a cancelled ticket (`cancel` said the work is not happening), a ticket that is not in `done/` at all, and a working location that is already occupied, which is the only one where proceeding would lose data.
+- Commits with an explicit pathspec rather than `git add` + bare `git commit`, so edits already in the tree stay uncommitted. Being asked for changes is the moment someone starts making them, and a reopen that swept them in would be a surprise in the direction that is hard to undo. It also means no clean-tree check is needed: the commit cannot pick up anything that is not the ticket's.
+- Runs neither `pre_close_command` nor `post_start_command`, and that is the whole of design note 26.
 
 #### `close_ticket()`
 - Runs the project's own `pre_close_command` last of the gates and still before any mutation, refusing on a non-zero exit (`pre_close_run()` in `lib/utils.sh`). Exported for it: `TICKET_NAME`, `TICKET_DIR` (empty for a legacy flat ticket), `TICKET_FILE`, `TICKET_BRANCH`, `TICKET_BASE_BRANCH` — resolved here, after the ticket's `base_branch` has already overridden `default_branch`, so a retargeted ticket hands the check the branch it is actually merging into. Runs under `--dry-run`, not bypassed by `--force`, and `cancel_ticket()` does not call it.
@@ -224,6 +238,7 @@ See `test/README.md` for detailed test documentation. Key points:
 - **pre-close-command tests** (`test-pre-close-command.sh`): that nothing is run and nothing is said when the key is absent or empty, that a failing command stops the close with its own output and leaves `closed_at` unstamped, that `--force` does not get past it and `--dry-run` shows it, that every `TICKET_*` variable holds what it claims (including a retargeted `base_branch` and a legacy flat ticket's empty `TICKET_DIR`), that `cancel` never runs it, that in worktree mode it runs in the worktree, that `--no-merge` gates it only off the base branch, and that a check which `cd`s away or ends on a false test cannot derail the close around it
 - **temp-file isolation tests** (`test-tmpfile-isolation.sh`): that two closes running in parallel never read each other's frontmatter (40 paired runs, failing on a single occurrence — against the old code 40 of 80 runs read the wrong ticket), that a file planted at the old fixed paths is left alone by `close`, `start` and `cancel`, that `description: |` still reads as its content (the guard against "fix" by replacing `yaml_parse` with a line matcher), that every temp file made is removed again, and that a `mktemp` which cannot deliver stops the run instead of carrying on
 - **post-start-command tests** (`test-post-start-command.sh`): that nothing runs and nothing is said when the key is absent, that on a worktree it creates it runs at that worktree's root with every `TICKET_*` variable and before the paths block, that resuming into an existing worktree runs nothing while a rebuilt worktree is prepared again, that `--no-worktree` and `--no-post-start` run nothing (and a misspelt flag is still an error), that a failure is a warning which leaves the worktree usable and `started_at` stamped, and that a command which `cd`s away or ends on a false test is contained
+- **reopen tests** (`test-reopen.sh`): that a finalized ticket comes back with `closed_at: null`, `started_at` untouched, one commit recorded as a rename, the symlinks re-linked and the paths block printed; that edits already in the tree are not swept into that commit; that it refuses on the base branch, on any other branch, for a ticket that is not in `done/`, for a cancelled one, when the working location is occupied, with no name and with a misspelt flag; that `--dry-run` changes nothing and still reports the refusals; that the gates are live again after a reopen (a project check that fails stops the second close, and passing it finalizes and re-stamps `closed_at`); that `close --no-merge` on a ticket already in `done/` keeps its exit 0 on an unchanged branch and on the base branch however far it has moved, refuses when commits followed the finalize, and is not fooled by a commit that touches the ticket's note; and that a legacy flat ticket comes back with its sibling note
 - **start no-switch tests** (`test-start-no-switch.sh`): that a ticket the base branch does not carry is refused with the branch, HEAD and working tree untouched and no switch announced, that the message names the real problem instead of claiming the ticket does not exist, that `list` still sees the ticket afterwards, that a ticket in neither place is still `Ticket not found` without a switch, that each of the three printed ways out works when run exactly as printed (the carry command naming the whole ticket directory, so the note comes with it), and that the ordinary cross-branch start still switches and still lands on the new feature branch
 - **Branch override tests** (`test-branch-override.sh`): `new --branch` validation, the full lifecycle (start/check/restore/close/list) on a ticket whose branch is named in its frontmatter, and the case where the ticket exists only on that branch
 - **Start base-sync tests** (`test-start-base-sync.sh`): both fast-forward mechanisms, the untracked ticket file `new` leaves behind, the fallback when the fast-forward cannot happen, and the base branch being held back when the resumed branch carries work of its own — including that a branch ahead only by the ticket's own files still advances it, and that `cancel` leaves nothing behind
@@ -573,6 +588,22 @@ Documentation updates should be part of the same PR as code changes.
    be undone on failure; here it could, which is strictly better, since an undo
    is one more thing that can fail.
 
+26. **A way back, or a check that stops being one**: `close --no-merge`'s
+   idempotent exit 0 was true when the command only ran after a merge. Once it
+   also runs *before* one, on the ticket's own branch, "already in `done/`"
+   stopped meaning "finished" and started meaning "finished as far as anyone
+   knew an hour ago" — and a gate that is skipped on the second run is not a
+   gate, it is a gate with a published bypass. Two things had to arrive
+   together: the refusal, and `reopen`, the way back. Either alone would have
+   been worse than neither. A refusal with no way back strands the work, which
+   is how the first version of this command came to skip the gates on the base
+   branch in the first place (design note 22's reasoning, which still holds
+   there); a `reopen` with no refusal leaves the bypass open for anyone who does
+   not happen to use it. The matching pair is also why `reopen` runs neither
+   `pre_close_command` nor `post_start_command`: the first would be a close
+   check answering a question nobody asked, and its passing would read as
+   approval of a ticket being un-finished.
+
 ### Recent Enhancements
 
 - **Smart branch handling**: Automatically handles existing branches and clean states
@@ -588,6 +619,8 @@ Documentation updates should be part of the same PR as code changes.
 - **Project's own preparation after start**: `post_start_command` runs one shell line at a freshly-created worktree's root for what a copy cannot produce; a failure warns and leaves the ticket started
 - **No fixed temp paths**: frontmatter parsing goes through `mktemp`, so parallel closes cannot read each other's ticket and a predictable name cannot be pre-created as a symlink
 - **Project's own check before close**: `pre_close_command` runs one shell line after the other gates and before the squash-merge; a non-zero exit stops the close and the command's own output is what you see
+- **`reopen`**: brings a ticket `close --no-merge` finalized back into the working set — out of `done/`, `closed_at` cleared, symlinks re-linked — on the ticket's own branch only
+- **No second close without the gates**: `close --no-merge` on a ticket already in `done/` keeps its idempotent exit 0 only while the branch has not moved; commits added after the finalize are refused, with `reopen` named as the way back
 - **Gated `--no-merge`**: the checklist, append-only and `pre_close_command` gates apply to `close --no-merge` when it runs off the ticket's base branch, where they can be measured
 - **Worktrees are kept by default**: `close` / `cancel` leave the worktree in place; `--delete-worktree` removes it, and `--keep-worktree` remains as a no-op
 - **Unknown flags stop `start`**: retired flags are inert by name, everything else is an error

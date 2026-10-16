@@ -4,7 +4,7 @@ base_branch: default  # Override base branch for start/close (default: use defau
 description: "done へ移した ticket を作業中へ戻す reopen と、done のまま直したときの close の抜け道（GH #22）"
 created_at: "2026-10-16T14:56:01Z"
 started_at: 2026-10-16T14:56:28Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-10-16T15:13:43Z # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
 
@@ -44,19 +44,19 @@ issue の提案 1〜6 に沿う。提案 4 の判定基準だけ変える:
 
 ## Tasks
 
-- [ ] `cmd_reopen` を実装する（done/ から元の場所へ `git mv`、`closed_at: null`、1 commit）
-- [ ] base branch の上では拒否し、ticket の branch（または worktree）でだけ動くようにする
-- [ ] 戻した後に symlink を張り直し `Active ticket paths:` を出す
-- [ ] flat の legacy layout（`done/<name>.md` + `-note.md`）も戻せるようにする
-- [ ] `--dry-run` を持たせる
-- [ ] `close --no-merge` の «already finalized» を、追加 commit が無ければ 0・在れば 1 にする
-- [ ] 判定の基準 commit を `--diff-filter=A` で取る（ticket 本文を直した commit に乗らない）
-- [ ] main() の dispatch と show_usage に足す
-- [ ] test/test-reopen.sh を書き、修正前のコードに対して落ちることを確認する
-- [ ] Run tests before closing and pass all tests (No exceptions)
-- [ ] Run `bash build.sh` to build the project
-- [ ] Update documentation if necessary
-  - [ ] Update README.*.md
-  - [ ] Update spec.*.md
-  - [ ] Update DEV.md
-- [ ] Get developer approval before closing
+- [x] `cmd_reopen` を実装する（done/ から元の場所へ `git mv`、`closed_at: null`、1 commit）
+- [x] base branch の上では拒否し、ticket の branch（または worktree）でだけ動くようにする
+- [x] 戻した後に symlink を張り直し `Active ticket paths:` を出す
+- [x] flat の legacy layout（`done/<name>.md` + `-note.md`）も戻せるようにする
+- [x] `--dry-run` を持たせる
+- [x] `close --no-merge` の «already finalized» を、追加 commit が無ければ 0・在れば 1 にする
+- [x] 判定の基準 commit を `--diff-filter=A` で取る（ticket 本文を直した commit に乗らない）
+- [x] main() の dispatch と show_usage に足す
+- [x] test/test-reopen.sh を書き、修正前のコードに対して落ちることを確認する
+- [x] Run tests before closing and pass all tests (No exceptions)
+- [x] Run `bash build.sh` to build the project
+- [x] Update documentation if necessary
+  - [x] Update README.*.md
+  - [x] Update spec.*.md
+  - [x] Update DEV.md
+- [x] Get developer approval before closing

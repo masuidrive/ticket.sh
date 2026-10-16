@@ -785,3 +785,31 @@ post_start_run() {
 
     return 0
 }
+
+# The base branch a ticket names, resolved.
+#
+# Reads `base_branch`, falls back to the historical `merge_to`, and treats both
+# an empty/null value and the literal `default` (any case) as "whatever the
+# config calls the default branch". Three commands asked this question with
+# three copies of the same cascade; `close --no-merge` now asks it twice, once
+# for a ticket that is still open and once for one already in done/, which is
+# one copy too many to keep writing out.
+#
+# Usage: ticket_base_from_frontmatter <frontmatter-text> <default_branch>
+ticket_base_from_frontmatter() {
+    local fm="$1"
+    local default_branch="$2"
+
+    local base
+    base=$(get_yaml_field "$fm" "base_branch")
+    if is_null_or_empty "$base" || \
+       [[ "$(echo "$base" | tr '[:upper:]' '[:lower:]')" == "default" ]]; then
+        base=$(get_yaml_field "$fm" "merge_to")
+    fi
+    local lower
+    lower=$(echo "$base" | tr '[:upper:]' '[:lower:]')
+    if is_null_or_empty "$base" || [[ "$lower" == "default" ]]; then
+        base="$default_branch"
+    fi
+    echo "$base"
+}

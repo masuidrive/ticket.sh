@@ -351,6 +351,7 @@ default_content: |
 ./ticket.sh check [--require "<group name>"]  # 同期状態 + ticket/note のチェックリスト（--require は1グループだけ判定）
 ./ticket.sh close [--no-push] [--force|-f]  # チケット完了・マージ処理
 ./ticket.sh cancel [--force|-f]           # マージせずにチケットをキャンセル
+./ticket.sh reopen [--dry-run|-n] [--no-push] <ticket-name>  # close --no-merge が finalize した ticket を作業中へ戻す
 ```
 
 ---
@@ -1133,6 +1134,31 @@ ticket が `done/` の外に取り残されるだけで、誰の役にも立つ�
 でも見える。plain `check` は同じ内容を表示して exit 0 のままなので、branch がまだ自分の
 もので追記できるうちに気づける。
 
+**ticket が既に `done/` にあるとき。** `--no-merge` は元から冪等で、`done/` にある ticket に
+対しては exit 0 で何も書かない——retry する bot が retry したことで罰を受けないように。
+merge の前に finalize するようになると、この約束は強すぎる。PR がまだ読まれている間 ticket は
+`done/` に在り、merge せず修正を求める reviewer は、ticket が「終わった」と言ったまま作業が
+動く状態を残す。そこでの 2 回目の close は gate を 1 つも走らせずに成功を報告していたので、
+ここまでの gate はすべて「先に finalize して後から直す」で迂回できた——`--force` でも抜けられ
+ないと宣言したものまで含めて、何も出力しないまま。
+
+0 を返すのは、branch が動いていない間だけになった:
+
+| 場所・状況 | 結果 |
+|-----------|------|
+| base branch 上（または ticket 自身の `base_branch` 上） | exit 0、何も書かない。branch がどれだけ進んでいても同じ |
+| それ以外で、finalize の後に commit が無い | exit 0、何も書かない |
+| それ以外で、finalize の後に commit が増えている | exit 1。finalize の commit、その後の commit 数、`reopen` を名指しする |
+| それ以外で、`done/` への移動がこの branch の履歴に無い | exit 1——「それ以降」を測る基準点が無い |
+
+finalize の基準は、その `done/` path を**追加した** commit
+（`git log --diff-filter=A -1`）であって、ticket を触った最新の commit ではない。finalize の
+後の commit が ticket を触ることは普通にある（作業しながら note を書く運用がそれ）ので、最新を
+基準にすると note を書く人の branch はすべて「動いていない」と読まれる——この穴を、記録を残す
+人に対してだけ開け直すことになる。
+
+`--dry-run` でも拒否する。ここで pass を報告する dry run は、元の欠陥に flag を付けただけ。
+
 **導入先自身の検査**（`pre_close_command`）
 
 ここまでの gate は `ticket.sh` が考える「終わった ticket」である——tree が綺麗で、
@@ -1449,6 +1475,56 @@ closed_at: "2025-06-28T18:45:20Z"
 
 Implementation details...
 ```
+
+---
+
+### `reopen [--dry-run|-n] [--no-push] <ticket-name>`
+
+`close --no-merge` が `done/` へ移した ticket を作業中へ戻す。上の拒否に対する戻り道であり、
+戻り道はこれしかない: `start` は open の場所しか見ないので、`done/` にある ticket は作業を
+続け得るどのコマンドからも届かなかった。
+
+**やること**
+
+1. `done/` から ticket を `git mv` で出す——ディレクトリ丸ごと、または flat の `<name>.md` と
+   その `<name>-note.md`——元の場所へ
+2. `closed_at` を `null` に戻す。`started_at` は触らない。その ticket は実際に開始されたので、
+   それは今も本当だから
+3. `[reopen] <branch>` という 1 commit。ticket の path を明示した pathspec で作る
+4. `current-ticket/` / `current-ticket.md` / `current-note.md` を張り直し、
+   `Active ticket paths:` ブロックを出す（`start` の resume と同じ）
+5. `auto_push: true` かつ `--no-push` 未指定なら branch を push する。push の失敗は
+   `close` と同様 warning で、失敗扱いにはしない
+
+**走る場所**
+
+ticket 自身の branch 上だけ——frontmatter の `branch:`、無ければ
+`{branch_prefix}<ticket-name>`——またはその worktree 内。2 回目の close が判定すべき commit が
+あるのはそこだから。
+
+**拒否するもの**
+
+| 条件 | 理由 |
+|------|------|
+| base branch 上（`default_branch`、または ticket の `base_branch`） | base branch に届いた ticket は merge 済み。ファイルを戻しても作業も「取り込むという判断」も戻らない。続きは新しい ticket |
+| それ以外の branch 上 | finalize の後の commit がそこに無く、2 回目の close が量るものも無い |
+| ticket が `done/` に無い | 戻すものが無い。使うのは `start` か `restore` |
+| ticket の `canceled_at` が入っている | `cancel` は「この作業はやらない」と言ったのであり、ファイルの移動で覆すものではない |
+| 作業中の場所が埋まっている | 一方を他方に上書きすれば、どちらかが失われる |
+| `<ticket-name>` が無い／知らない flag | flag の打ち間違いは好みではなく間違い |
+
+**走らせないもの**
+
+`pre_close_command` も `post_start_command` も走らせない。戻すことは「作業が終わった」と
+主張しないので、ここで close の検査が通ったら言っている内容と逆になる。`post_start_command`
+が整える worktree は、今立っているその worktree であり、既に整っている。
+
+**commit の pathspec。** 素の `git commit` ではなく `git commit -- <ticket の path>` にして
+いるので、tree にある編集は未 commit のまま残る。修正を求められた直後は、まさに誰かが手を
+付け始めている瞬間であり、それを自分の commit に巻き込む reopen は、取り消しにくい方向の
+驚きになる。`no_verify: true` は `ticket.sh` 自身が作る他の commit と同じく尊重する。
+
+`--dry-run` は上のすべての検査を走らせ、移動も commit も張り替えもせずに終わる。
 
 ---
 
