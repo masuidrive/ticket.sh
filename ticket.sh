@@ -12,7 +12,7 @@ fi
 # Source file: src/ticket.sh
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20261016.114009
+# Version: 20261016.123801
 # Built from source files
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
@@ -347,15 +347,18 @@ yaml_parse() {
     # which corrupts the output for anyone sourcing this into zsh.
     local type indent key value rest item_key item_value
     
-    # Use temporary file to avoid process substitution (bash 3.2 compatibility)
-    local temp_yaml_output="/tmp/yaml_parse_$$.tmp"
-    _yaml_parse_awk "$file" > "$temp_yaml_output" 2>/dev/null || true
-    
-    # Ensure file exists and is not empty before processing
-    if [[ ! -f "$temp_yaml_output" ]]; then
+    # Use temporary file to avoid process substitution (bash 3.2 compatibility).
+    # mktemp rather than a name built from $$: the PID keeps two processes apart
+    # but not two subshells of one process, it says nothing about whether the
+    # path is already there as somebody else's symlink, and it assumes /tmp is
+    # both present and writable. mktemp answers all three and honours TMPDIR.
+    local temp_yaml_output
+    if ! temp_yaml_output=$(mktemp 2>/dev/null); then
         echo "Error: Failed to create temporary YAML output" >&2
+        echo "Check that TMPDIR (or /tmp) exists and is writable." >&2
         return 1
     fi
+    _yaml_parse_awk "$file" > "$temp_yaml_output" 2>/dev/null || true
     
     # Read line by line with explicit error handling for bash 5.1+ compatibility
     while IFS='' read -r line || [[ -n "$line" ]]; do
@@ -855,6 +858,48 @@ extract_markdown_body() {
         echo
     fi
 }
+# Parse YAML text into yaml-sh's globals, so `yaml_get` can read it.
+#
+# Usage: yaml_parse_text <yaml_content>
+#
+# yaml_parse takes a file, and the frontmatter it is wanted for is already a
+# string in hand. Three callers used to bridge that with a path of their own
+# naming - /tmp/ticket_yaml.yml, /tmp/ticket_yaml_early.yml - which is a fixed
+# name in a world-writable directory, and that is two bugs rather than a style
+# problem. Two `close` runs in parallel worktrees (the arrangement this script
+# advertises) wrote and read the same file and read each other's ticket: in a
+# hundred paired dry-runs, forty-eight read the wrong frontmatter, and where the
+# other ticket's base_branch happened to name a branch that also exists here,
+# the run passed every check and aimed the squash-merge at the wrong branch. And
+# on a shared machine a name anyone can predict is a name anyone can pre-create
+# as a symlink, which `>|` then follows - the removal afterwards takes the
+# symlink, not the file it clobbered.
+#
+# mktemp answers both: a name nobody else knows, created with O_EXCL, under
+# TMPDIR where the caller put it. A failure to make one stops the caller rather
+# than letting it read a file it did not write - which is what the whole problem
+# was.
+#
+# Returns yaml_parse's own status, so callers behave exactly as they did when
+# they called it directly.
+yaml_parse_text() {
+    local content="$1"
+    local tmp
+    if ! tmp=$(mktemp 2>/dev/null); then
+        echo "Error: could not create a temporary file to read the ticket's frontmatter" >&2
+        echo "Check that TMPDIR (or /tmp) exists and is writable." >&2
+        return 1
+    fi
+
+    local status=0
+    printf '%s\n' "$content" > "$tmp" || status=$?
+    if [[ "$status" -eq 0 ]]; then
+        yaml_parse "$tmp" || status=$?
+    fi
+    rm -f "$tmp"
+    return "$status"
+}
+
 # --- utils.sh ---
 
 # Utility functions for ticket.sh
@@ -2440,7 +2485,7 @@ if [ -z "${BASH_VERSION:-}" ]; then
 fi
 
 # ticket.sh - Git-based Ticket Management System for Development
-# Version: 20261016.114009
+# Version: 20261016.123801
 #
 # A lightweight ticket management system that uses Git branches and Markdown files.
 # Perfect for small teams, solo developers, and AI coding assistants.
@@ -2532,7 +2577,7 @@ SCRIPT_COMMAND=$(get_script_command)
 
 
 # Global variables
-VERSION="20261016.114009"  # This will be replaced during build
+VERSION="20261016.123801"  # This will be replaced during build
 CONFIG_FILE=""  # Will be set dynamically by get_config_file()
 CURRENT_TICKET_LINK="current-ticket.md"
 CURRENT_NOTE_LINK="current-note.md"
@@ -4601,14 +4646,12 @@ cmd_start() {
     local effective_base="$default_branch"
     if [[ -f "$ticket_file" ]]; then
         local _yaml_content=$(extract_yaml_frontmatter "$ticket_file")
-        echo "$_yaml_content" >| /tmp/ticket_yaml_early.yml
-        yaml_parse /tmp/ticket_yaml_early.yml
+        yaml_parse_text "$_yaml_content"
         local _base_branch=$(yaml_get "base_branch" || echo "")
         # Backward compatibility: fall back to merge_to if base_branch is not set
         if is_null_or_empty "$_base_branch" || [[ "$(echo "$_base_branch" | tr '[:upper:]' '[:lower:]')" == "default" ]]; then
             _base_branch=$(yaml_get "merge_to" || echo "default")
         fi
-        rm -f /tmp/ticket_yaml_early.yml
 
         local _base_lower=$(echo "$_base_branch" | tr '[:upper:]' '[:lower:]')
         if ! is_null_or_empty "$_base_branch" && [[ "$_base_lower" != "default" ]]; then
@@ -6108,8 +6151,7 @@ EOF
     
     # Check ticket status
     local yaml_content=$(extract_yaml_frontmatter "$ticket_file")
-    echo "$yaml_content" >| /tmp/ticket_yaml.yml
-    yaml_parse /tmp/ticket_yaml.yml
+    yaml_parse_text "$yaml_content"
     local started_at=$(yaml_get "started_at" || echo "null")
     local closed_at=$(yaml_get "closed_at" || echo "null")
     local description=$(yaml_get "description" || echo "")
@@ -6118,7 +6160,6 @@ EOF
     if is_null_or_empty "$base_branch" || [[ "$(echo "$base_branch" | tr '[:upper:]' '[:lower:]')" == "default" ]]; then
         base_branch=$(yaml_get "merge_to" || echo "default")
     fi
-    rm -f /tmp/ticket_yaml.yml
 
     # Override default_branch if base_branch is specified in ticket
     local base_branch_lower=$(echo "$base_branch" | tr '[:upper:]' '[:lower:]')
@@ -6699,8 +6740,7 @@ EOF
 
     # Check ticket status
     local yaml_content=$(extract_yaml_frontmatter "$ticket_file")
-    echo "$yaml_content" >| /tmp/ticket_yaml.yml
-    yaml_parse /tmp/ticket_yaml.yml
+    yaml_parse_text "$yaml_content"
     local started_at=$(yaml_get "started_at" || echo "null")
     local closed_at=$(yaml_get "closed_at" || echo "null")
     local canceled_at=$(yaml_get "canceled_at" || echo "null")
@@ -6710,7 +6750,6 @@ EOF
     if is_null_or_empty "$base_branch" || [[ "$(echo "$base_branch" | tr '[:upper:]' '[:lower:]')" == "default" ]]; then
         base_branch=$(yaml_get "merge_to" || echo "default")
     fi
-    rm -f /tmp/ticket_yaml.yml
 
     # Override default_branch if base_branch is specified
     local base_branch_lower=$(echo "$base_branch" | tr '[:upper:]' '[:lower:]')

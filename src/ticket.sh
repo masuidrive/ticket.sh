@@ -2189,14 +2189,12 @@ cmd_start() {
     local effective_base="$default_branch"
     if [[ -f "$ticket_file" ]]; then
         local _yaml_content=$(extract_yaml_frontmatter "$ticket_file")
-        echo "$_yaml_content" >| /tmp/ticket_yaml_early.yml
-        yaml_parse /tmp/ticket_yaml_early.yml
+        yaml_parse_text "$_yaml_content"
         local _base_branch=$(yaml_get "base_branch" || echo "")
         # Backward compatibility: fall back to merge_to if base_branch is not set
         if is_null_or_empty "$_base_branch" || [[ "$(echo "$_base_branch" | tr '[:upper:]' '[:lower:]')" == "default" ]]; then
             _base_branch=$(yaml_get "merge_to" || echo "default")
         fi
-        rm -f /tmp/ticket_yaml_early.yml
 
         local _base_lower=$(echo "$_base_branch" | tr '[:upper:]' '[:lower:]')
         if ! is_null_or_empty "$_base_branch" && [[ "$_base_lower" != "default" ]]; then
@@ -3696,8 +3694,7 @@ EOF
     
     # Check ticket status
     local yaml_content=$(extract_yaml_frontmatter "$ticket_file")
-    echo "$yaml_content" >| /tmp/ticket_yaml.yml
-    yaml_parse /tmp/ticket_yaml.yml
+    yaml_parse_text "$yaml_content"
     local started_at=$(yaml_get "started_at" || echo "null")
     local closed_at=$(yaml_get "closed_at" || echo "null")
     local description=$(yaml_get "description" || echo "")
@@ -3706,7 +3703,6 @@ EOF
     if is_null_or_empty "$base_branch" || [[ "$(echo "$base_branch" | tr '[:upper:]' '[:lower:]')" == "default" ]]; then
         base_branch=$(yaml_get "merge_to" || echo "default")
     fi
-    rm -f /tmp/ticket_yaml.yml
 
     # Override default_branch if base_branch is specified in ticket
     local base_branch_lower=$(echo "$base_branch" | tr '[:upper:]' '[:lower:]')
@@ -4287,8 +4283,7 @@ EOF
 
     # Check ticket status
     local yaml_content=$(extract_yaml_frontmatter "$ticket_file")
-    echo "$yaml_content" >| /tmp/ticket_yaml.yml
-    yaml_parse /tmp/ticket_yaml.yml
+    yaml_parse_text "$yaml_content"
     local started_at=$(yaml_get "started_at" || echo "null")
     local closed_at=$(yaml_get "closed_at" || echo "null")
     local canceled_at=$(yaml_get "canceled_at" || echo "null")
@@ -4298,7 +4293,6 @@ EOF
     if is_null_or_empty "$base_branch" || [[ "$(echo "$base_branch" | tr '[:upper:]' '[:lower:]')" == "default" ]]; then
         base_branch=$(yaml_get "merge_to" || echo "default")
     fi
-    rm -f /tmp/ticket_yaml.yml
 
     # Override default_branch if base_branch is specified
     local base_branch_lower=$(echo "$base_branch" | tr '[:upper:]' '[:lower:]')

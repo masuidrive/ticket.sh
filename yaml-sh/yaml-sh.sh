@@ -308,15 +308,18 @@ yaml_parse() {
     # which corrupts the output for anyone sourcing this into zsh.
     local type indent key value rest item_key item_value
     
-    # Use temporary file to avoid process substitution (bash 3.2 compatibility)
-    local temp_yaml_output="/tmp/yaml_parse_$$.tmp"
-    _yaml_parse_awk "$file" > "$temp_yaml_output" 2>/dev/null || true
-    
-    # Ensure file exists and is not empty before processing
-    if [[ ! -f "$temp_yaml_output" ]]; then
+    # Use temporary file to avoid process substitution (bash 3.2 compatibility).
+    # mktemp rather than a name built from $$: the PID keeps two processes apart
+    # but not two subshells of one process, it says nothing about whether the
+    # path is already there as somebody else's symlink, and it assumes /tmp is
+    # both present and writable. mktemp answers all three and honours TMPDIR.
+    local temp_yaml_output
+    if ! temp_yaml_output=$(mktemp 2>/dev/null); then
         echo "Error: Failed to create temporary YAML output" >&2
+        echo "Check that TMPDIR (or /tmp) exists and is writable." >&2
         return 1
     fi
+    _yaml_parse_awk "$file" > "$temp_yaml_output" 2>/dev/null || true
     
     # Read line by line with explicit error handling for bash 5.1+ compatibility
     while IFS='' read -r line || [[ -n "$line" ]]; do

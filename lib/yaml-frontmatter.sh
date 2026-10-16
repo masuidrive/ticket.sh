@@ -194,3 +194,44 @@ extract_markdown_body() {
         echo
     fi
 }
+# Parse YAML text into yaml-sh's globals, so `yaml_get` can read it.
+#
+# Usage: yaml_parse_text <yaml_content>
+#
+# yaml_parse takes a file, and the frontmatter it is wanted for is already a
+# string in hand. Three callers used to bridge that with a path of their own
+# naming - /tmp/ticket_yaml.yml, /tmp/ticket_yaml_early.yml - which is a fixed
+# name in a world-writable directory, and that is two bugs rather than a style
+# problem. Two `close` runs in parallel worktrees (the arrangement this script
+# advertises) wrote and read the same file and read each other's ticket: in a
+# hundred paired dry-runs, forty-eight read the wrong frontmatter, and where the
+# other ticket's base_branch happened to name a branch that also exists here,
+# the run passed every check and aimed the squash-merge at the wrong branch. And
+# on a shared machine a name anyone can predict is a name anyone can pre-create
+# as a symlink, which `>|` then follows - the removal afterwards takes the
+# symlink, not the file it clobbered.
+#
+# mktemp answers both: a name nobody else knows, created with O_EXCL, under
+# TMPDIR where the caller put it. A failure to make one stops the caller rather
+# than letting it read a file it did not write - which is what the whole problem
+# was.
+#
+# Returns yaml_parse's own status, so callers behave exactly as they did when
+# they called it directly.
+yaml_parse_text() {
+    local content="$1"
+    local tmp
+    if ! tmp=$(mktemp 2>/dev/null); then
+        echo "Error: could not create a temporary file to read the ticket's frontmatter" >&2
+        echo "Check that TMPDIR (or /tmp) exists and is writable." >&2
+        return 1
+    fi
+
+    local status=0
+    printf '%s\n' "$content" > "$tmp" || status=$?
+    if [[ "$status" -eq 0 ]]; then
+        yaml_parse "$tmp" || status=$?
+    fi
+    rm -f "$tmp"
+    return "$status"
+}

@@ -1153,6 +1153,21 @@ where the merge has already happened.
 Empty by default, and empty runs nothing. A key written with no value is the same
 as leaving it out.
 
+**Temporary files**
+
+`close`, `start` and `cancel` read the ticket's frontmatter through yaml-sh,
+which parses a file, so the frontmatter string is written to a temporary file
+first. That file is made with `mktemp` and removed again. It is named that way
+deliberately: the three callers used to use one fixed path under `/tmp`, and two
+closes running in parallel worktrees then read each other's ticket — in a
+hundred paired dry-runs, forty-eight read the wrong frontmatter, and where the
+other ticket's `base_branch` named a branch that also existed locally, the run
+passed every preflight check and aimed the squash-merge at the wrong branch. A
+predictable name in a shared directory is also a name anyone can pre-create as a
+symlink for `>|` to follow, and the removal afterwards takes the symlink rather
+than the file it clobbered. If no temporary file can be made, the command says so
+and stops, rather than continuing with a file it did not write.
+
 **Execution Flow:**
 1. **Check working directory**: Ensures no uncommitted changes (unless `--force` is used)
 2. **Update ticket**: Sets current time to `closed_at` of the ticket resolved via the `current-ticket.md` symlink

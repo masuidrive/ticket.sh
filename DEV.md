@@ -100,6 +100,12 @@ The main script uses a case statement to route commands:
   `<list>.<N>.<key>` would make the list look empty. A list item's first key
   must carry an inline value; a block scalar goes on its own indented line
   below it. Nesting is one level only.
+- `yaml_parse_text()` bridges the gap between `yaml_parse`, which takes a file,
+  and frontmatter that is already a string. It writes to an `mktemp` file and
+  removes it. Three callers used to bridge it with a path of their own naming
+  (`/tmp/ticket_yaml.yml`, `/tmp/ticket_yaml_early.yml`), which is a fixed name
+  in a world-writable directory — see design note 23. `yaml_parse` itself makes
+  its awk scratch file with `mktemp` for the same reason, rather than from `$$`.
 
 #### Utilities (lib/utils.sh)
 - Date/time handling and timezone conversion
@@ -208,6 +214,7 @@ See `test/README.md` for detailed test documentation. Key points:
 - **ticket_files tests** (`test-ticket-files.sh`): file creation, placeholder substitution, the `note.md` override, path escapes, the `Active ticket paths:` lines, and the declared files travelling into a worktree (both routes) without leaving anything untracked in the main repo
 - **append-only tests** (`test-append-only.sh`): the refusal, the message, `--force`/`--dry-run`, and that appending the lines again clears the gate without rewriting history
 - **pre-close-command tests** (`test-pre-close-command.sh`): that nothing is run and nothing is said when the key is absent or empty, that a failing command stops the close with its own output and leaves `closed_at` unstamped, that `--force` does not get past it and `--dry-run` shows it, that every `TICKET_*` variable holds what it claims (including a retargeted `base_branch` and a legacy flat ticket's empty `TICKET_DIR`), that `cancel` never runs it, that in worktree mode it runs in the worktree, that `--no-merge` gates it only off the base branch, and that a check which `cd`s away or ends on a false test cannot derail the close around it
+- **temp-file isolation tests** (`test-tmpfile-isolation.sh`): that two closes running in parallel never read each other's frontmatter (40 paired runs, failing on a single occurrence — against the old code 40 of 80 runs read the wrong ticket), that a file planted at the old fixed paths is left alone by `close`, `start` and `cancel`, that `description: |` still reads as its content (the guard against "fix" by replacing `yaml_parse` with a line matcher), that every temp file made is removed again, and that a `mktemp` which cannot deliver stops the run instead of carrying on
 - **Branch override tests** (`test-branch-override.sh`): `new --branch` validation, the full lifecycle (start/check/restore/close/list) on a ticket whose branch is named in its frontmatter, and the case where the ticket exists only on that branch
 - **Start base-sync tests** (`test-start-base-sync.sh`): both fast-forward mechanisms, the untracked ticket file `new` leaves behind, the fallback when the fast-forward cannot happen, and the base branch being held back when the resumed branch carries work of its own — including that a branch ahead only by the ticket's own files still advances it, and that `cancel` leaves nothing behind
 - **Error reporting tests** (`test-error-reporting.sh`): that a deliberate refusal is not dressed up as a crash, that an unplanned failure names the command and keeps its exit code, that a signal-class exit stays quiet, and that a detached main-repo HEAD reaches its own refusal. The crash cases inject a failing line into a *copy* of the built `ticket.sh`, right after the traps are installed — there is no way in from outside, and the hook has no business in the shipped script.
@@ -515,6 +522,23 @@ Documentation updates should be part of the same PR as code changes.
    It is not bypassed by `--force` for the same reason the checklist is not: the
    escape hatch belongs in the check, where the condition is written down.
 
+23. **A temp file nobody else can name**: `yaml_parse` takes a file and the
+   frontmatter is a string, and the three callers that bridged that each picked
+   a fixed path under `/tmp`. Both halves of that are defects. Two `close` runs
+   in parallel worktrees — the arrangement this script advertises, and which its
+   own main-repo guard exists to protect — wrote and read the same file: in a
+   hundred paired dry-runs, forty-eight read the other repo's ticket, and where
+   the other ticket's `base_branch` named a branch that also exists locally, the
+   run passed every preflight check and aimed the squash-merge at the wrong
+   branch. Separately, a name anyone can predict is a name anyone can pre-create
+   as a symlink, and `>|` follows it; the `rm -f` afterwards takes the symlink,
+   not the file it clobbered. `mktemp` answers both at once — unpredictable,
+   `O_EXCL`, and the platform's own private directory. The failure to make one
+   has to stop the caller, because carrying on without a file you wrote is the
+   whole bug. What is *not* the fix: dropping `yaml_parse` for a line matcher.
+   `description: |` is read by yaml-sh as its folded content and by a line
+   matcher as `|`, and the commit subject is where that would surface.
+
 ### Recent Enhancements
 
 - **Smart branch handling**: Automatically handles existing branches and clean states
@@ -526,6 +550,7 @@ Documentation updates should be part of the same PR as code changes.
 - **Extra ticket files**: `ticket_files` lets a project declare any number of companion files `new` should create, not just `note.md`
 - **Append-only files**: `append_only_files` makes `close` refuse when a file kept as a record has lost lines it used to hold
 - **Per-ticket branch names**: `branch:` in the frontmatter (`new --branch`) lets a ticket adopt a branch whose name came from outside
+- **No fixed temp paths**: frontmatter parsing goes through `mktemp`, so parallel closes cannot read each other's ticket and a predictable name cannot be pre-created as a symlink
 - **Project's own check before close**: `pre_close_command` runs one shell line after the other gates and before the squash-merge; a non-zero exit stops the close and the command's own output is what you see
 - **Gated `--no-merge`**: the checklist, append-only and `pre_close_command` gates apply to `close --no-merge` when it runs off the ticket's base branch, where they can be measured
 - **Worktrees are kept by default**: `close` / `cancel` leave the worktree in place; `--delete-worktree` removes it, and `--keep-worktree` remains as a no-op

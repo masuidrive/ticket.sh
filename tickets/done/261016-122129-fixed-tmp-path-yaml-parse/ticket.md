@@ -4,7 +4,7 @@ base_branch: default  # Override base branch for start/close (default: use defau
 description: "close / start / cancel の固定パス /tmp/ticket_yaml.yml をやめる（GH #20）"
 created_at: "2026-10-16T12:21:29Z"
 started_at: 2026-10-16T12:21:48Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-10-16T12:40:54Z # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
 
@@ -38,16 +38,17 @@ GH #20。`cmd_close` / `cmd_start` / `cmd_cancel` が ticket の frontmatter を
 
 ## Tasks
 
-- [ ] `yaml_parse_text()` を lib に足す（mktemp / 失敗時は理由を出して止まる）
-- [ ] `cmd_close` / `cmd_start` / `cmd_cancel` の 3 箇所を差し替える
-- [ ] `yaml-sh/yaml-sh.sh` の固定パスも mktemp にする
-- [ ] 並走しても互いの frontmatter を読まないテスト
-- [ ] 固定パスに symlink を置いても辿らないテスト
-- [ ] `TMPDIR` を見ること / `description: |` が従来どおり読めることのテスト
-- [ ] Run tests before closing and pass all tests (No exceptions)
-- [ ] Run `bash build.sh` to build the project
-- [ ] Update documentation if necessary
-  - [ ] Update README.*.md
-  - [ ] Update spec.*.md
-  - [ ] Update DEV.md
-- [ ] Get developer approval before closing
+- [x] `yaml_parse_text()` を lib に足す（mktemp / 失敗時は理由を出して止まる）
+- [x] `cmd_close` / `cmd_start` / `cmd_cancel` の 3 箇所を差し替える
+- [x] `yaml-sh/yaml-sh.sh` の固定パスも mktemp にする
+- [x] 並走しても互いの frontmatter を読まないテスト
+- [x] 固定パスに symlink を置いても辿らないテスト
+- [x] `description: |` が従来どおり読めることのテスト
+- [-] `TMPDIR` を見ることのテスト - skip: `mktemp`（template 無し）は GNU / busybox では `TMPDIR` を見るが macOS は見ない（per-user の temp dir を使う）。置き場所は platform の裁量で、必要な性質（private・予測不能・`O_EXCL`）はどちらも満たすので、「後に残っていないか」を見る テストに替えた（note.md 参照）
+- [x] Run tests before closing and pass all tests (No exceptions)
+- [x] Run `bash build.sh` to build the project
+- [x] Update documentation if necessary
+  - [x] Update README.*.md
+  - [x] Update spec.*.md
+  - [x] Update DEV.md
+- [x] Get developer approval before closing（「直して」）
