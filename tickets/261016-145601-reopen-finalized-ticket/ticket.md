@@ -3,7 +3,7 @@ priority: 2
 base_branch: default  # Override base branch for start/close (default: use default_branch from config)
 description: "done へ移した ticket を作業中へ戻す reopen と、done のまま直したときの close の抜け道（GH #22）"
 created_at: "2026-10-16T14:56:01Z"
-started_at: null  # Do not modify manually
+started_at: 2026-10-16T14:56:28Z # Do not modify manually
 closed_at: null   # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
