@@ -3,7 +3,7 @@ priority: 2
 base_branch: default  # Override base branch for start/close (default: use default_branch from config)
 description: "worktree を作った直後に導入先のコマンドを実行する設定（post_start_command / GH #19）"
 created_at: "2026-10-16T12:41:42Z"
-started_at: null  # Do not modify manually
+started_at: 2026-10-16T12:42:02Z # Do not modify manually
 closed_at: null   # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
