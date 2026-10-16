@@ -726,3 +726,62 @@ pre_close_run() {
 
     return 0
 }
+
+
+# Run the project's own preparation inside a worktree `start` has just created.
+#
+# Usage: post_start_run <command> <worktree_path> <ticket_name> <ticket_dir> \
+#                       <ticket_file> <feature_branch> <base_branch>
+#
+# <command> is the single shell line the project put in `post_start_command`.
+# Empty (or `null`, which is what yaml_get hands back for a key written with no
+# value) means the project declared nothing, which is the default.
+#
+# This is the counterpart of pre_close_run, and the one way it differs is the
+# important part: a failure here does not stop anything. `pre_close_command` is
+# a check - its whole job is to refuse. This is preparation, and the worktree is
+# already built by the time it runs, so stopping would mean a transient npm
+# registry error could leave a ticket that cannot be opened at all. A warning
+# that says what to re-run leaves the worktree usable and the problem visible.
+# So this always returns 0, and the caller does not test it.
+post_start_run() {
+    local command="$1"
+    local wt_path="$2"
+    local ticket_name="$3"
+    local ticket_dir="$4"
+    local ticket_file="$5"
+    local feature_branch="$6"
+    local base_branch="$7"
+
+    [[ -z "$command" || "$command" == "null" ]] && return 0
+
+    echo "Running post_start_command: $command"
+
+    # A subshell, for the same reasons as in pre_close_run: the line is shell
+    # written elsewhere, errexit would give `test -d x && npm ci` a meaning its
+    # author did not write, and a command that cd's somewhere has no business
+    # changing the rest of start. The cd is the point here, though - the files
+    # this installs belong in the new worktree, not in the main checkout the
+    # caller is standing in.
+    local status=0
+    (
+        set +e +u +o pipefail
+        cd "$wt_path" || exit 1
+        export TICKET_NAME="$ticket_name"
+        export TICKET_DIR="$ticket_dir"
+        export TICKET_FILE="$ticket_file"
+        export TICKET_BRANCH="$feature_branch"
+        export TICKET_BASE_BRANCH="$base_branch"
+        eval "$command"
+    ) || status=$?
+
+    if [[ "$status" -ne 0 ]]; then
+        echo "Warning: post_start_command failed (exit $status)" >&2
+        echo "  $command" >&2
+        echo "The worktree is ready and the ticket is started - only this preparation" >&2
+        echo "step did not finish. Fix what it reports above and run it yourself:" >&2
+        echo "  cd $wt_path && $command" >&2
+    fi
+
+    return 0
+}

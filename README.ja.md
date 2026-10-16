@@ -269,6 +269,15 @@ require_checklist: false
 # 既定は空で、空なら何も走らない。
 # pre_close_command: "bash scripts/check-ticket.sh"
 
+# 'start' が作ったばかりの worktree で、worktree_copy_files のコピーの後に走らせる
+# shell 1 行。コピーでは作れないもの（package manager が作るディレクトリ）のため。
+# worktree を作った run のときだけで、worktree を作らない start では走らない。
+# 'start --no-post-start' で 1 回だけ飛ばせる。失敗しても start は止まらない——
+# warning と出力と再実行する 1 行が出る。新しい worktree の root で走り、
+# TICKET_NAME / TICKET_DIR / TICKET_FILE / TICKET_BRANCH / TICKET_BASE_BRANCH が
+# 渡される。既定は空。
+# post_start_command: "npm ci"
+
 # Worktree mode: create a separate git worktree for each ticket
 # When true, 'start' creates a worktree even without the --worktree flag.
 # This is a default, not a rule: 'start --no-worktree' skips the worktree for
@@ -446,6 +455,7 @@ pre_close_command: "bash scripts/check-ticket.sh"
 - **同時に close しても混ざらない**: ticket の frontmatter を parse するとき、各 run は `mktemp` で作った自分専用のファイルを使う。少し前まではこれを行う 3 つのコマンドがどれも `/tmp` の固定パスを使っていたため、2 つの close を同時に走らせると 100 回中 48 回が**相手の ticket** を読んでいた。相手の `base_branch` がこちらにも在る branch 名だった場合は、どの検査も通ったうえで squash-merge の先を間違える。
 - **カスタムディレクトリ**: configで`worktree_dir`を設定してworktreeの場所をカスタマイズ（デフォルト: `../<プロジェクト名>.worktrees/`）
 - **worktree 用ファイルコピー**: config の `worktree_copy_files: [".env"]` (任意の repo 相対 path のリスト)を指定すると、start が worktree を作った直後に main repo からその path 群を worktree へコピー。target 側に既にあれば上書きせず skip、source に無ければ warn のみで続行。ワンショットは `start --worktree --copy-file <path>` (反復可)。gitignore された `.env` 等を新 worktree でも即座に使うことを想定 — gitignore 前提なので、共有 config に入っていても各人自身の `.env` が各人の worktree にコピーされるだけで secret は拡散しない。
+- **新しい worktree を整える**: config に `post_start_command: "npm ci"` を書くと、`start` が作ったばかりの worktree の root で、`worktree_copy_files` のコピーの後に実行する。コピーでは作れないもの——package manager が作るディレクトリ——のため。**worktree を作った run のときだけ**で、既にある worktree に resume したときは入れ直さない。worktree を作らない `start` では走らず、`start --no-post-start` で 1 回だけ飛ばせる。失敗しても `start` は**止まらない**: その時点で worktree はもう出来ているので、registry の一時的な失敗で ticket が開けなくなるより、warning とコマンド自身の出力と「これを再実行すればよい」という 1 行が出る方がよい。`TICKET_NAME` / `TICKET_DIR` / `TICKET_FILE` / `TICKET_BRANCH` / `TICKET_BASE_BRANCH` が渡され、出力は `Active ticket paths:` ブロックより前に出る（agent が読む必要があるのはそのブロックなので）。
 
 ### エラー回復
 - **checkコマンド**: 問題を診断して次のステップのガイダンス提供

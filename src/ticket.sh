@@ -142,6 +142,7 @@ DEFAULT_WORKTREE_DIR=""  # Empty means auto: ../<project-name>.worktrees
 DEFAULT_NO_VERIFY="false"  # Run Git hooks on commits ticket.sh makes itself
 DEFAULT_REQUIRE_CHECKLIST="false"  # close does not judge the ticket/note checklists
 DEFAULT_PRE_CLOSE_COMMAND=""  # no project check runs before close
+DEFAULT_POST_START_COMMAND=""  # no project preparation runs after a worktree is made
 DEFAULT_CONTENT='# Ticket Overview
 
 Write the overview and tasks for this ticket here.
@@ -272,11 +273,12 @@ be recognized by every command; they are never auto-migrated.
   - With \`ticket_files\` in config, the declared files are created in the ticket directory alongside \`note.md\`.
 - \`$SCRIPT_COMMAND list [--status STATUS] [--count N]\` - List tickets (default: todo + doing, count: 20)
   - A ticket the current branch calls \`todo\` is checked against its branch (\`branch:\` if set, else \`{branch_prefix}<name>\`) before being believed. If that branch carries a \`started_at\`, the ticket is \`doing\` and the line \`started_at_only_on: <branch>\` says the timestamp lives only there - which happens when \`start\`'s fast-forward onto the base branch was skipped.
-- \`$SCRIPT_COMMAND start [--worktree|--no-worktree] [--copy-file <path>]... <ticket-name>\` - Start working on ticket (creates or switches to feature branch, --worktree creates a separate worktree)
+- \`$SCRIPT_COMMAND start [--worktree|--no-worktree] [--no-post-start] [--copy-file <path>]... <ticket-name>\` - Start working on ticket (creates or switches to feature branch, --worktree creates a separate worktree)
   - With \`--worktree\`: **cd to the worktree directory after start; cd back to the main repo after close.** In environments where cwd resets each command (e.g. LLM agents), cd must be re-run every time.
   - \`--no-worktree\` turns \`worktree_mode: true\` off for this one call, so \`start\` switches branches in the current checkout as it would without the setting. For a caller that owns its whole checkout and works one ticket in it - a CI runner - a worktree protects nobody, and creating one would leave the work in the original checkout while the ticket's branch lived elsewhere. Passing both flags is an error, not a preference.
   - When the current branch is the one the ticket's \`branch:\` names, the ticket is there, and the base branch has no copy of it, \`start\` stays on that branch instead of switching to the base: it stamps \`started_at\`, commits it there, and skips the fast-forward with a line saying why. Switching would walk away from the only copy of the ticket. Running it again resumes rather than re-stamps.
   - \`start\` commits \`started_at\` on the feature branch and fast-forwards the base branch onto that commit, so the ticket shows as \`doing\` from the base branch too. Nothing is pushed: the base branch reaches the remote on close. If the base branch has moved on, the fast-forward is skipped with a note and the start time stays on the feature branch.
+  - \`post_start_command\` (one shell line in config) is the project's own preparation, run at the new worktree's root after \`worktree_copy_files\`, for what a copy cannot produce - the directories a package manager builds. Only on the run that **creates** the worktree, never when \`start\` makes none, and skippable for one call with \`--no-post-start\`. A failure does **not** stop \`start\`: the worktree is already built, so you get a warning, the command's output and the line to re-run, rather than a ticket you cannot open because a registry was down. \`TICKET_NAME\`, \`TICKET_DIR\`, \`TICKET_FILE\`, \`TICKET_BRANCH\` and \`TICKET_BASE_BRANCH\` are exported for it, and its output comes before the \`Active ticket paths:\` block.
   - \`--copy-file <path>\` (repeatable) copies the given file from the main repo into the new worktree, appended to the \`worktree_copy_files\` config list. Only applied when a worktree is created. Existing files in the target are never overwritten; missing sources warn and continue. Typical use: bringing gitignored \`.env\` into the worktree.
 - \`$SCRIPT_COMMAND restore\` - Restore current-ticket.md symlink from branch name (a branch named by some ticket's \`branch:\` resolves too, not only \`{branch_prefix}*\`)
 - \`$SCRIPT_COMMAND check [--require "<group name>"]\` - Check current directory and ticket/branch synchronization status
@@ -587,6 +589,21 @@ require_checklist: $DEFAULT_REQUIRE_CHECKLIST
 #     - .env
 #     - .env.local
 worktree_copy_files: []
+
+# One shell line run in a worktree 'start' has just created, after
+# worktree_copy_files has been copied in. For what a copy cannot produce: the
+# directories a package manager builds ('npm ci', 'uv sync', 'bundle install').
+# Only on the run that creates the worktree - resuming a ticket whose worktree
+# is already there does not install anything again - and never when 'start' does
+# not make a worktree. 'start --no-post-start' skips it for one call.
+# A failure does NOT stop start. The worktree is already built by the time this
+# runs, so a registry hiccup would otherwise leave a ticket that cannot be opened
+# at all; instead you get a warning, the command's output, and the line to re-run.
+# (pre_close_command is the opposite: a check whose job is to refuse.)
+# The command runs at the new worktree's root with TICKET_NAME, TICKET_DIR,
+# TICKET_FILE, TICKET_BRANCH and TICKET_BASE_BRANCH exported.
+# Empty by default, and empty runs nothing.
+# post_start_command: "npm ci"
 
 # Success messages (leave empty to disable)
 # Message displayed after creating a new ticket
@@ -2019,6 +2036,11 @@ cmd_start() {
     # Extra paths appended to config's worktree_copy_files via --copy-file.
     # Repeatable; ignored entirely unless use_worktree is true.
     local cli_copy_files=()
+    # Skip the project's post_start_command for this one call. Preparation can be
+    # the slowest part of start (a full `npm ci`), and someone who only wants to
+    # read the ticket should not have to wait for it or edit the config to avoid
+    # it.
+    local no_post_start=false
 
     # Parse arguments.
     while [[ $# -gt 0 ]]; do
@@ -2055,6 +2077,10 @@ cmd_start() {
                 cli_copy_files+=("${1#--copy-file=}")
                 shift
                 ;;
+            --no-post-start)
+                no_post_start=true
+                shift
+                ;;
             --no-push)
                 # Deprecated and inert: start stopped pushing anything, so there
                 # is nothing for this to turn off. Named explicitly rather than
@@ -2067,7 +2093,7 @@ cmd_start() {
                 ;;
             -*)
                 echo "Error: Unknown option: $1" >&2
-                echo "Usage: $SCRIPT_COMMAND start [--worktree|--no-worktree] [--copy-file <path>]... <ticket-name>" >&2
+                echo "Usage: $SCRIPT_COMMAND start [--worktree|--no-worktree] [--no-post-start] [--copy-file <path>]... <ticket-name>" >&2
                 return 1
                 ;;
             *)
@@ -2091,7 +2117,7 @@ cmd_start() {
 
     if [[ -z "$ticket_input" ]]; then
         echo "Error: ticket name required" >&2
-        echo "Usage: $SCRIPT_COMMAND start [--worktree|--no-worktree] [--copy-file <path>]... <ticket-name>" >&2
+        echo "Usage: $SCRIPT_COMMAND start [--worktree|--no-worktree] [--no-post-start] [--copy-file <path>]... <ticket-name>" >&2
         return 1
     fi
 
@@ -2111,6 +2137,7 @@ cmd_start() {
     local repository=$(yaml_get "repository" || echo "$DEFAULT_REPOSITORY")
     local no_verify=$(yaml_get "no_verify" || echo "$DEFAULT_NO_VERIFY")
     local start_success_message=$(yaml_get "start_success_message" || echo "$DEFAULT_START_SUCCESS_MESSAGE")
+    local post_start_command=$(yaml_get "post_start_command" || echo "$DEFAULT_POST_START_COMMAND")
     # Read while yaml_get still holds the config: the ticket's own frontmatter
     # is parsed into the same globals further down, and emit_active_ticket_paths
     # runs after that.
@@ -2483,6 +2510,11 @@ EOF
     # Anchor the worktree path on main_repo (not cwd's toplevel) so callers
     # inside other worktrees still produce the canonical path.
     local wt_path=""
+    # Whether this run is the one that built the worktree. post_start_command is
+    # preparation, not upkeep: re-running `npm ci` every time somebody resumes a
+    # ticket would make resuming slow for no gain, and a worktree that was
+    # already there has already been prepared.
+    local _wt_created=false
     if [[ "$use_worktree" == "true" ]]; then
         local project_root="$main_repo"
         local project_name=$(basename "$project_root")
@@ -2546,6 +2578,7 @@ EOF
                 fi
                 mkdir -p "$(dirname "$wt_path")"
                 run_git_command "git -C $main_repo worktree add $wt_path $branch_name" || return 1
+                _wt_created=true
             fi
         else
             # Checkout existing branch (original behavior)
@@ -2658,6 +2691,16 @@ EOF
         if [[ "$use_worktree" == "true" ]] && [[ ${#copy_files_list[@]} -gt 0 ]]; then
             copy_worktree_files "$main_repo" "$wt_path" "${copy_files_list[@]}"
         fi
+        # The project's own preparation, for the files a copy cannot produce
+        # (node_modules and the like). Only when this run built the worktree,
+        # and before the paths block below, so an install log does not push the
+        # one piece of output an agent has to read off the top of the screen.
+        if [[ "$_wt_created" == "true" ]] && [[ "$no_post_start" == "false" ]]; then
+            local _ps_dir=""
+            [[ "${ticket_file##*/}" == "ticket.md" ]] && _ps_dir="${ticket_file%/ticket.md}"
+            post_start_run "$post_start_command" "$wt_path" "$ticket_name" \
+                "$_ps_dir" "$ticket_file" "$branch_name" "$effective_base"
+        fi
         echo "Resumed ticket: $ticket_name"
         echo "Continuing work on existing feature branch."
         emit_active_ticket_paths "$link_dir" "$tickets_dir" "$ticket_name"
@@ -2709,6 +2752,7 @@ EOF
         # Create worktree with new branch (operate on main repo, never touch cwd HEAD)
         mkdir -p "$(dirname "$wt_path")"
         run_git_command "git -C $main_repo worktree add -b $branch_name $wt_path $start_from" || return 1
+        _wt_created=true
 
         # If the ticket file isn't on start_from, bring it (and related files)
         # over from cwd's branch. Note: cwd is unchanged in worktree mode, so
@@ -2783,6 +2827,16 @@ EOF
         # gitignored .env). Idempotent — skips entries that already exist.
         if [[ ${#copy_files_list[@]} -gt 0 ]]; then
             copy_worktree_files "$main_repo" "$wt_path" "${copy_files_list[@]}"
+        fi
+        # See the resume path above: preparation the project owns, run in the
+        # worktree, before the paths block. The _wt_created test is always true
+        # here - this branch is the one that creates the worktree - and is kept
+        # so both call sites read the same and neither can drift.
+        if [[ "$_wt_created" == "true" ]] && [[ "$no_post_start" == "false" ]]; then
+            local _ps_dir_new=""
+            [[ "${ticket_file##*/}" == "ticket.md" ]] && _ps_dir_new="${ticket_file%/ticket.md}"
+            post_start_run "$post_start_command" "$wt_path" "$ticket_name" \
+                "$_ps_dir_new" "$ticket_file" "$branch_name" "$effective_base"
         fi
         echo "Started ticket: $ticket_name"
         # Emit resolved paths relative to the worktree (that's where the agent

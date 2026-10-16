@@ -359,6 +359,15 @@ require_checklist: false
 # Empty by default, and empty runs nothing.
 # pre_close_command: "bash scripts/check-ticket.sh"
 
+# One shell line run in a worktree 'start' has just created, after
+# worktree_copy_files. For what a copy cannot produce: the directories a package
+# manager builds. Only on the run that creates the worktree, never when no
+# worktree is made, and 'start --no-post-start' skips it for one call. A failure
+# does NOT stop start - you get a warning, the output and the line to re-run.
+# Runs at the new worktree's root with TICKET_NAME, TICKET_DIR, TICKET_FILE,
+# TICKET_BRANCH and TICKET_BASE_BRANCH exported. Empty by default.
+# post_start_command: "npm ci"
+
 # Worktree mode: create a separate git worktree for each ticket
 # When true, 'start' creates a worktree even without the --worktree flag.
 # This is a default, not a rule: 'start --no-worktree' skips the worktree for
@@ -529,6 +538,7 @@ pre_close_command: "bash scripts/check-ticket.sh"
   - Multiple AI agents (Claude Code, etc.) are running in parallel from different worktrees
   - Two tickets are closed at the same time from different worktrees. Each run parses its own ticket's frontmatter through a private `mktemp` file. Until recently all three commands that do this used one fixed path under `/tmp`, so in a hundred paired runs forty-eight read the *other* ticket — and where the other ticket's `base_branch` named a branch that also existed locally, the close passed every check and aimed the squash-merge at the wrong branch.
 - **Populate worktree extras**: Set `worktree_copy_files: [".env"]` (or any list of repo-relative paths) in config to copy those files from the main repo into a freshly-created worktree. Existing files in the target are never overwritten; missing sources warn and continue. One-shot additions: `start --worktree --copy-file <path>` (repeatable). Intended for gitignored helpers like `.env` — the assumption is those files are gitignored, so each collaborator's own `.env` is copied into their own worktree and secrets stay local.
+- **Prepare a fresh worktree**: Set `post_start_command: "npm ci"` in config and `start` runs it at the new worktree's root, after `worktree_copy_files`, for the things no copy can produce — the directories a package manager builds. Only on the run that **creates** the worktree (resuming into one that is already there installs nothing again), never when `start` makes no worktree, and skippable for one call with `start --no-post-start`. A failure does **not** stop `start`: the worktree is already built by then, so a registry hiccup would otherwise leave a ticket nobody can open; instead you get a warning, the command's own output and the line to re-run. `TICKET_NAME`, `TICKET_DIR`, `TICKET_FILE`, `TICKET_BRANCH` and `TICKET_BASE_BRANCH` are exported for it, and its output comes before the `Active ticket paths:` block, which is the part an agent has to read.
 
 ### Check Command Diagnostics
 

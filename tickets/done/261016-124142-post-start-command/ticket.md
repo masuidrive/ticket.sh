@@ -4,7 +4,7 @@ base_branch: default  # Override base branch for start/close (default: use defau
 description: "worktree を作った直後に導入先のコマンドを実行する設定（post_start_command / GH #19）"
 created_at: "2026-10-16T12:41:42Z"
 started_at: 2026-10-16T12:42:02Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-10-16T13:13:15Z # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
 
@@ -37,18 +37,18 @@ repo root の `node_modules` も無く依存不足で落ちる。いまは「wor
 
 ## Tasks
 
-- [ ] `post_start_command` を config に足す（既定値・生成される config のコメント）
-- [ ] `post_start_run()` を lib に足す（worktree root で実行・失敗しても 0）
-- [ ] worktree を新規作成した 2 経路（新しい branch / 既存 branch）で呼ぶ
-- [ ] 既存 worktree の再利用・worktree なしの start では呼ばない
-- [ ] `--no-post-start` を足す（unknown flag は従来どおりエラーのまま）
-- [ ] `Active ticket paths:` を後に出す順序にする
-- [ ] 環境変数 5 つを渡す
-- [ ] テストを書く
-- [ ] Run tests before closing and pass all tests (No exceptions)
-- [ ] Run `bash build.sh` to build the project
-- [ ] Update documentation if necessary
-  - [ ] Update README.*.md
-  - [ ] Update spec.*.md
-  - [ ] Update DEV.md
-- [ ] Get developer approval before closing
+- [x] `post_start_command` を config に足す（既定値・生成される config のコメント）
+- [x] `post_start_run()` を lib に足す（worktree root で実行・失敗しても 0）
+- [x] worktree を新規作成した 2 経路（新しい branch / 既存 branch）で呼ぶ
+- [x] 既存 worktree の再利用・worktree なしの start では呼ばない
+- [x] `--no-post-start` を足す（unknown flag は従来どおりエラーのまま）
+- [x] `Active ticket paths:` を後に出す順序にする
+- [x] 環境変数 5 つを渡す
+- [x] テストを書く
+- [x] Run tests before closing and pass all tests (No exceptions)
+- [x] Run `bash build.sh` to build the project
+- [x] Update documentation if necessary
+  - [x] Update README.*.md
+  - [x] Update spec.*.md
+  - [x] Update DEV.md
+- [x] Get developer approval before closing（「両方終わらせて公開してコメントして」）

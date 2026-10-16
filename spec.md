@@ -283,6 +283,11 @@ require_checklist: false
 # not bypassed by --force, never run by cancel. Empty by default.
 # pre_close_command: "bash scripts/check-ticket.sh"
 
+# One shell line run in a worktree 'start' has just created, after
+# worktree_copy_files. Only on the run that creates it; never without a worktree.
+# A failure warns and start still succeeds. 'start --no-post-start' skips it.
+# post_start_command: "npm ci"
+
 # Worktree mode (optional)
 # worktree_mode: false    # When true, 'start' creates a worktree without the
 #                         # flag. 'start --no-worktree' turns it off per call.
@@ -324,6 +329,7 @@ require_checklist_groups: []
 ticket_files: []
 append_only_files: []
 pre_close_command: ""
+post_start_command: ""
 default_content: |
   # Ticket Overview
   
@@ -345,7 +351,7 @@ default_content: |
 ./ticket.sh init                          # Initialize
 ./ticket.sh new <slug> [--branch <name>]  # Create ticket (slug: lowercase, numbers, hyphens only); --branch overrides the feature branch name
 ./ticket.sh list [--status todo|doing|done] [--count N]  # List tickets
-./ticket.sh start [--worktree] [--copy-file <path>]... <ticket-name>  # Start ticket/create branch (--worktree for separate directory; --copy-file appends worktree_copy_files entry)
+./ticket.sh start [--worktree] [--no-post-start] [--copy-file <path>]... <ticket-name>  # Start ticket/create branch (--worktree for separate directory; --no-post-start skips post_start_command; --copy-file appends worktree_copy_files entry)
 ./ticket.sh restore                       # Restore current-ticket link
 ./ticket.sh check [--require "<group name>"]  # Sync status + ticket/note checklists (--require judges one group)
 ./ticket.sh close [--no-push] [--force|-f]  # Complete ticket/merge process
@@ -646,7 +652,7 @@ Displays ticket list:
   2. Or omit --count to use default (20)
   ```
 
-### `start [--worktree|--no-worktree] [--copy-file <path>]... <ticket-name>`
+### `start [--worktree|--no-worktree] [--no-post-start] [--copy-file <path>]... <ticket-name>`
 Starts ticket work:
 
 1. Sets current time to specified ticket's `started_at`
@@ -660,6 +666,7 @@ Starts ticket work:
 - `--worktree`: Creates a separate git worktree instead of switching branches. The main repository stays on the default branch. Worktree is created at `../<project>.worktrees/<ticket-name>/` (or custom `worktree_dir` if configured)
 - `--no-worktree`: skips the worktree for this one call despite `worktree_mode: true`, switching branches in the current checkout instead. See **Worktree Mode** below.
 - `--copy-file <path>` (repeatable): appends the given path to `worktree_copy_files` for this invocation only. Ignored unless a worktree is actually created.
+- `--no-post-start`: skips the project's `post_start_command` for this one call. Preparation can be the slowest part of `start`, and someone who only wants to read the ticket should not have to wait for a full install or edit the config to avoid it.
 
 **Recording the start time:**
 
@@ -747,6 +754,41 @@ the ticket reads `doing` from either branch.
 - Otherwise copy with `cp -p` and log a line to stdout.
 - Assumes entries are gitignored so secrets stay local per user (each collaborator's own `.env` is copied into their own worktree).
 - Combine with `--copy-file <path>` on the CLI to add one-shot extras without touching config.
+
+**The project's own preparation (`post_start_command`):**
+
+```yaml
+post_start_command: "npm ci && (cd frontend && npm ci)"
+```
+
+`worktree_copy_files` brings in files that exist somewhere to be copied from. A
+worktree also needs what no copy can produce — the directories a package manager
+builds, which is why projects ended up documenting "run `npm install` first in a
+worktree" and relying on whoever read it. One shell line, run at the new
+worktree's root after the copies, is that instruction written where it executes.
+
+- Only on the run that **creates** the worktree. Resuming a ticket whose worktree
+  is already there installs nothing again; a worktree that had to be rebuilt is
+  prepared again, which is the same rule and not a special case.
+- Never when `start` makes no worktree — there is no new place to prepare, and
+  installing into the caller's own checkout is not what was asked for.
+- `start --no-post-start` skips it for one call.
+- **A failure does not stop `start`.** This is the one way it differs from
+  `pre_close_command`, and the difference is the point: a close check exists to
+  refuse, while this is preparation, and by the time it runs the worktree is
+  already built. Stopping would mean a registry being briefly unreachable leaves
+  a ticket that cannot be opened at all. Instead the exit status is reported as a
+  warning, the command's own output is shown, and the message gives the line to
+  re-run: `cd <worktree> && <command>`.
+- Its output comes **before** the `Active ticket paths:` block. That block is the
+  one piece of `start`'s output a downstream agent has to read, and an install log
+  is long enough to push it off the top of the screen.
+- The command runs in a subshell with `errexit`, `nounset` and `pipefail` off, for
+  the same reason as `pre_close_command`: the value is one line of shell written
+  by the project, and what is judged is that line's own exit status.
+- Exported for it: `TICKET_NAME`, `TICKET_DIR` (empty for a legacy flat ticket),
+  `TICKET_FILE`, `TICKET_BRANCH`, `TICKET_BASE_BRANCH`.
+- Empty by default, and empty runs nothing.
 
 **File Specification Flexibility:**
 ```bash

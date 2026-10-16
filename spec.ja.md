@@ -278,6 +278,11 @@ require_checklist: false
 # cancel では走らない。既定は空。
 # pre_close_command: "bash scripts/check-ticket.sh"
 
+# 'start' が作ったばかりの worktree で、worktree_copy_files のコピーの後に走らせる
+# shell 1 行。作った run のときだけで、worktree を作らない start では走らない。
+# 失敗しても warning だけで start は成功する。'start --no-post-start' で飛ばせる。
+# post_start_command: "npm ci"
+
 # Worktreeモード（オプション）
 # worktree_mode: false    # true の場合、start はフラグ無しでも worktree を作成。
 #                         # start --no-worktree で 1 回だけ外せる。
@@ -319,6 +324,7 @@ require_checklist_groups: []
 ticket_files: []
 append_only_files: []
 pre_close_command: ""
+post_start_command: ""
 default_content: |
   # Ticket Overview
   
@@ -340,7 +346,7 @@ default_content: |
 ./ticket.sh init                          # 初期化
 ./ticket.sh new <slug> [--branch <name>]  # チケット作成 (slug: lowercase, numbers, hyphens only); --branch overrides the feature branch name
 ./ticket.sh list [--status todo|doing|done] [--count N]  # チケット一覧
-./ticket.sh start [--worktree] [--copy-file <path>]... <ticket-name>  # チケット開始・ブランチ作成（--worktreeで別ディレクトリ、--copy-fileでworktree_copy_filesエントリ追加）
+./ticket.sh start [--worktree] [--no-post-start] [--copy-file <path>]... <ticket-name>  # チケット開始・ブランチ作成（--worktreeで別ディレクトリ、--no-post-startでpost_start_commandを飛ばす、--copy-fileでworktree_copy_filesエントリ追加）
 ./ticket.sh restore                       # current-ticketリンク復元
 ./ticket.sh check [--require "<group name>"]  # 同期状態 + ticket/note のチェックリスト（--require は1グループだけ判定）
 ./ticket.sh close [--no-push] [--force|-f]  # チケット完了・マージ処理
@@ -633,7 +639,7 @@ Additional notes or requirements.
   2. Or omit --count to use default (20)
   ```
 
-### `start [--worktree|--no-worktree] [--copy-file <path>]... <ticket-name>`
+### `start [--worktree|--no-worktree] [--no-post-start] [--copy-file <path>]... <ticket-name>`
 チケット作業を開始：
 
 1. 指定チケットの `started_at` に現在時刻を設定
@@ -646,6 +652,7 @@ Additional notes or requirements.
 - `--worktree`: ブランチ切り替えの代わりに別のgit worktreeを作成。メインリポジトリはデフォルトブランチのまま。worktreeは `../<プロジェクト名>.worktrees/<チケット名>/`（またはconfigの`worktree_dir`）に作成
 - `--no-worktree`: `worktree_mode: true` でもその 1 回だけ worktree を作らず、今の checkout で branch を切り替える。後述の **Worktreeモード** を参照。
 - `--copy-file <path>` (反復可): その呼び出し限定で `worktree_copy_files` に path を追加。worktree が実際に作成された場合のみ参照される。
+- `--no-post-start`: その呼び出し限定で導入先の `post_start_command` を飛ばす。準備は `start` の中でいちばん時間のかかる部分になり得る（丸ごとの install）ので、ticket を読みたいだけの人がそれを待ったり config を書き換えたりしなくて済むようにする。
 
 **開始時刻の記録:**
 
@@ -726,6 +733,40 @@ ticket はどちらの branch から見ても `doing` と読める。
 - 上記以外 → `cp -p` でコピーし、stdout に 1 行ログを出す。
 - gitignore されたファイル前提(各人自身の `.env` が各人の worktree にコピーされるだけで secret は拡散しない)。
 - CLI からは `--copy-file <path>` (反復可) で config を触らずにワンショット追加できる。
+
+**導入先自身の準備 (`post_start_command`):**
+
+```yaml
+post_start_command: "npm ci && (cd frontend && npm ci)"
+```
+
+`worktree_copy_files` が持ち込めるのは、どこかに在ってコピーできるファイルである。
+worktree にはそれ以外に、コピーでは作れないもの——package manager が作る
+ディレクトリ——が必要で、だから各プロジェクトは「worktree ではまず `npm install`」
+と文書に書き、読む人に頼る形になっていた。コピーの後に新しい worktree の root で
+走る shell 1 行は、その指示を実行される場所に書いたものである。
+
+- **worktree を作った run のときだけ。** 既に worktree がある ticket に resume した
+  ときは入れ直さない。一度消して作り直した worktree は再度準備される——これは同じ
+  規則であって、resume の特例ではない。
+- worktree を作らない `start` では走らない。準備する新しい場所が無く、呼び出し側
+  自身の checkout に install するのは頼まれていないことだから。
+- `start --no-post-start` で 1 回だけ飛ばせる。
+- **失敗しても `start` は止まらない。** `pre_close_command` との違いはここだけで、
+  その違いがこの機能の要点である: close の検査は拒否するために在るが、こちらは準備で
+  あり、走る時点で worktree はもう出来ている。止めてしまうと、registry が一時的に
+  繋がらないだけで「開くことすらできない ticket」が残る。代わりに exit status を
+  warning として報告し、コマンド自身の出力を見せ、再実行する行
+  （`cd <worktree> && <command>`）を出す。
+- 出力は `Active ticket paths:` ブロックより**前**に出る。そのブロックは `start` の
+  出力のうち下流の agent が読まなければならない唯一の部分で、install のログは画面の
+  上へ押し流すだけの長さがある。
+- コマンドは subshell の中で `errexit` / `nounset` / `pipefail` を外して走る。理由は
+  `pre_close_command` と同じで、値は導入先が書いた shell 1 行であり、判定するのは
+  その行自身の exit status だから。
+- 渡される環境変数: `TICKET_NAME` / `TICKET_DIR`（legacy の flat ticket では空）/
+  `TICKET_FILE` / `TICKET_BRANCH` / `TICKET_BASE_BRANCH`。
+- 既定は空で、空なら何も走らない。
 
 **ファイル指定の柔軟性:**
 ```bash

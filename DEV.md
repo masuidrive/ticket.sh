@@ -128,6 +128,12 @@ The main script uses a case statement to route commands:
   elsewhere, and `set -e` would read `grep -q x f && echo ok` as a failure where
   its author meant a test. The subshell also keeps a check that `cd`s or exports
   from changing the close that continues after it.
+- `post_start_run()` runs the project's `post_start_command` inside a worktree
+  `start` has just created, cd'd to its root. Same subshell discipline as
+  `pre_close_run()`, and one deliberate difference: it always returns 0. A close
+  check exists to refuse; this is preparation, and the worktree is already built
+  when it runs, so a failure warns and names the command to re-run rather than
+  leaving a ticket nobody can open because a registry was briefly down.
 - `branch_carries_only()` answers whether a branch holds anything beyond the
   base other than the named files. It lists the commits (`log --name-only`)
   rather than diffing, because a file added on the branch and deleted again
@@ -152,6 +158,7 @@ The main script uses a case statement to route commands:
 
 #### `start_ticket()`
 - Creates feature branch (or git worktree with `--worktree` flag)
+- Runs the project's `post_start_command` at the new worktree's root, after `copy_worktree_files()` and before `emit_active_ticket_paths()` — the paths block is the one piece of output a downstream agent must read, and an install log is long. Gated on `_wt_created`, set only where this run's `git worktree add` succeeded, so resuming into an existing worktree installs nothing again while a rebuilt one is prepared afresh. Both worktree paths (new branch, and existing branch without a worktree) test the same condition so neither can drift. `--no-post-start` skips it for one call.
 - Carries the ticket's companion files from config's `ticket_files` wherever the ticket goes: into the worktree (both the `git checkout <prev-branch> --` path and the fallback copy for an uncommitted ticket), into the `[start]` commit via `record_start_on_base()`'s `commit_paths`, and into the `<path> <hash>` pairs that clear the base tree's untracked copies before the fast-forward. `ticket_extra_file_rels()` is the single place that list is derived, because each of those sites used to name `ticket.md` and `note.md` and stop — so `new` created the file and `start` left it untracked in the base branch's working tree, where it blocked every later `close` from the worktree. The fallback copy decides file by file rather than under the `! -f <worktree>/ticket.md` test, since a ticket already committed on the base branch skipped that whole block and with it the one file that was actually missing. The hashes are snapshotted at the same point as the ticket's and the note's — before the commit is built — because that is what `drop_untracked_if_unchanged()` compares against.
 - `--no-worktree` turns `worktree_mode: true` off for one call. The parser records *which way the flags asked* (`worktree_flag_set` / `no_worktree_flag_set`) rather than only the resulting boolean, because the config read is a default and has to stay silent when the command line spoke. That read used to be unconditional and sat after the parsing, so `worktree_mode: true` set `use_worktree` back to true a few lines after the parser had honoured the flag — the flag could never have worked without moving it. Both flags together is an error, not last-one-wins: argument order is exactly what a caller assembling the command line from several places cannot see. `--copy-file` with `--no-worktree` warns and continues (nothing to copy into, and ignoring it is already its contract, so a wrapper that always passes it keeps working). Both flags are matched by name, not by a catch-all — see design note 11 below.
 - Updates `started_at` timestamp
@@ -215,6 +222,7 @@ See `test/README.md` for detailed test documentation. Key points:
 - **append-only tests** (`test-append-only.sh`): the refusal, the message, `--force`/`--dry-run`, and that appending the lines again clears the gate without rewriting history
 - **pre-close-command tests** (`test-pre-close-command.sh`): that nothing is run and nothing is said when the key is absent or empty, that a failing command stops the close with its own output and leaves `closed_at` unstamped, that `--force` does not get past it and `--dry-run` shows it, that every `TICKET_*` variable holds what it claims (including a retargeted `base_branch` and a legacy flat ticket's empty `TICKET_DIR`), that `cancel` never runs it, that in worktree mode it runs in the worktree, that `--no-merge` gates it only off the base branch, and that a check which `cd`s away or ends on a false test cannot derail the close around it
 - **temp-file isolation tests** (`test-tmpfile-isolation.sh`): that two closes running in parallel never read each other's frontmatter (40 paired runs, failing on a single occurrence — against the old code 40 of 80 runs read the wrong ticket), that a file planted at the old fixed paths is left alone by `close`, `start` and `cancel`, that `description: |` still reads as its content (the guard against "fix" by replacing `yaml_parse` with a line matcher), that every temp file made is removed again, and that a `mktemp` which cannot deliver stops the run instead of carrying on
+- **post-start-command tests** (`test-post-start-command.sh`): that nothing runs and nothing is said when the key is absent, that on a worktree it creates it runs at that worktree's root with every `TICKET_*` variable and before the paths block, that resuming into an existing worktree runs nothing while a rebuilt worktree is prepared again, that `--no-worktree` and `--no-post-start` run nothing (and a misspelt flag is still an error), that a failure is a warning which leaves the worktree usable and `started_at` stamped, and that a command which `cd`s away or ends on a false test is contained
 - **Branch override tests** (`test-branch-override.sh`): `new --branch` validation, the full lifecycle (start/check/restore/close/list) on a ticket whose branch is named in its frontmatter, and the case where the ticket exists only on that branch
 - **Start base-sync tests** (`test-start-base-sync.sh`): both fast-forward mechanisms, the untracked ticket file `new` leaves behind, the fallback when the fast-forward cannot happen, and the base branch being held back when the resumed branch carries work of its own — including that a branch ahead only by the ticket's own files still advances it, and that `cancel` leaves nothing behind
 - **Error reporting tests** (`test-error-reporting.sh`): that a deliberate refusal is not dressed up as a crash, that an unplanned failure names the command and keeps its exit code, that a signal-class exit stays quiet, and that a detached main-repo HEAD reaches its own refusal. The crash cases inject a failing line into a *copy* of the built `ticket.sh`, right after the traps are installed — there is no way in from outside, and the hook has no business in the shipped script.
@@ -539,6 +547,18 @@ Documentation updates should be part of the same PR as code changes.
    `description: |` is read by yaml-sh as its folded content and by a line
    matcher as `|`, and the commit subject is where that would surface.
 
+24. **Preparation is not a gate**: `post_start_command` and
+   `pre_close_command` are the same mechanism pointed in opposite directions,
+   and the temptation is to give them the same failure behaviour. They must not
+   have it. A close check's whole purpose is to refuse, so a non-zero exit stops
+   the close. `post_start_command` runs after the worktree exists, so refusing
+   buys nothing and costs the ticket: an npm registry unreachable for a minute
+   would leave a ticket that cannot be opened at all, with no way forward except
+   editing the config. So it warns, prints the command's own output, and gives
+   the line to re-run. It is also gated on having *created* the worktree rather
+   than on being in worktree mode — a resume that reinstalled every time would
+   make resuming a ticket cost as much as starting one.
+
 ### Recent Enhancements
 
 - **Smart branch handling**: Automatically handles existing branches and clean states
@@ -550,6 +570,7 @@ Documentation updates should be part of the same PR as code changes.
 - **Extra ticket files**: `ticket_files` lets a project declare any number of companion files `new` should create, not just `note.md`
 - **Append-only files**: `append_only_files` makes `close` refuse when a file kept as a record has lost lines it used to hold
 - **Per-ticket branch names**: `branch:` in the frontmatter (`new --branch`) lets a ticket adopt a branch whose name came from outside
+- **Project's own preparation after start**: `post_start_command` runs one shell line at a freshly-created worktree's root for what a copy cannot produce; a failure warns and leaves the ticket started
 - **No fixed temp paths**: frontmatter parsing goes through `mktemp`, so parallel closes cannot read each other's ticket and a predictable name cannot be pre-created as a symlink
 - **Project's own check before close**: `pre_close_command` runs one shell line after the other gates and before the squash-merge; a non-zero exit stops the close and the command's own output is what you see
 - **Gated `--no-merge`**: the checklist, append-only and `pre_close_command` gates apply to `close --no-merge` when it runs off the ticket's base branch, where they can be measured
