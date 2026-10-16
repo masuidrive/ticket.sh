@@ -4,7 +4,7 @@ base_branch: default  # Override base branch for start/close (default: use defau
 description: "close の前に導入先のコマンドを実行し、失敗なら close を止める設定（pre_close_command / GH #18）"
 created_at: "2026-10-16T11:15:06Z"
 started_at: 2026-10-16T11:15:28Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-10-16T11:41:14Z # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
 
@@ -35,17 +35,17 @@ config に `pre_close_command:` を足して、close の直前に導入先のコ
 
 ## Tasks
 
-- [ ] `pre_close_command` を config の読み書き（既定値・生成される config のコメント）に足す
-- [ ] `close` の検査順の中に実行点を置く（clean-check / checklist の後、commit・merge の前）
-- [ ] 非 0 のときに close を中止し、コマンドの出力を見せる
-- [ ] `--dry-run` でも実行し、`--force` では飛ばさない
-- [ ] 環境変数 `TICKET_NAME` / `TICKET_DIR` / `TICKET_BASE_BRANCH` を渡す
-- [ ] `cancel` では実行しないことを確かめる
-- [ ] テストを書く（空 / 0 / 非 0 / --dry-run / --force / 環境変数 / cancel）
-- [ ] Run tests before closing and pass all tests (No exceptions)
-- [ ] Run `bash build.sh` to build the project
-- [ ] Update documentation if necessary
-  - [ ] Update README.*.md
-  - [ ] Update spec.*.md
-  - [ ] Update DEV.md
-- [ ] Get developer approval before closing
+- [x] `pre_close_command` を config の読み書き（既定値・生成される config のコメント）に足す
+- [x] `close` の検査順の中に実行点を置く（clean-check / checklist の後、commit・merge の前）
+- [x] 非 0 のときに close を中止し、コマンドの出力を見せる
+- [x] `--dry-run` でも実行し、`--force` では飛ばさない
+- [x] 環境変数 `TICKET_NAME` / `TICKET_DIR` / `TICKET_BASE_BRANCH` を渡す
+- [x] `cancel` では実行しないことを確かめる
+- [x] テストを書く（空 / 0 / 非 0 / --dry-run / --force / 環境変数 / cancel）
+- [x] Run tests before closing and pass all tests (No exceptions)
+- [x] Run `bash build.sh` to build the project
+- [x] Update documentation if necessary
+  - [x] Update README.*.md
+  - [x] Update spec.*.md
+  - [x] Update DEV.md
+- [x] Get developer approval before closing（「実装までよろ。公開も。終わったらコメントして閉じて」）

@@ -277,6 +277,12 @@ require_checklist: false
 # append_only_files:
 #   - progress.md
 
+# One shell line run just before close commits anything - after the clean-check
+# and the checklist and append-only gates, before the squash-merge. A non-zero
+# exit stops the close and the command's own output is shown. Run by --dry-run,
+# not bypassed by --force, never run by cancel. Empty by default.
+# pre_close_command: "bash scripts/check-ticket.sh"
+
 # Worktree mode (optional)
 # worktree_mode: false    # When true, 'start' creates a worktree without the
 #                         # flag. 'start --no-worktree' turns it off per call.
@@ -317,6 +323,7 @@ require_checklist: false
 require_checklist_groups: []
 ticket_files: []
 append_only_files: []
+pre_close_command: ""
 default_content: |
   # Ticket Overview
   
@@ -1084,6 +1091,67 @@ Empty by default. Not bypassed by `--force`, for the same reason as the
 checklist, and visible under `--dry-run`. Plain `check` reports the same thing
 and still exits 0, so the loss surfaces while the branch is still yours to
 append to.
+
+**The project's own check** (`pre_close_command`)
+
+The gates above are `ticket.sh`'s idea of a finished ticket: a clean tree, the
+checkboxes, the lines that may only grow. A project usually has one of its own —
+the ticket directory holds a file a template repo distributed and it must still
+match, an acceptance criterion has to carry an approval, a review has to have
+happened. None of that is expressible in `require_checklist`, and `ticket.sh`
+has no business learning any of it.
+
+```yaml
+pre_close_command: "bash scripts/check-ticket.sh"
+```
+
+One shell line, run after the clean-check and the checklist and append-only
+gates and before anything is committed. Exit 0 lets the close continue; anything
+else stops it. The command's stdout and stderr are not captured, so its own
+messages reach the person closing the ticket as written — the project knows what
+its check found, and a wrapper that reformatted the output could only add a layer
+to read through.
+
+A Git hook is not a substitute, which is why this key exists at all. `.git/hooks`
+is not in the repository, so every clone has to install it separately; a
+`pre-commit` hook cannot tell close's commit from any other, so the check would
+need to work out for itself whether this is the run that matters; and a hook
+never runs under `--dry-run`. Underneath all three: a hook guards *making a
+commit*, and what is being guarded here is *finishing a ticket*.
+
+`--dry-run` runs it, so the answer arrives before the close rather than during
+it. `--force` does **not** bypass it, for the same reason as the checklist:
+`--force` speaks to the state of the Git tree, and an escape hatch belongs inside
+the check, where the condition is written down and a reader can weigh it.
+`cancel` never runs it — a cancelled ticket makes no claim about being finished,
+and a check that refused the cancellation would leave no way to put the ticket
+down.
+
+The command runs at the repo root — in worktree mode that is the worktree's root,
+which is where the work and the ticket directory are — with everything about the
+ticket exported, so the check never has to derive a path or a branch name:
+
+| Variable | Value |
+|----------|-------|
+| `TICKET_NAME` | the ticket name |
+| `TICKET_DIR` | the ticket directory, empty for a legacy flat ticket that has none |
+| `TICKET_FILE` | the ticket's `.md` file, in either layout |
+| `TICKET_BRANCH` | the feature branch close is running on |
+| `TICKET_BASE_BRANCH` | the branch the ticket is about to be merged into (the ticket's `base_branch` when it sets one) |
+
+The line runs in a subshell with `errexit`, `nounset` and `pipefail` turned off.
+It is one line of shell written by the project, and what is judged is the line's
+own exit status: under inherited `set -e` a perfectly ordinary
+`grep -q x f && echo ok` would fail the close on a `grep` that simply found
+nothing. The subshell also means a check that `cd`s somewhere or exports
+something cannot change the close that continues after it.
+
+`close --no-merge` runs it under exactly the condition the other gates use: off
+the ticket's base branch, where there is still a close to refuse, and not on it,
+where the merge has already happened.
+
+Empty by default, and empty runs nothing. A key written with no value is the same
+as leaving it out.
 
 **Execution Flow:**
 1. **Check working directory**: Ensures no uncommitted changes (unless `--force` is used)

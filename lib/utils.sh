@@ -665,3 +665,64 @@ get_config_file() {
         echo ".ticket-config.yaml"
     fi
 }
+
+# Run the project's own check before a close is allowed to proceed.
+#
+# Usage: pre_close_run <command> <ticket_name> <ticket_dir> <ticket_file> \
+#                      <feature_branch> <base_branch>
+#
+# <command> is the single shell line the project put in `pre_close_command`.
+# Empty (or the `null` yaml_get hands back for a key written with no value) means
+# the project declared no check, which is the default and passes without running
+# anything.
+#
+# The command's stdout and stderr are left alone, so its own messages reach the
+# person closing the ticket as written. A wrapper that captured and reformatted
+# them could only add a layer to read through: the project knows what its check
+# found, and this does not.
+#
+# Everything about the ticket the check would otherwise have to guess at is
+# exported for it. TICKET_DIR is empty for a legacy flat-layout ticket, which has
+# no directory - TICKET_FILE is the one that answers "where is the ticket" in
+# both layouts.
+pre_close_run() {
+    local command="$1"
+    local ticket_name="$2"
+    local ticket_dir="$3"
+    local ticket_file="$4"
+    local feature_branch="$5"
+    local base_branch="$6"
+
+    [[ -z "$command" || "$command" == "null" ]] && return 0
+
+    echo "Running pre_close_command: $command"
+
+    # A subshell, so a check that cd's somewhere or sets a variable cannot
+    # change the close that continues after it. errexit and friends are turned
+    # off inside it because the value is one line of shell written by the
+    # project, and `set -e` would give `grep -q x f && echo ok` a meaning its
+    # author did not write; what is judged is the line's own exit status.
+    local status=0
+    (
+        set +e +u +o pipefail
+        export TICKET_NAME="$ticket_name"
+        export TICKET_DIR="$ticket_dir"
+        export TICKET_FILE="$ticket_file"
+        export TICKET_BRANCH="$feature_branch"
+        export TICKET_BASE_BRANCH="$base_branch"
+        eval "$command"
+    ) || status=$?
+
+    if [[ "$status" -ne 0 ]]; then
+        echo "" >&2
+        echo "Error: pre_close_command failed (exit $status)" >&2
+        echo "  $command" >&2
+        echo "This is the project's own check, and what it reports above is the reason." >&2
+        echo "Fix that and run close again. --force does not bypass it: --force speaks" >&2
+        echo "to the state of the Git tree, and the project put this check in the way of" >&2
+        echo "close on purpose." >&2
+        return 1
+    fi
+
+    return 0
+}

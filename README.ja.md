@@ -260,6 +260,15 @@ require_checklist: false
 # append_only_files:
 #   - progress.md
 
+# close が何かを commit する直前に走らせる shell 1 行。clean-check と checklist /
+# append-only の gate の後、squash-merge の前。exit が 0 以外なら close を止め、
+# そのコマンド自身の出力をそのまま見せる。「この ticket は終わったか」の導入先なりの
+# 判断をここに置く。--dry-run でも走り、--force では迂回できず、cancel では走らない。
+# コマンドは repo root（worktree mode なら worktree の root）で走り、TICKET_NAME /
+# TICKET_DIR / TICKET_FILE / TICKET_BRANCH / TICKET_BASE_BRANCH が渡される。
+# 既定は空で、空なら何も走らない。
+# pre_close_command: "bash scripts/check-ticket.sh"
+
 # Worktree mode: create a separate git worktree for each ticket
 # When true, 'start' creates a worktree even without the --worktree flag.
 # This is a default, not a rule: 'start --no-worktree' skips the worktree for
@@ -405,7 +414,7 @@ default_content: |
 1. **PR が merge された後、base branch 上で**（従来）
 2. **PR を作る前、ticket 自身の branch 上で** — `done/` への移動を PR の差分に載せる。workflow の token が保護された default branch へ push できない（`GH006`）場合はこちらしか選べない
 
-`require_checklist` / `require_checklist_groups` / `append_only_files` の gate は、**ticket の base branch 以外で走っているときに効く**。そこではすべて測れるし、拒否されても直せる。base branch 上（merge 済み）では従来どおり飛ばす——そこで拒否しても ticket が `done/` の外に取り残されるだけで、役に立つ行動にならないため。
+`require_checklist` / `require_checklist_groups` / `append_only_files` / `pre_close_command` の gate は、**ticket の base branch 以外で走っているときに効く**。そこではすべて測れるし、拒否されても直せる。base branch 上（merge 済み）では従来どおり飛ばす——そこで拒否しても ticket が `done/` の外に取り残されるだけで、役に立つ行動にならないため。
 
 通常の `close` と同じく迂回手段は無い。flag による opt-in にしないのは、「呼ぶのを忘れる」形の穴が**何も出力しない**まま残るため。`--dry-run` も使える（同じ検査を走らせて、何も書かずに終わる）。
 
@@ -414,6 +423,18 @@ default_content: |
 - **履歴を書き換えずに直せる**: 判定するのは「行が**今**ファイルにあるか」であって「どれかの commit が消したか」ではないので、新しい commit で追記し直せば解消する。行の**変更**も削除に数える（変更前の文字列は失われているため）。
 - **表示だけでなく拒否する**: `--force` では迂回できず（修復の方が記録を読める形で残るため）、`--dry-run` でも見える。plain `check` は同じ内容を表示して exit 0 のままなので、branch がまだ自分のもので追記できるうちに気づける。
 - **opt-in で範囲は狭い**: 既定は空。ファイルを持たない ticket は対象外。
+
+### close の前に走る導入先自身の検査（`pre_close_command`）
+- **close が何かを commit する直前に走る shell 1 行**: clean-check と checklist / append-only の gate の後、squash-merge の前。exit が 0 以外なら close を止める。見えるのはそのコマンド自身の出力そのままで、整形はしない——その検査が何を見つけたかを知っているのは導入先で、`ticket.sh` ではないから。
+- **`ticket.sh` が概念として持たない基準のために**: ticket dir の記録を読む script、template repo が配ったファイルとの lock の照合、review を通ったことの確認。どれも「**この ticket が終わったか**」の性質であって、`require_checklist` では表現できない。
+- **git hook では代わりにならない**: `.git/hooks` は repo に入らないので clone ごとに入れ直しが要る。hook は close の commit を他の commit と区別できない。`--dry-run` では動かない。そもそも hook が守るのは「commit を作ること」で、ここで守りたいものではない。
+- **早く見え、迂回できない**: `--dry-run` でも走るので、答えは close の最中ではなく前に来る。`--force` では迂回できない——`--force` が指しているのは Git tree の状態であり、抜け道は条件が読める場所、つまり検査の側に置くべきもの。`cancel` では走らない（cancel した ticket は「終わった」と主張していない）。
+- **ticket を渡す（推測させない）**: `TICKET_NAME` / `TICKET_DIR`（legacy の flat ticket では空）/ `TICKET_FILE` / `TICKET_BRANCH` / `TICKET_BASE_BRANCH` が渡される。実行場所は repo root——worktree mode では worktree の root、つまり作業がある側。
+- **opt-in**: 既定は空で、空なら何も走らない。
+
+```yaml
+pre_close_command: "bash scripts/check-ticket.sh"
+```
 
 ### Worktreeサポート（オプション）
 - **並行作業**: `start`に`--worktree`フラグを付けてチケット毎に別のgit worktreeを作成

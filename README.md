@@ -232,7 +232,7 @@ It takes the ticket name as an explicit argument (it does not rely on the active
 
 **Two places it runs, and the gates.** `--no-merge` also fits a second shape: finalize *before* the PR exists, on the ticket's own branch, so the move into `done/` rides in on the PR's diff. That is what you need when a workflow token cannot push to a protected default branch (`GH006`), which makes the after-the-merge push impossible.
 
-The `require_checklist` / `require_checklist_groups` / `append_only_files` gates **apply whenever `--no-merge` runs on a branch other than the ticket's base branch**, and are skipped when it runs on that branch. Off the base branch everything is measurable and a refusal is still actionable; on it the merge has already happened, and refusing would only strand the ticket outside `done/`. As with a normal `close`, nothing bypasses the gates — there is no flag, because a gate you have to remember to ask for is one that goes quiet exactly when it is forgotten.
+The `require_checklist` / `require_checklist_groups` / `append_only_files` / `pre_close_command` gates **apply whenever `--no-merge` runs on a branch other than the ticket's base branch**, and are skipped when it runs on that branch. Off the base branch everything is measurable and a refusal is still actionable; on it the merge has already happened, and refusing would only strand the ticket outside `done/`. As with a normal `close`, nothing bypasses the gates — there is no flag, because a gate you have to remember to ask for is one that goes quiet exactly when it is forgotten.
 
 `--dry-run` works here too: it runs the same checks and exits before anything is written.
 
@@ -348,6 +348,16 @@ require_checklist: false
 # the same thing without failing. Not bypassed by --force. Empty by default.
 # append_only_files:
 #   - progress.md
+
+# One shell line run just before close commits anything - after the clean-check
+# and the checklist and append-only gates, before the squash-merge. A non-zero
+# exit stops the close, and the command's own output is what you are shown. This
+# is where a project puts its own idea of "this ticket is finished". Run by
+# --dry-run too, not bypassed by --force, never run by cancel. The command runs
+# at the repo root (the worktree's root in worktree mode) with TICKET_NAME,
+# TICKET_DIR, TICKET_FILE, TICKET_BRANCH and TICKET_BASE_BRANCH exported.
+# Empty by default, and empty runs nothing.
+# pre_close_command: "bash scripts/check-ticket.sh"
 
 # Worktree mode: create a separate git worktree for each ticket
 # When true, 'start' creates a worktree even without the --worktree flag.
@@ -492,6 +502,18 @@ default_content: |
 - **Repairable without rewriting history**: What is judged is whether the line is in the file *now*, not whether some commit once took it out — so appending it again in a new commit clears the gate. A line that was *edited* counts as removed: its old text is gone.
 - **Refused, not merely reported**: Not bypassed by `--force` (the repair leaves the record readable, which an escape hatch would not), visible under `--dry-run`. Plain `check` shows the same thing and still exits 0, so the loss surfaces while the branch is still yours to append to.
 - **Opt-in and narrow**: Empty by default; a ticket that does not have the file is unaffected.
+
+### Project's Own Check Before Close (`pre_close_command`)
+- **One shell line, run just before the close commits anything**: After the clean-check and the checklist and append-only gates, before the squash-merge. A non-zero exit stops the close; the command's own output is what you see, unreformatted, because the project knows what its check found and `ticket.sh` does not.
+- **For the standard `ticket.sh` has no notion of**: A script that reads the ticket directory, verifies a lock file against what a template repo distributed, insists a review happened. These are properties of *this ticket being finished*, and nothing in `require_checklist` can express them.
+- **Not a job for a Git hook**: `.git/hooks` is not in the repo, so every clone has to install it; a hook cannot tell the close commit from any other; and it never runs under `--dry-run`. A hook also guards making a commit, which is not the thing being guarded here.
+- **Visible early, not bypassable**: Run under `--dry-run`, so the answer arrives before the close rather than during it. Not bypassed by `--force` — `--force` speaks to the state of the Git tree, and an escape hatch belongs in the check itself, where a reader can see the condition. Never run by `cancel`: a cancelled ticket makes no claim about being finished.
+- **Handed the ticket, not left to guess**: `TICKET_NAME`, `TICKET_DIR` (empty for a legacy flat ticket), `TICKET_FILE`, `TICKET_BRANCH` and `TICKET_BASE_BRANCH` are exported for it, and it runs at the repo root — the worktree's root in worktree mode, which is where the work is.
+- **Opt-in**: Empty by default, and empty runs nothing.
+
+```yaml
+pre_close_command: "bash scripts/check-ticket.sh"
+```
 
 ### Worktree Support (Optional)
 - **Parallel work**: Use `--worktree` flag with `start` to create a separate git worktree per ticket

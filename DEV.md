@@ -115,6 +115,13 @@ The main script uses a case statement to route commands:
   a branch name. The frontmatter is read with awk rather than yaml-sh, because
   `yaml_parse` writes to globals the caller is usually mid-way through using for
   the config — the same reason `started_at_on_branch()` does it that way.
+- `pre_close_run()` runs the project's `pre_close_command` and turns a non-zero
+  exit into a refusal. The command's streams are left alone, so the project's own
+  message is what the user reads. It runs in a subshell with `errexit`,
+  `nounset` and `pipefail` off: the value is one line of shell written
+  elsewhere, and `set -e` would read `grep -q x f && echo ok` as a failure where
+  its author meant a test. The subshell also keeps a check that `cd`s or exports
+  from changing the close that continues after it.
 - `branch_carries_only()` answers whether a branch holds anything beyond the
   base other than the named files. It lists the commits (`log --name-only`)
   rather than diffing, because a file added on the branch and deleted again
@@ -158,10 +165,11 @@ The main script uses a case statement to route commands:
 
 #### `cmd_close_no_merge()`
 - Finalizes without a squash-merge: sets `closed_at`, `git mv`s the ticket into `done/`, commits and pushes on the current branch.
-- Applies the checklist and append-only gates **when the current branch is not the ticket's base branch** (`base_branch` frontmatter, falling back to `default_branch`), and skips them when it is. The original skip was reasoning about where the command runs, not about the command: the same call now also happens before the PR exists, on the ticket's own branch, because a workflow token cannot push to a protected default branch and the move into `done/` has to ride in on the PR. Skipping there let a gate that refuses `--force` be walked around by changing the call site, with no output. On the base branch the merge has already happened, so refusing would strand the ticket outside `done/`.
+- Applies the checklist, append-only and `pre_close_command` gates **when the current branch is not the ticket's base branch** (`base_branch` frontmatter, falling back to `default_branch`), and skips them when it is. The original skip was reasoning about where the command runs, not about the command: the same call now also happens before the PR exists, on the ticket's own branch, because a workflow token cannot push to a protected default branch and the move into `done/` has to ride in on the PR. Skipping there let a gate that refuses `--force` be walked around by changing the call site, with no output. On the base branch the merge has already happened, so refusing would strand the ticket outside `done/`.
 - Honours `--dry-run`, which `cmd_close` used to accept and drop on the floor for this path.
 
 #### `close_ticket()`
+- Runs the project's own `pre_close_command` last of the gates and still before any mutation, refusing on a non-zero exit (`pre_close_run()` in `lib/utils.sh`). Exported for it: `TICKET_NAME`, `TICKET_DIR` (empty for a legacy flat ticket), `TICKET_FILE`, `TICKET_BRANCH`, `TICKET_BASE_BRANCH` — resolved here, after the ticket's `base_branch` has already overridden `default_branch`, so a retargeted ticket hands the check the branch it is actually merging into. Runs under `--dry-run`, not bypassed by `--force`, and `cancel_ticket()` does not call it.
 - Refuses, before any mutation, when an `append_only_files` entry is missing a line it used to hold (`append_only_check()` in `lib/append-only.sh`). The judgement is per line and forgiven once the line is back in the file, not per commit — otherwise the only available repair (appending the lines again, since history is not rewritten) would not clear the gate. Runs alongside the checklist gates, before the `--dry-run` exit, and is not bypassed by `--force`.
 - Updates `closed_at` timestamp in `ticket.md`
 - Removes any `current-ticket.md` / `current-note.md` that were force-committed to git history
@@ -199,6 +207,7 @@ See `test/README.md` for detailed test documentation. Key points:
 - **Checklist tests** (`test-checklist.sh`): `require_checklist`, `require_checklist_groups`, `check --require`, and the Markdown scanner's edge cases
 - **ticket_files tests** (`test-ticket-files.sh`): file creation, placeholder substitution, the `note.md` override, path escapes, the `Active ticket paths:` lines, and the declared files travelling into a worktree (both routes) without leaving anything untracked in the main repo
 - **append-only tests** (`test-append-only.sh`): the refusal, the message, `--force`/`--dry-run`, and that appending the lines again clears the gate without rewriting history
+- **pre-close-command tests** (`test-pre-close-command.sh`): that nothing is run and nothing is said when the key is absent or empty, that a failing command stops the close with its own output and leaves `closed_at` unstamped, that `--force` does not get past it and `--dry-run` shows it, that every `TICKET_*` variable holds what it claims (including a retargeted `base_branch` and a legacy flat ticket's empty `TICKET_DIR`), that `cancel` never runs it, that in worktree mode it runs in the worktree, that `--no-merge` gates it only off the base branch, and that a check which `cd`s away or ends on a false test cannot derail the close around it
 - **Branch override tests** (`test-branch-override.sh`): `new --branch` validation, the full lifecycle (start/check/restore/close/list) on a ticket whose branch is named in its frontmatter, and the case where the ticket exists only on that branch
 - **Start base-sync tests** (`test-start-base-sync.sh`): both fast-forward mechanisms, the untracked ticket file `new` leaves behind, the fallback when the fast-forward cannot happen, and the base branch being held back when the resumed branch carries work of its own — including that a branch ahead only by the ticket's own files still advances it, and that `cancel` leaves nothing behind
 - **Error reporting tests** (`test-error-reporting.sh`): that a deliberate refusal is not dressed up as a crash, that an unplanned failure names the command and keeps its exit code, that a signal-class exit stays quiet, and that a detached main-repo HEAD reaches its own refusal. The crash cases inject a failing line into a *copy* of the built `ticket.sh`, right after the traps are installed — there is no way in from outside, and the hook has no business in the shipped script.
@@ -492,6 +501,20 @@ Documentation updates should be part of the same PR as code changes.
    the one case design note 15b exists to serve — a fix trading one silent loss
    for another.
 
+22. **A gate the project owns belongs in `close`, not in a Git hook**:
+   `close` judged a ticket only by ticket.sh's own standards, so a project with
+   a standard of its own had to run it somewhere else — a test suite step that
+   `close` does not call, which is to say a check that is skipped exactly when
+   someone is in a hurry. `.git/hooks` is not that place either: it is not in
+   the repo, so every clone installs it separately; a `pre-commit` hook cannot
+   tell close's commit from any other, so it has to work out for itself whether
+   this run is the one that matters; and it never fires under `--dry-run`.
+   Underneath all three, a hook guards *making a commit* and what wants guarding
+   is *finishing a ticket*. `pre_close_command` is one shell line, run where the
+   other gates run, with the ticket handed to it rather than left to be derived.
+   It is not bypassed by `--force` for the same reason the checklist is not: the
+   escape hatch belongs in the check, where the condition is written down.
+
 ### Recent Enhancements
 
 - **Smart branch handling**: Automatically handles existing branches and clean states
@@ -503,7 +526,8 @@ Documentation updates should be part of the same PR as code changes.
 - **Extra ticket files**: `ticket_files` lets a project declare any number of companion files `new` should create, not just `note.md`
 - **Append-only files**: `append_only_files` makes `close` refuse when a file kept as a record has lost lines it used to hold
 - **Per-ticket branch names**: `branch:` in the frontmatter (`new --branch`) lets a ticket adopt a branch whose name came from outside
-- **Gated `--no-merge`**: the checklist and append-only gates apply to `close --no-merge` when it runs off the ticket's base branch, where they can be measured
+- **Project's own check before close**: `pre_close_command` runs one shell line after the other gates and before the squash-merge; a non-zero exit stops the close and the command's own output is what you see
+- **Gated `--no-merge`**: the checklist, append-only and `pre_close_command` gates apply to `close --no-merge` when it runs off the ticket's base branch, where they can be measured
 - **Worktrees are kept by default**: `close` / `cancel` leave the worktree in place; `--delete-worktree` removes it, and `--keep-worktree` remains as a no-op
 - **Unknown flags stop `start`**: retired flags are inert by name, everything else is an error
 - **`start` from another ticket's worktree**: the ticket is read out of git when the cwd's tree has no copy of it, instead of the run ending on exit 128 with nothing printed

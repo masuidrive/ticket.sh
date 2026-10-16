@@ -141,6 +141,7 @@ DEFAULT_WORKTREE_MODE="false"
 DEFAULT_WORKTREE_DIR=""  # Empty means auto: ../<project-name>.worktrees
 DEFAULT_NO_VERIFY="false"  # Run Git hooks on commits ticket.sh makes itself
 DEFAULT_REQUIRE_CHECKLIST="false"  # close does not judge the ticket/note checklists
+DEFAULT_PRE_CLOSE_COMMAND=""  # no project check runs before close
 DEFAULT_CONTENT='# Ticket Overview
 
 Write the overview and tasks for this ticket here.
@@ -289,10 +290,11 @@ be recognized by every command; they are never auto-migrated.
   - With \`require_checklist: true\` in config, close refuses while the ticket body or the note has unchecked items, and lists them per file. Off by default. \`--force\` does not bypass it: the way out is \`- [-] ... - skip: <reason>\`, which leaves the reason in the file. \`--dry-run\` surfaces it too.
   - \`require_checklist_groups\` (a list of heading names) makes close refuse when a named group is in **neither** file - or is there with no checkboxes under it - as well as when anything under it is unchecked. \`require_checklist\` alone cannot catch this: it counts unchecked boxes, so a section that is not in the file at all counts zero and reads exactly like one where everything got done. Empty by default, independent of \`require_checklist\`, and not bypassed by \`--force\`.
   - \`append_only_files\` (a list of paths relative to the ticket directory) makes close refuse while a line one of those files used to hold is missing from it, naming the file, the commit that removed it and the count. What is judged is whether the line is in the file now, not whether some commit once took it out - so the repair is to append it again in a new commit, with no history rewriting. A line that was *edited* counts as removed: its old text is gone. Empty by default, not bypassed by \`--force\`, visible under \`--dry-run\`, and skipped for a ticket that does not have the file. Applied to \`--no-merge\` too, but only when it runs off the ticket's base branch (see below).
+  - \`pre_close_command\` (one shell line) is the project's own check, run after those gates and before anything is committed. A non-zero exit stops the close and the command's own output is what you see. Use it for what \`$SCRIPT_COMMAND\` has no notion of - a script that reads the ticket directory, verifies a lock file, insists on a review. A Git hook cannot stand in for it: hooks are not in the repo, cannot tell the close commit from any other, and never run under \`--dry-run\`. Empty by default, run under \`--dry-run\`, not bypassed by \`--force\`, never run by \`cancel\`. \`TICKET_NAME\`, \`TICKET_DIR\`, \`TICKET_FILE\`, \`TICKET_BRANCH\` and \`TICKET_BASE_BRANCH\` are exported for it.
   - From a worktree, close refuses to merge if the main repo is on a non-default branch or has uncommitted changes (protects parallel workers).
   - A worktree is **kept** by default. \`--delete-worktree\` removes it. It used to be the other way round, with the help telling coding agents they *must* pass \`--keep-worktree\`: forgetting deleted the directory their shell was in, and every command afterwards failed with an error that pointed nowhere near the flag. \`--keep-worktree\` is still accepted and does nothing, so existing invocations keep working.
   - \`--no-merge [--closed-at <ISO8601-UTC>] [--dry-run|-n] <ticket-name>\` - Skip the squash-merge. Only set closed_at, move the ticket/note to done/, commit and push. Requires \`<ticket-name>\`. \`--closed-at\` overrides closed_at with a full ISO8601 UTC value (default: now).
-    - The checklist and append-only gates apply whenever this runs on a branch other than the ticket's base branch - which is where it runs when the move into done/ has to ride in on the PR rather than follow it (a workflow token cannot push to a protected default branch). On the base branch they are still skipped: the merge has already happened by then, and refusing would strand the ticket outside \`done/\` without giving anyone a useful action.
+    - The checklist, append-only and \`pre_close_command\` gates apply whenever this runs on a branch other than the ticket's base branch - which is where it runs when the move into done/ has to ride in on the PR rather than follow it (a workflow token cannot push to a protected default branch). On the base branch they are still skipped: the merge has already happened by then, and refusing would strand the ticket outside \`done/\` without giving anyone a useful action.
     - \`--dry-run\` runs the same checks and exits before anything is written. It used to be accepted here and silently ignored.
 - \`$SCRIPT_COMMAND cancel [--force|-f] [--delete-worktree]\` - Cancel current ticket (no merge, moves to done/ with CANCELED marker)
   - Same as close: the worktree is kept unless \`--delete-worktree\` is given, and \`--keep-worktree\` is accepted as a no-op.
@@ -531,6 +533,25 @@ require_checklist: $DEFAULT_REQUIRE_CHECKLIST
 # went, where the wrong turns are the part worth keeping.
 # append_only_files:
 #   - progress.md
+
+# One shell line run just before close commits anything - after the clean-check
+# and the checklist and append-only gates, before the squash-merge. A non-zero
+# exit stops the close, and the command's own output is what you are shown. This
+# is where a project puts its own idea of "this ticket is finished": a script
+# that reads the ticket directory, checks a lock file, insists on a review.
+# Empty by default, and empty means nothing is run.
+# Run by --dry-run too, so the answer arrives before the close rather than during
+# it, and not bypassed by --force - the escape hatch belongs in the check, where
+# a reader can see it. Never run by 'cancel': a cancelled ticket makes no claim
+# about being finished.
+# The command is run from the repo root (the worktree's root in worktree mode,
+# which is where the work is), with these exported for it:
+#   TICKET_NAME         the ticket name
+#   TICKET_DIR          the ticket directory (empty for a legacy flat ticket)
+#   TICKET_FILE         the ticket .md file, in either layout
+#   TICKET_BRANCH       the feature branch close is running on
+#   TICKET_BASE_BRANCH  the branch the ticket is about to be merged into
+# pre_close_command: "bash scripts/check-ticket.sh"
 
 # Extra files 'new' creates in the ticket directory, beyond note.md. Each entry
 # is a path (relative to the ticket directory) and the content to seed it with;
@@ -3273,6 +3294,7 @@ cmd_close_no_merge() {
     local tickets_dir=$(yaml_get "tickets_dir" || echo "$DEFAULT_TICKETS_DIR")
     local default_branch=$(yaml_get "default_branch" || echo "$DEFAULT_BRANCH")
     local require_checklist=$(yaml_get "require_checklist" || echo "$DEFAULT_REQUIRE_CHECKLIST")
+    local pre_close_command=$(yaml_get "pre_close_command" || echo "$DEFAULT_PRE_CLOSE_COMMAND")
     check_legacy_checklist_key || return 1
     # Read the lists while yaml_get still holds the config: the ticket's own
     # frontmatter is parsed into the same globals further down.
@@ -3393,6 +3415,15 @@ EOF
                 echo "Warning: append_only_files: neither '${repository}/${_ticket_base}' nor a local" >&2
                 echo "'${_ticket_base}' exists, so there is nothing to measure against. Check skipped." >&2
             fi
+        fi
+
+        # The project's own check, under the same condition as the gates above
+        # and for the same reason: off the base branch there is a close to
+        # refuse, and on it the merge has already happened.
+        if ! pre_close_run "$pre_close_command" "$ticket_name" "$src_ticket_dir" \
+                "$ticket_file" "$current_branch" "$_ticket_base"; then
+            echo "Nothing was closed." >&2
+            return 1
         fi
     fi
 
@@ -3636,6 +3667,7 @@ EOF
     local delete_remote_on_close=$(yaml_get "delete_remote_on_close" || echo "$DEFAULT_DELETE_REMOTE_ON_CLOSE")
     local close_success_message=$(yaml_get "close_success_message" || echo "$DEFAULT_CLOSE_SUCCESS_MESSAGE")
     local require_checklist=$(yaml_get "require_checklist" || echo "$DEFAULT_REQUIRE_CHECKLIST")
+    local pre_close_command=$(yaml_get "pre_close_command" || echo "$DEFAULT_PRE_CLOSE_COMMAND")
     check_legacy_checklist_key || return 1
     # Read here, not at the point of use: the ticket's own frontmatter is
     # parsed into the same yaml-sh globals further down, which overwrites the
@@ -3823,6 +3855,26 @@ EOF
             echo "Warning: append_only_files: neither '${repository}/${default_branch}' nor a local" >&2
             echo "'${default_branch}' exists, so there is nothing to measure against. Check skipped." >&2
         fi
+    fi
+
+    # The project's own check, last of the gates and before any mutation - the
+    # clean-check, the checklists and the append-only files are ticket.sh's idea
+    # of a finished ticket, and this is the project's. It runs here rather than
+    # in a Git hook because a hook is not in the repo, cannot tell the close
+    # commit from any other, and never runs under --dry-run; what the project
+    # wants checked is a property of closing this ticket, not of making a commit.
+    local _pre_close_name _pre_close_dir=""
+    if [[ "${ticket_file##*/}" == "ticket.md" ]]; then
+        _pre_close_dir="${ticket_file%/ticket.md}"
+        _pre_close_name="${_pre_close_dir##*/}"
+    else
+        _pre_close_name="${ticket_file##*/}"
+        _pre_close_name="${_pre_close_name%.md}"
+    fi
+    if ! pre_close_run "$pre_close_command" "$_pre_close_name" "$_pre_close_dir" \
+            "$ticket_file" "$current_branch" "$default_branch"; then
+        echo "Nothing was closed." >&2
+        return 1
     fi
 
     # --dry-run: all preflight checks passed; exit before any mutation.

@@ -272,6 +272,12 @@ require_checklist: false
 # append_only_files:
 #   - progress.md
 
+# close が何かを commit する直前に走らせる shell 1 行。clean-check と checklist /
+# append-only の gate の後、squash-merge の前。exit が 0 以外なら close を止め、
+# そのコマンド自身の出力を見せる。--dry-run でも走り、--force では迂回できず、
+# cancel では走らない。既定は空。
+# pre_close_command: "bash scripts/check-ticket.sh"
+
 # Worktreeモード（オプション）
 # worktree_mode: false    # true の場合、start はフラグ無しでも worktree を作成。
 #                         # start --no-worktree で 1 回だけ外せる。
@@ -312,6 +318,7 @@ require_checklist: false
 require_checklist_groups: []
 ticket_files: []
 append_only_files: []
+pre_close_command: ""
 default_content: |
   # Ticket Overview
   
@@ -1041,6 +1048,59 @@ base branch 上では従来どおり飛ばす。そこでは merge が既に済�
 ticket が `done/` の外に取り残されるだけで、誰の役にも立つ行動にならない。既定は空。チェックリストと同じ理由で `--force` では迂回できず、`--dry-run`
 でも見える。plain `check` は同じ内容を表示して exit 0 のままなので、branch がまだ自分の
 もので追記できるうちに気づける。
+
+**導入先自身の検査**（`pre_close_command`）
+
+ここまでの gate は `ticket.sh` が考える「終わった ticket」である——tree が綺麗で、
+checkbox が片付いていて、増えるだけのファイルが減っていない。導入先には導入先の基準が
+あるのが普通で、ticket dir に template repo が配ったファイルがあって今も一致している
+必要がある、受入条件に承認が付いている、review を通っている、といったものだ。どれも
+`require_checklist` では表現できないし、`ticket.sh` がそれらを覚える筋合いも無い。
+
+```yaml
+pre_close_command: "bash scripts/check-ticket.sh"
+```
+
+shell 1 行。clean-check と checklist / append-only の gate の後、何かを commit する前に
+走る。exit 0 なら close は続き、それ以外なら止まる。コマンドの stdout / stderr は捕まえ
+ないので、そのコマンド自身のメッセージが書かれたまま close する人に届く——検査が何を
+見つけたかを知っているのは導入先であり、整形して包み直したところで読む層が 1 枚増える
+だけである。
+
+git hook は代わりにならない。そもそもこの key がある理由はそこにある。`.git/hooks` は
+repository に入らないので clone ごとに入れ直す必要があり、`pre-commit` hook は close の
+commit を他の commit と区別できないので「今回がその run か」を hook 側で判定する工夫が
+要り、そして `--dry-run` では走らない。3 つの根っこは同じで、hook が守るのは「**commit を
+作ること**」で、ここで守りたいのは「**ticket を終わらせること**」である。
+
+`--dry-run` でも走るので、答えは close の最中ではなく前に来る。`--force` では**迂回でき
+ない**。理由はチェックリストと同じで、`--force` が指しているのは Git tree の状態であり、
+抜け道は条件が書かれている場所、つまり検査の側に置くべきものだから。`cancel` では走ら
+ない——cancel した ticket は「終わった」と主張していないし、cancel を拒否する検査は
+ticket を置く方法を無くしてしまう。
+
+コマンドは repo root で走る。worktree mode ではそれは worktree の root で、作業と ticket
+dir があるのはそちら側である。ticket について知るべきことは環境変数で渡すので、検査が
+path や branch 名を導出する必要は無い。
+
+| 変数 | 値 |
+|------|-----|
+| `TICKET_NAME` | ticket 名 |
+| `TICKET_DIR` | ticket dir。ディレクトリを持たない legacy の flat ticket では空 |
+| `TICKET_FILE` | ticket の `.md`。どちらの layout でも指す |
+| `TICKET_BRANCH` | close が走っている feature branch |
+| `TICKET_BASE_BRANCH` | これから merge される先の branch（ticket が `base_branch` を持つならそれ） |
+
+実行は subshell の中で、`errexit` / `nounset` / `pipefail` を外して行う。値は導入先が書いた
+shell 1 行であり、判定するのはその行自身の exit status である——`set -e` を継いだままだと、
+ごく普通の `grep -q x f && echo ok` が「`grep` が何も見つけなかった」だけで close を落として
+しまう。subshell なのは、`cd` する検査や変数を残す検査が、その後に続く close を変えられない
+ようにするためでもある。
+
+`close --no-merge` では、他の gate とまったく同じ条件で走る。ticket の base branch 以外なら
+拒否すべき close がまだあるので走り、base branch 上では merge が済んでいるので走らない。
+
+既定は空で、空なら何も走らない。値を書かずに key だけ置いた場合も、key が無いのと同じ。
 
 **実行フロー:**
 1. **作業ディレクトリチェック**: `--force` 未指定時のみ、コミットされていない変更がないか確認
