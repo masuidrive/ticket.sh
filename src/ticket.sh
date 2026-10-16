@@ -1597,6 +1597,20 @@ ticket_extra_file_rels() {
 # nothing - and still returns 0 - when no source has it, leaving the decision
 # to the caller rather than ending the run on a lookup.
 #
+# Usage: ticket_not_found_error <ticket_file>
+# The wording is in one place because `start` reaches it from two directions now:
+# before the branch switch, where "it is not anywhere" is the honest answer, and
+# after it, for the paths that never switch.
+ticket_not_found_error() {
+    cat << EOF
+Error: Ticket not found
+Ticket '$1' does not exist. Please:
+1. Check the ticket name spelling
+2. Run '$SCRIPT_COMMAND list' to see available tickets
+3. Use '$SCRIPT_COMMAND new <slug>' to create a new ticket
+EOF
+}
+
 # Usage: ticket_frontmatter_text <main_repo> <ticket_file> [<ref>...]
 ticket_frontmatter_text() {
     local main_repo="$1"
@@ -2354,6 +2368,53 @@ EOF
         # override had been ignored, the very thing this is here to stop.
         check_clean_working_dir "$tickets_dir" || return 1
     elif [[ "$current_branch" != "$effective_base" ]]; then
+        # Look before leaping. Everything below checks out '$effective_base' in
+        # order to branch from it, and the ticket's existence used to be checked
+        # after that - so a ticket the base branch does not carry produced
+        # "Ticket not found" from a tree that genuinely did not have it, with the
+        # caller left standing on the base branch and never told it had moved.
+        # Three things were wrong with that at once: `start` failed yet HEAD had
+        # changed; the message's own advice made it worse, because `list` on the
+        # base branch answers "(No tickets found)" and hardens the wrong
+        # conclusion; and "does not exist" was false - the ticket was right there
+        # a moment earlier. The check costs nothing extra here: base_has_ticket
+        # was already read above, from the branch that still holds the ticket.
+        if [[ "$base_has_ticket" != "true" ]]; then
+            if [[ -f "$ticket_file" ]]; then
+                # Name the whole ticket directory, not just ticket.md: note.md and
+                # any ticket_files entries belong to the ticket, and advice that
+                # moved one file would land the user on the base branch with a
+                # ticket whose note had been left behind.
+                local _carry="$ticket_file"
+                [[ "${ticket_file##*/}" == "ticket.md" ]] && _carry="${ticket_file%/ticket.md}/"
+                cat >&2 << EOF
+Error: Ticket is not on its base branch
+The ticket is in this tree, but the branch it is based on does not have it:
+  ticket:       $ticket_file
+  base_branch:  $effective_base
+  you are on:   $current_branch
+Creating the feature branch means checking out the base branch first, which
+would walk away from the only copy of the ticket. Nothing was switched.
+
+Pick one:
+1. Put the ticket on the base branch and start again:
+     git checkout $effective_base
+     git checkout $current_branch -- $_carry
+     git commit -m "Add ticket"
+2. Or set base_branch in the ticket to the branch this work is really based on.
+3. Or start it in a worktree, which brings the ticket across for you:
+     $SCRIPT_COMMAND start --worktree $ticket_name
+EOF
+            else
+                # Not here and not on the base branch: it is simply not anywhere,
+                # which is the one case where the old message was right. Said
+                # before the checkout rather than after, so the advice to run
+                # 'list' is given somewhere 'list' can still see the tickets.
+                ticket_not_found_error "$ticket_file" >&2
+            fi
+            return 1
+        fi
+
         # We're not on the effective base branch - handle different scenarios
         local git_status_output
         # Only stdout is the porcelain listing. Folding stderr in here made any
@@ -2422,13 +2483,7 @@ EOF
             fi
         fi
         if [[ "$ticket_in_base" != "true" ]]; then
-            cat >&2 << EOF
-Error: Ticket not found
-Ticket '$ticket_file' does not exist. Please:
-1. Check the ticket name spelling
-2. Run '$SCRIPT_COMMAND list' to see available tickets
-3. Use '$SCRIPT_COMMAND new <slug>' to create a new ticket
-EOF
+            ticket_not_found_error "$ticket_file" >&2
             return 1
         fi
     fi

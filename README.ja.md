@@ -462,6 +462,7 @@ pre_close_command: "bash scripts/check-ticket.sh"
 - **restoreコマンド**: シンボリックリンクの再構築と中断操作からの回復
 - **競合解決**: マージ競合解決後の操作再開
 - **黙って止まらない**: `ticket.sh` が想定していなかった失敗は、終了コードだけを残して終わるのではなく、失敗したコマンド・終了コード・報告先を 1 行で出す。意図した拒否（exit 1〜6）と中断（signal）は従来どおり — そちらは既に自分で理由を述べている。
+- **拒否されたとき tree はそのまま**: `start` は base branch を checkout する**前**に、そこに ticket が在るかを確認する。以前は後だったので、base branch が持っていない ticket は `Ticket not found` で失敗しつつ、利用者を base branch に立たせたまま——しかもそれを言わずに——終わっていた。message が勧める `list` を実行すると、その branch では `(No tickets found)` と出るので、間違った結論が裏付けられたように見える。今は実際の問題を名指しし、何も切り替えていないと言い、進み方を 3 つ出す（ticket を base に載せる / `base_branch:` を直す / worktree で始める）。
 
 ### 堅牢性機能
 - **UTF-8対応**: すべてのコンテンツとファイル名でUnicode完全対応

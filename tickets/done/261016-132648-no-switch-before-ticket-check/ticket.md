@@ -4,7 +4,7 @@ base_branch: default  # Override base branch for start/close (default: use defau
 description: "start は base_branch へ checkout する前に ticket の存在を確認する（GH #21）"
 created_at: "2026-10-16T13:26:48Z"
 started_at: 2026-10-16T13:26:48Z # Do not modify manually
-closed_at: null   # Do not modify manually
+closed_at: 2026-10-16T13:55:32Z # Do not modify manually
 canceled_at: null # Do not modify manually
 ---
 
@@ -52,15 +52,15 @@ start できる）。in-place 経路だけの問題。
 
 ## Tasks
 
-- [ ] switch の前に guard を置く（ticket が base branch に無ければ動かずに止まる）
-- [ ] ticket が手元に在る場合の文面（実際の状態と行き先 3 つ）
-- [ ] ticket がどこにも無い場合は switch 前に「Ticket not found」
-- [ ] テスト: 非 0 で終わる / branch が動かない / 文面 / その後 `list` が ticket を
+- [x] switch の前に guard を置く（ticket が base branch に無ければ動かずに止まる）
+- [x] ticket が手元に在る場合の文面（実際の状態と行き先 3 つ）
+- [x] ticket がどこにも無い場合は switch 前に「Ticket not found」
+- [x] テスト: 非 0 で終わる / branch が動かない / 文面 / その後 `list` が ticket を
       見せる / 従来のケース（base に ticket が在る）が変わらない / worktree は通る
-- [ ] Run tests before closing and pass all tests (No exceptions)
-- [ ] Run `bash build.sh` to build the project
-- [ ] Update documentation if necessary
-  - [ ] Update README.*.md
-  - [ ] Update spec.*.md
-  - [ ] Update DEV.md
-- [ ] Get developer approval before closing
+- [x] Run tests before closing and pass all tests (No exceptions)
+- [x] Run `bash build.sh` to build the project
+- [x] Update documentation if necessary
+  - [x] Update README.*.md
+  - [x] Update spec.*.md
+  - [x] Update DEV.md
+- [x] Get developer approval before closing（「それも進めて」）

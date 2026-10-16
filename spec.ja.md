@@ -698,6 +698,49 @@ base に戻れなくなる。3 つ目が無ければ、両方の branch にあ�
 `doing` と読めるようにしている fast-forward を失う。worktree モードはこの経路に入らない
 ——そもそも呼び出し元の `HEAD` を触らないので、ticket を守る必要が無い。
 
+**base branch が ticket を持っていない場合:**
+
+上はその場に留まるのが正しいケースだった。その隣に、正しい動きが無いケースがある。
+`start` はそれを、**動かずに**言わなければならない: ticket はこの tree に在り、base
+branch はそれを持たず、現在の branch は ticket が指す branch では**ない**——つまり
+feature branch は base branch から切る必要があり、それを checkout すると唯一の copy
+から離れてしまう。
+
+```
+$ ./ticket.sh start 261016-131444-retargeted
+Error: Ticket is not on its base branch
+The ticket is in this tree, but the branch it is based on does not have it:
+  ticket:       tickets/261016-131444-retargeted/ticket.md
+  base_branch:  release
+  you are on:   main
+Creating the feature branch means checking out the base branch first, which
+would walk away from the only copy of the ticket. Nothing was switched.
+
+Pick one:
+1. Put the ticket on the base branch and start again:
+     git checkout release
+     git checkout main -- tickets/261016-131444-retargeted/
+     git commit -m "Add ticket"
+2. Or set base_branch in the ticket to the branch this work is really based on.
+3. Or start it in a worktree, which brings the ticket across for you:
+     ./ticket.sh start --worktree 261016-131444-retargeted
+```
+
+この確認は checkout の**前**に行う。以前は後だったため、3 つの失敗が同時に起きていた:
+`start` が非 0 で終わるのに `HEAD` は動いていて、そのことを言う行が無い。message は
+ticket が「does not exist」と言うが、それは偽である——切り替えがそれを真にするところ
+だった。そしてその message 自身の「`list` を実行せよ」という助言は、`list` が
+`(No tickets found)` と答える branch に利用者を置くので、間違った結論を強めるだけに
+なる。前に出すために追加で読むものは無い: base branch が ticket を持っているかは、
+ticket を今も持っている branch の上で既に読んである。
+
+どちらにも無い ticket は従来どおり `Ticket not found`。ただしこちらも checkout の前に
+言うので、「`list` を実行せよ」は `list` が ticket を見られる場所で言われる。
+
+worktree モードにはもともとこの問題が無い。呼び出し元の `HEAD` を触らず、呼び出し元が
+いる branch から ticket を新しい worktree へ運ぶため——上の選択肢 3 が通るのはこれが
+理由である。
+
 **`branch:` がその branch 上でだけ書かれた場合:**
 
 姉妹形。ticket は base branch **にも**あるので上の経路には入らず、`start` は普段どおり

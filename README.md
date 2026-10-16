@@ -561,6 +561,7 @@ The `check` command verifies the following:
 - **Restore command**: Rebuild symlinks and recover from interrupted operations  
 - **Conflict resolution**: Resume operations after resolving merge conflicts
 - **No silent stops**: a failure `ticket.sh` did not plan for prints one line naming the command that failed, the exit code and where to report it, instead of ending the run with nothing but a status. Deliberate refusals (exit 1–6) and interruptions (signals) are unchanged — they already say their piece.
+- **A refusal leaves the tree where it was**: `start` checks that the base branch has the ticket *before* checking that branch out. It used to check after, so a ticket the base branch did not carry failed with `Ticket not found` while leaving you standing on the base branch, unannounced — and the message's advice to run `list` landed you where `list` answers `(No tickets found)`, which made the wrong conclusion look confirmed. Now it names the real problem, says nothing was switched, and offers three ways on (carry the ticket over, retarget `base_branch`, or start in a worktree).
 
 ### Robustness Features
 - **UTF-8 support**: Full Unicode support for all content and filenames

@@ -710,6 +710,51 @@ so the ticket still shows as `doing`.
 Running it again resumes rather than re-stamps: `started_at` is when the work
 began, and a second `start` is how an interrupted session gets its links back.
 
+**When the base branch does not have the ticket:**
+
+The case above is the one where staying put is right. There is a neighbouring
+one where nothing is right, and `start` has to say so without moving: the ticket
+is in this tree, the base branch does not have it, and the current branch is
+*not* the one the ticket names — so the feature branch has to be cut from the
+base branch, and checking that out would walk away from the only copy.
+
+```
+$ ./ticket.sh start 261016-131444-retargeted
+Error: Ticket is not on its base branch
+The ticket is in this tree, but the branch it is based on does not have it:
+  ticket:       tickets/261016-131444-retargeted/ticket.md
+  base_branch:  release
+  you are on:   main
+Creating the feature branch means checking out the base branch first, which
+would walk away from the only copy of the ticket. Nothing was switched.
+
+Pick one:
+1. Put the ticket on the base branch and start again:
+     git checkout release
+     git checkout main -- tickets/261016-131444-retargeted/
+     git commit -m "Add ticket"
+2. Or set base_branch in the ticket to the branch this work is really based on.
+3. Or start it in a worktree, which brings the ticket across for you:
+     ./ticket.sh start --worktree 261016-131444-retargeted
+```
+
+The check happens **before** the checkout. It used to happen after, which was
+three failures at once: `start` returned non-zero yet `HEAD` had moved, with no
+line saying so; the message said the ticket "does not exist", which was false —
+the switch is what would have made it true; and its own advice to run `list`
+landed the user on a branch where `list` answers `(No tickets found)`, hardening
+the wrong conclusion. Nothing extra is read to do it earlier: whether the base
+branch carries the ticket is already known at that point, from the branch that
+still holds it.
+
+A ticket that is in neither place is still `Ticket not found` — now said before
+the checkout too, so the advice to run `list` is given somewhere `list` can see
+the tickets.
+
+Worktree mode never had this problem: it does not touch the caller's `HEAD`, and
+it copies the ticket into the new worktree from the branch the caller is on,
+which is why option 3 above works.
+
 All three conditions matter. Without the first, any feature branch would keep
 `start` from returning to the base branch. Without the third, a ticket that is on
 both branches would lose the fast-forward that makes it read `doing` from either
